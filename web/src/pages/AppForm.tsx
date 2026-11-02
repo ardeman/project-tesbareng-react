@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ErrorBox, NotFound, Skel, useToast } from '../components/bits'
+import { Dialog, ErrorBox, NotFound, Skel, useToast } from '../components/bits'
 import { BuildDialog } from '../components/dialogs'
 import { IconBack, IconPlus } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { api, errorText, softDeleteApp, updateApp, useApp, useBuilds, type AppInput } from '../lib/data'
 import { COMMUNITY_GROUP } from '../lib/community'
+import { usePageMeta } from '../lib/pageMeta'
 import { appStatusLabel, fmtDate, isoDate } from '../lib/progress'
 import type { AppDoc, AppStatus } from '../lib/types'
 import { LIMITS, OPT_IN_PREFIX, validateApp, type Errors } from '../lib/validate'
@@ -17,14 +18,15 @@ export function AppForm() {
   const { user, ready, isAdmin, signIn } = useAuth()
   const toast = useToast()
   const app = useApp(id)
+  usePageMeta(id ? (app.data && !app.data.deleted ? `Ubah ${app.data.name}` : 'Ubah aplikasi') : 'Tambah aplikasi')
 
   if (!ready || (id && app.loading)) return <Skel w={240} h={32} />
   if (!user) {
     return (
-      <div className="stack-16" style={{ maxWidth: 560 }}>
-        <h1 style={{ fontSize: 'var(--fs-title)', lineHeight: '38px', fontWeight: 700, letterSpacing: '-0.02em' }}>{id ? 'Edit aplikasi' : 'Tambah aplikasi'}</h1>
-        <p className="muted" style={{ fontSize: 16, lineHeight: '24px' }}>Masuk dengan akun Google yang Anda pakai di Play Console.</p>
-        <button className="btn primary" style={{ justifySelf: 'start' }} onClick={() => signIn().catch((e) => toast(errorText(e)))}>Masuk dengan Google</button>
+      <div className="state-page">
+        <h1 className="page-title">{id ? 'Edit aplikasi' : 'Tambah aplikasi'}</h1>
+        <p>Masuk dengan akun Google yang Anda pakai di Play Console.</p>
+        <button className="btn primary" onClick={() => signIn().catch((e) => toast(errorText(e)))}>Masuk dengan Google</button>
       </div>
     )
   }
@@ -55,6 +57,7 @@ function Form({ existing }: { existing?: AppDoc }) {
   const [busy, setBusy] = useState(false)
   const [fail, setFail] = useState<string | null>(null)
   const [buildOpen, setBuildOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => { if (touched) setErrors(validateApp(v, { creating, groupConfirmed: group })) }, [v, group, touched, creating])
 
@@ -90,8 +93,8 @@ function Form({ existing }: { existing?: AppDoc }) {
 
   const remove = async () => {
     if (!existing) return
-    if (!window.confirm(`Hapus ${existing.name}? Aplikasi hilang dari daftar dan tester tidak bisa mendaftar lagi. Data tetap disimpan untuk admin.`)) return
-    try { await softDeleteApp(existing.id); toast(`${existing.name} dihapus.`); navigate('/') } catch (err) { toast(errorText(err)) }
+    setConfirmDelete(false)
+    try { await softDeleteApp(existing.id); toast(`${existing.name} dihapus.`); navigate('/apps') } catch (err) { toast(errorText(err)) }
   }
 
   const field = (k: keyof AppInput, label: string, input: ReactNode, hint?: string, limit?: number) => (
@@ -105,8 +108,9 @@ function Form({ existing }: { existing?: AppDoc }) {
   const aria = (k: keyof AppInput) => ({ id: `f-${k}`, 'aria-invalid': !!errors[k] || undefined, 'aria-describedby': `f-${k}-hint` })
 
   return (
+    <>
     <form className="form-wrap" onSubmit={submit} noValidate>
-      <Link to={existing ? `/apps/${existing.id}` : '/'} className="crumb"><IconBack />{existing ? existing.name : 'Aplikasi'}</Link>
+      <Link to={existing ? `/apps/${existing.id}` : '/apps'} className="crumb"><IconBack />{existing ? existing.name : 'Aplikasi'}</Link>
       <div className="title-row">
         <div>
           <h1>{creating ? 'Tambah aplikasi' : 'Edit aplikasi'}</h1>
@@ -153,10 +157,10 @@ function Form({ existing }: { existing?: AppDoc }) {
         </div>
         <div className="form-panel">
           {field('feedbackGuide', 'Yang ingin Anda uji (opsional)', <textarea className="input" rows={4} maxLength={LIMITS.feedbackGuide} placeholder="Coba level 3 di layar kecil: apakah tombol lompat mudah ditekan?" value={v.feedbackGuide} onChange={set('feedbackGuide')} {...aria('feedbackGuide')} />, undefined, LIMITS.feedbackGuide)}
-          <div className="preview-card" aria-label="Pratinjau untuk tester">
+          <div className="preview-card" role="group" aria-label="Pratinjau untuk tester">
             <span className="small muted">Yang dilihat tester di atas tombol Daftar jadi tester:</span>
             <span className="t">Yang ingin diuji kreator</span>
-            <span style={{ whiteSpace: 'pre-line' }}>{v.feedbackGuide?.trim() || <span className="muted">Kreator belum menulis panduan feedback.</span>}</span>
+            <p className="guide-quote">{v.feedbackGuide?.trim() || <span className="muted">Kreator belum menulis panduan feedback.</span>}</p>
           </div>
         </div>
       </section>
@@ -168,7 +172,7 @@ function Form({ existing }: { existing?: AppDoc }) {
             <label className="check" style={{ padding: 0 }}>
               <input id="f-groupConfirmed" type="checkbox" checked={group} onChange={(e) => setGroup(e.target.checked)} aria-describedby="f-group-hint" aria-invalid={!!errors.groupConfirmed || undefined} />
               <span><span className="t">Saya sudah menambahkan {COMMUNITY_GROUP} sebagai daftar penguji di jalur uji tertutup.</span>
-                <span className="d" id="f-group-hint" style={errors.groupConfirmed ? { color: 'var(--negative)' } : undefined}>{errors.groupConfirmed ?? 'Play Console → Uji tertutup → Penguji → Google Groups.'}</span></span>
+                <span className={`d ${errors.groupConfirmed ? 'err-text' : ''}`} id="f-group-hint">{errors.groupConfirmed ?? 'Play Console → Uji tertutup → Penguji → Google Groups.'}</span></span>
             </label>
           </div>
         </section>
@@ -176,20 +180,34 @@ function Form({ existing }: { existing?: AppDoc }) {
 
       {existing && <BuildsSection app={existing} onAdd={() => setBuildOpen(true)} />}
 
-      {fail && <div style={{ marginBottom: 16 }}><ErrorBox text={fail} /></div>}
+      {fail && <ErrorBox text={fail} />}
       <div className="form-foot">
-        <Link className="btn" to={existing ? `/apps/${existing.id}` : '/'}>Batal</Link>
+        <Link className="btn" to={existing ? `/apps/${existing.id}` : '/apps'}>Batal</Link>
         <button className="btn primary" disabled={busy}>{busy ? 'Menyimpan…' : creating ? 'Daftarkan aplikasi' : 'Simpan perubahan'}</button>
       </div>
 
       {existing && (
-        <section className="form-section" style={{ marginTop: 48 }}>
+        <section className="form-section danger-zone">
           <div className="label-col"><h2>Hapus aplikasi</h2><p>Aplikasi disembunyikan dari daftar. Riwayat tester tetap tersimpan untuk admin.</p></div>
-          <div><button type="button" className="btn danger" onClick={remove}>Hapus {existing.name}</button></div>
+          <div><button type="button" className="btn danger" onClick={() => setConfirmDelete(true)}>Hapus {existing.name}</button></div>
         </section>
       )}
-      {existing && <BuildDialog open={buildOpen} onClose={() => setBuildOpen(false)} app={existing} />}
     </form>
+    {/* Dialogs live outside the app form: a nested <form> would submit the app form too. */}
+    {existing && <BuildDialog open={buildOpen} onClose={() => setBuildOpen(false)} app={existing} />}
+    {existing && (
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} label={`Hapus ${existing.name}?`}>
+        <div className="sheet-body">
+          <h2>Hapus {existing.name}?</h2>
+          <p className="lede">Aplikasi hilang dari daftar dan tester tidak bisa mendaftar lagi. Data tetap disimpan, tapi hanya admin yang bisa memulihkannya.</p>
+        </div>
+        <div className="sheet-foot">
+          <button type="button" className="btn" onClick={() => setConfirmDelete(false)}>Batal</button>
+          <button type="button" className="btn danger" onClick={remove}>Hapus {existing.name}</button>
+        </div>
+      </Dialog>
+    )}
+    </>
   )
 }
 

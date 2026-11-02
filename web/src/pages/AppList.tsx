@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ErrorBox, Seats, Skel, StatusPill, useToast } from '../components/bits'
+import { Badge, Empty, ErrorBox, Seats, Skel, StatusPill, useToast } from '../components/bits'
 import { IconPlus, IconSearch } from '../components/icons'
 import { useAuth } from '../lib/auth'
+import { usePageMeta } from '../lib/pageMeta'
 import { errorText, useApps } from '../lib/data'
 import { appStatusLabel, relDays, TARGET_TESTERS } from '../lib/progress'
 import type { AppDoc, AppStatus } from '../lib/types'
@@ -22,6 +23,7 @@ export function AppList() {
   const [tab, setTab] = useState<Tab>('all')
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<Sort>('need')
+  usePageMeta('Daftar aplikasi', 'Aplikasi Android anggota komunitas yang sedang uji tertutup dan butuh tester.')
 
   const rows = useMemo<Row[]>(() => apps.data.map((app) => ({ app, eligible: app.eligibleCount })), [apps.data])
 
@@ -70,10 +72,11 @@ export function AppList() {
         </div>
       </div>
 
-      <div className="tabs" role="tablist" aria-label="Status aplikasi">
+      {/* A filter, not tabs: one list below, narrowed by status. Toggle buttons, one pressed at a time. */}
+      <div className="tabs" role="group" aria-label="Saring menurut status">
         {TABS.map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
-            {t === 'all' ? 'Semua' : appStatusLabel[t]}<span className="n">{loading ? '' : counts[t]}</span>
+          <button key={t} type="button" className="tab" aria-pressed={tab === t} onClick={() => setTab(t)}>
+            {t === 'all' ? 'Semua' : appStatusLabel[t]}<span className="n num">{loading ? '' : counts[t]}</span>
           </button>
         ))}
       </div>
@@ -87,7 +90,7 @@ export function AppList() {
         <span className="spacer" />
         <span className="total num">{loading ? '' : `${shown.length} aplikasi`}</span>
         <label className="sr-only" htmlFor="sort">Urutkan</label>
-        <select id="sort" className="input" style={{ width: 'auto', height: 36 }} value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+        <select id="sort" className="input" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
           <option value="need">Paling butuh tester</option>
           <option value="creator">Kreator paling aktif menguji</option>
           <option value="new">Terbaru</option>
@@ -115,7 +118,7 @@ export function AppList() {
                     <tr key={i}>
                       <td className="cell-2"><Skel w={160} /><br /><Skel w={110} h={12} /></td>
                       <td><Skel w={150} /></td><td className="num md-hide"><Skel w={40} /></td><td className="num"><Skel w={90} /></td>
-                      <td className="md-hide"><Skel w={140} /></td><td><Skel w={96} h={22} /></td>
+                      <td className="md-hide"><Skel w={140} /></td><td><Skel w={120} h={24} /></td>
                     </tr>
                   ))
                 : shown.map((r) => <DesktopRow key={r.app.id} row={r} onOpen={() => navigate(`/apps/${r.app.id}`)} />)}
@@ -128,12 +131,20 @@ export function AppList() {
             : shown.map((r) => <PhoneRow key={r.app.id} row={r} />)}
         </div>
         {!loading && shown.length === 0 && (
-          <div style={{ padding: 16 }}>
-            <div className="empty">
-              {rows.length === 0 ? (
-                <span>Belum ada aplikasi. Daftarkan aplikasi Anda agar anggota lain bisa ikut menguji. <button className="link" onClick={add}>Tambah aplikasi</button></span>
-              ) : q ? <span>Tidak ada aplikasi bernama “{q}” di tab ini.</span> : <span>Belum ada aplikasi dengan status ini.</span>}
-            </div>
+          <div className="empty-pad">
+            {rows.length === 0 ? (
+              <Empty title="Belum ada aplikasi yang sedang uji tertutup.">
+                <p>Daftarkan aplikasi Anda lewat tombol Tambah aplikasi di atas, agar anggota lain bisa ikut menguji.</p>
+              </Empty>
+            ) : q ? (
+              <Empty title={`Tidak ada aplikasi bernama “${q}” dengan status ini.`}>
+                <button className="text-action" onClick={() => { setQ(''); setTab('all') }}>Hapus pencarian dan lihat semua</button>
+              </Empty>
+            ) : (
+              <Empty title="Belum ada aplikasi dengan status ini.">
+                <button className="text-action" onClick={() => setTab('all')}>Lihat semua aplikasi</button>
+              </Empty>
+            )}
           </div>
         )}
       </div>
@@ -145,7 +156,7 @@ function SeatCell({ app, eligible }: Row) {
   return (
     <span className="seat-cell">
       <Seats active={app.activeTesterCount} eligible={eligible} />
-      <span className="seat-count num">{app.activeTesterCount}<small> /{TARGET_TESTERS}</small></span>
+      <span className="seat-count num">{app.activeTesterCount}<small> / {TARGET_TESTERS}</small></span>
     </span>
   )
 }
@@ -165,15 +176,18 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
       <td className="cell-2">
         <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
         <span>{app.creatorName} · didaftarkan {relDays(app.createdAt)}</span>
-        <span className="md-show">Kreatornya menguji {c.t} aplikasi</span>
+        <span className="md-show">Kreatornya menguji {c.t} aplikasi <Badge tier={app.creatorBadgeTier} size="sm" /></span>
       </td>
       <td className="cell-2"><SeatCell app={app} eligible={eligible} /><span className="md-show">{eligible} lewat 14 hari</span></td>
-      <td className="num md-hide">{eligible}<span className="muted"> /{TARGET_TESTERS}</span></td>
+      <td className="num md-hide"><b>{eligible}</b><span className="of"> / {TARGET_TESTERS}</span></td>
       <td className="num">
-        {app.feedbackSentCount === 0 ? <span className="dash">0</span> : <>{app.feedbackSentCount}<span className="muted"> · {app.feedbackVerifiedCount} terverifikasi</span></>}
+        {app.feedbackSentCount === 0 ? <span className="dash">0</span> : <><b>{app.feedbackSentCount}</b><span className="muted"> · {app.feedbackVerifiedCount} terverifikasi</span></>}
       </td>
       <td className="muted md-hide">
-        {c.t === 0 ? <span>Belum menguji aplikasi lain</span> : <><span style={{ color: 'var(--text)' }}>{c.t} aplikasi</span> · feedback {c.f}</>}
+        <span className="creator-nums">
+          {c.t === 0 ? <span>Belum menguji aplikasi lain</span> : <span><b style={{ color: 'var(--ink)' }}>{c.t} aplikasi</b> · feedback {c.f}</span>}
+          <Badge tier={app.creatorBadgeTier} size="sm" />
+        </span>
       </td>
       <td><StatusPill status={app.status} /></td>
     </tr>
@@ -186,7 +200,7 @@ function PhoneRow({ row }: { row: Row }) {
   return (
     <Link to={`/apps/${app.id}`} className="mrow">
       <span className="l1">{app.name}</span>
-      <span className="r1 num">{app.activeTesterCount}<span className="muted"> /{TARGET_TESTERS}</span></span>
+      <span className="r1 num">{app.activeTesterCount}<span className="of"> / {TARGET_TESTERS}</span></span>
       <span className="l2">
         <Seats active={app.activeTesterCount} eligible={eligible} />
         <span>{eligible} lewat 14 hari</span>
@@ -195,6 +209,7 @@ function PhoneRow({ row }: { row: Row }) {
       <span className="l2">
         <StatusPill status={app.status} />
         <span>{app.creatorName} · menguji {c.t} aplikasi</span>
+        <Badge tier={app.creatorBadgeTier} size="sm" />
       </span>
     </Link>
   )
