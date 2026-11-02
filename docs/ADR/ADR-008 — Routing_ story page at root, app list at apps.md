@@ -2,7 +2,7 @@
 
 |  |  |
 | --- | --- |
-| **Status** | **Proposed — needs the owner's decision** (answers PRD §17 Q9) |
+| **Status** | **Accepted: option A** (answers PRD §17 Q9) |
 | **Decider** | Community Admin |
 | **Date** | 2 November 2026 |
 | **PRD ref** | PRD v2.2 §10, §13.0, §17 Q9. ADR-001 (Context, Step 1) |
@@ -43,7 +43,7 @@ This matters for the Awwwards goal: jurors open the home URL. If `/` is a work s
 
 ## Decision
 
-_To be filled in by the owner: chosen option, date. Then answer PRD §17 Q9 and update PRD §10._
+**Option A**, decided by the owner on 2 November 2026. `/` renders the story surface (landing); `/apps` renders the app list; `/about` keeps the community rules and how-it-works guide. After Google sign-in from `/`, the member goes to `/apps`.
 
 ## Consequences (if A is accepted)
 
