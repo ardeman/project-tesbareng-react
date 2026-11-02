@@ -1,0 +1,19 @@
+{
+  "name": "tesbareng",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "seed": "tsx scripts/seed.ts",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "@types/node": "^22.19.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  }
+}
