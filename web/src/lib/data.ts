@@ -1,7 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
-import type { AppDoc, BuildDoc, PublicProfile, TesterDoc, TesterStatus } from './types'
+import type { AppDoc, BadgeTier, BuildDoc, PublicProfile, TesterDoc, TesterStatus } from './types'
 
 export interface Live<T> { data: T; loading: boolean; error: string | null; retry: () => void }
 
@@ -39,6 +39,7 @@ function toApp(r: Row, s: Row | undefined): AppDoc {
     creatorTestingCount: s?.creator_testing_count ?? 0,
     creatorFeedbackSentCount: s?.creator_feedback_sent_count ?? 0,
     creatorFeedbackVerifiedCount: s?.creator_feedback_verified_count ?? 0,
+    creatorBadgeTier: s?.creator_badge_tier ?? 'none',
     createdAt: ms(r.created_at)!,
     updatedAt: ms(r.updated_at) ?? undefined,
     deleted: r.deleted,
@@ -261,12 +262,30 @@ export const usePublicProfile = (uid?: string) =>
             testingCount: s?.testing_count ?? 0,
             feedbackSentCount: s?.feedback_sent_count ?? 0,
             feedbackVerifiedCount: s?.feedback_verified_count ?? 0,
+            appsTestedCount: s?.apps_tested_count ?? 0,
+            badgeTier: s?.badge_tier ?? 'none',
+            nextTierAt: s ? s.next_tier_at : 3,
+            emailReminders: p.email_reminders ?? true,
             createdAt: ms(p.created_at) ?? undefined,
           }
         }
       : null,
     undefined, [uid],
   )
+
+/** Badge tier per member, for tester tables (FR-27j). Manual entries (no user id) have none. */
+export const useBadgesOf = (userIds: string[]) => {
+  const key = [...new Set(userIds)].sort().join(',')
+  return useFetch<Map<string, BadgeTier>>(
+    key
+      ? async () => {
+          const r = await rows<Row[]>(supabase.from('profile_stats').select('profile_id, badge_tier').in('profile_id', key.split(',')))
+          return new Map(r.map((x) => [x.profile_id as string, x.badge_tier as BadgeTier]))
+        }
+      : null,
+    new Map(), [key],
+  )
+}
 
 // ---------- writes (all through RPC) ----------
 
@@ -333,6 +352,8 @@ export const api = {
       }),
     }),
 }
+
+export const setEmailReminders = (enabled: boolean) => rpc('set_email_reminders', { p_enabled: enabled })
 
 export const updateApp = (appId: string, input: AppInput & { status?: AppDoc['status'] }) =>
   rpc('update_app', { p_app_id: appId, ...appArgs(input), p_status: input.status ?? null })
