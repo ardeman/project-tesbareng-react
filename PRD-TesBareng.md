@@ -1,9 +1,9 @@
 # PRD — TesBareng
 
-| | |
-|---|---|
+|  |  |
+| --- | --- |
 | **Product** | TesBareng ("test together") |
-| **Version** | 2.0 |
+| **Version** | 2.1 |
 | **Status** | Draft |
 | **Last updated** | 2 November 2026 |
 | **Owner** | Community Admin |
@@ -14,7 +14,12 @@
 
 ## Changelog
 
+**v2.1 — 2 November 2026**
+
+- **Design ambition: Awwwards-level** (§13.0). The site targets an Awwwards Honorable Mention at minimum and Site of the Day as the goal, scored against Awwwards' own rubric. New design pass phase after the Supabase migration (§16).
+
 **v2.0 — 2 November 2026**
+
 - **Stack moved from Firebase to Supabase** (decided 31 October 2026). Firebase needs the Blaze plan, which requires a credit card, to deploy server-side logic. Supabase's free plan needs no card. §9 and §11 are rewritten for Postgres, Row Level Security and RPC.
 - **Cohorts with assignment** (§5.6, §6.9): creators are grouped into cohorts and assigned apps to test, so nobody receives testers without testing back.
 - **Milestone check-ins** (§6.10): attendance per milestone instead of daily.
@@ -58,7 +63,7 @@ Today, progress is invisible, and testing is not fair by default: some members w
 ## 4. Roles
 
 | Role | Description |
-|---|---|
+| --- | --- |
 | **Visitor** | Not logged in. Can browse apps, progress, tester lists (masked), engagement status, cohorts and profiles. Read-only. |
 | **Member** | Logged in with Google. Can create apps and register as a tester. |
 | **Creator** | A member who owns an app. Full edit rights on that app and its tester list. |
@@ -71,6 +76,7 @@ A single user can be a Creator of their own app(s), a Tester of other apps and a
 ## 5. Core User Flows
 
 ### 5.1 Create an app (Creator)
+
 1. Log in with Google.
 2. Click **Add App**.
 3. Fill in: app name, short description, Play Store opt-in link, optional Play Store listing link, optional package name, and a **feedback guide** (§6.5).
@@ -78,6 +84,7 @@ A single user can be a Creator of their own app(s), a Tester of other apps and a
 5. The app is published with status **Recruiting** and can be added to a cohort by the admin.
 
 ### 5.2 Register as a tester (Member)
+
 1. Log in with Google.
 2. Open an app page. Apps assigned to the member through a cohort show a **Ditugaskan (Assigned)** badge.
 3. Click **Daftar jadi tester / Become a tester**.
@@ -88,6 +95,7 @@ A single user can be a Creator of their own app(s), a Tester of other apps and a
 5. Click **Confirm**. The member is added immediately (no creator approval). `opted_in_at` is set to now. This is the cohort's opt-in milestone.
 
 ### 5.3 Send feedback via Google Play (Tester)
+
 1. Use the app for a few days, ideally after at least one build update.
 2. Read the app's **feedback guide** on its TesBareng page.
 3. Open the app's Play Store page and send feedback in your own words (rating plus a specific comment: what worked, what broke, what to improve).
@@ -95,11 +103,14 @@ A single user can be a Creator of their own app(s), a Tester of other apps and a
 5. Repeat after new builds if the creator asks for it.
 
 ### 5.4 Leave testing (Tester)
+
 1. On the app page, click **Stop testing**.
 2. Status changes to **Left**. The entry stays visible but no longer counts toward progress.
 
 ### 5.5 Manage tester list (Creator)
+
 On their own app only, the creator can:
+
 - Manually add a tester (name + email; the email is masked and discarded) for people who joined outside the website.
 - Change a tester's status (Active / Left / Removed) and correct the opt-in date (not in the future).
 - Add a short note per tester (max 140 chars, visible to all).
@@ -107,6 +118,7 @@ On their own app only, the creator can:
 - Log each new build uploaded to the closed track (§6.5).
 
 ### 5.6 Run a cohort (Admin)
+
 1. **Form:** create a cohort (e.g. "Cohort #3") and add members, each with the app they bring. Members without an app can join as **Helpers**. A cohort needs at least **13 apps**, so each app can receive at least 12 testers.
 2. **Link:** paste the cohort's WhatsApp sub-group link (§6.12).
 3. **Start (Day 0):** all closed tracks must be live. Starting the cohort generates assignments (§6.9) and opens the 48-hour opt-in window.
@@ -115,6 +127,7 @@ On their own app only, the creator can:
 6. **Close:** when every app shows "Ready to apply", or at Day 21, the admin closes the cohort. Members with unmet obligations are marked **Owing** and cannot join the next cohort until the admin marks them settled.
 
 ### 5.7 Cohort member's journey
+
 1. After Day 0, **Tugas saya (My Testing)** lists the member's assigned apps and obligations, e.g. "9/14 opt-in · 4/14 feedback".
 2. Day 0–2: register as tester on every assigned app (§5.2).
 3. Around Day 7: check in "Sudah buka app" and send feedback on Play.
@@ -125,12 +138,14 @@ On their own app only, the creator can:
 ## 6. Functional Requirements
 
 ### 6.1 Authentication
+
 - **FR-1** Login with Supabase Auth, Google provider only, using the redirect flow (works on phones). Any Google account may sign in, including Workspace accounts.
 - **FR-2** A trigger on new auth users creates the profile; on each sign-in, `ensure_profile()` refreshes name and photo from the Google identity and stores the masked email.
 - **FR-3** Browsing does not require login. Any write action prompts login.
 - **FR-3a** A dev-only sign-in shortcut (`?devLogin=<seeded user>`) exists for local screen checks. It runs only when the Supabase URL is `127.0.0.1` or `localhost`. Production has the email/password provider disabled.
 
 ### 6.2 App management
+
 - **FR-4** App fields:
   - Name (required, max 50 chars)
   - Short description (required, max 280 chars)
@@ -145,13 +160,13 @@ On their own app only, the creator can:
 - **FR-7** Deleting an app soft-deletes it (hidden from lists, data retained). Only the admin can restore.
 
 ### 6.3 Tester list (the "shared spreadsheet")
+
 - **FR-8** Each app page displays its tester list as a table:
 
   | # | Name | Email (masked) | Opted in since | Days active | Status | Feedback on Play | Creator replied | Check-ins |
-  |---|---|---|---|---|---|---|---|---|
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
   "Feedback on Play" shows: — (not yet), ✓ Sent (self-reported), ✓✓ Verified (confirmed by creator). "Check-ins" shows the milestones completed (§6.10).
-
 - **FR-9** Emails are always shown masked to everyone, including the creator (§8).
 - **FR-10** "Days active" = days between `opted_in_at` and today (or `left_at` if Left), computed on the client.
 - **FR-11** A tester with **≥14 days active and status Active** is highlighted as **Eligible**.
@@ -160,6 +175,7 @@ On their own app only, the creator can:
 - **FR-14** The table is sortable by name, opt-in date and days active.
 
 ### 6.4 Progress indicators (per app)
+
 - **FR-15** Active testers: `X / 12` with progress bar.
 - **FR-16** Eligible testers (Active and ≥14 days): `Y / 12` with progress bar.
 - **FR-17** Days since test start: `Z / 14` (if test start date is set).
@@ -170,6 +186,7 @@ On their own app only, the creator can:
 - **FR-19** App list cards show active, eligible and feedback counts, status, cohort badge, and the "Belum tes" label when applicable.
 
 ### 6.5 Engagement tracking
+
 Feedback itself lives in Google Play. TesBareng tracks engagement around it.
 
 - **FR-20** Only Active testers can tick **Feedback sent on Play** on their own entry, with an optional summary (max 500 chars, trimmed; empty becomes null). Unticking clears the timestamp and summary.
@@ -179,10 +196,12 @@ Feedback itself lives in Google Play. TesBareng tracks engagement around it.
 - **FR-24** The creator can remove Verified if it was set by mistake.
 
 ### 6.6 App discovery
+
 - **FR-25** Home page lists all apps with search by name and filter by status and cohort.
 - **FR-26** Default sort: apps needing testers most (lowest active count first).
 
 ### 6.7 Reciprocity score
+
 - **FR-27a** Each member has two public numbers instead of one opaque score:
   - **Testing:** apps where they are Active, or Left after 14+ days. Removed entries, Left before 14 days, and entries on deleted apps do not count.
   - **Feedback:** apps where their feedback is marked Sent (Verified shown separately); Removed entries do not count.
@@ -193,9 +212,11 @@ Feedback itself lives in Google Play. TesBareng tracks engagement around it.
 - **FR-27f** A public profile page lists the apps a member created, the apps they are testing, and their cohort history (names and status only, no email).
 
 ### 6.8 Tugas saya (My Testing)
+
 - **FR-28** Logged-in users see: apps I created, apps I'm testing (days active, feedback status, check-ins), my reciprocity numbers, and a **to-do list** ordered by urgency: assigned apps not yet joined, check-ins due, feedback owed, new builds to test. During a cohort, the top of the page shows obligations, e.g. "9/14 opt-in · 6/14 sudah buka app · 4/14 feedback".
 
 ### 6.9 Cohorts and assignment
+
 - **FR-29** Admin creates a cohort with a name. Cohort status: **Forming → Active → Closed**.
 - **FR-30** While Forming, the admin adds members, each with one app they own (one app per member per cohort) or as a Helper with no app. An app can be in only one non-closed cohort at a time.
 - **FR-31** Starting a cohort requires at least 13 apps and sets Day 0 to the start time.
@@ -211,10 +232,11 @@ Feedback itself lives in Google Play. TesBareng tracks engagement around it.
 - **FR-38a** Members outside a cohort can still join any app freely (open pool). Open-pool testing counts toward reciprocity but not toward cohort obligations.
 
 ### 6.10 Milestone check-ins (attendance)
+
 Daily attendance on 14 apps would mean 14 taps per person per day and invites careless clicking. Attendance is per milestone instead:
 
 | Milestone | When | Tester action | Creator action |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Opt-in | Day 0–2 | Register as tester (§5.2) | — |
 | Used the app | From Day 5, due Day 7 | Check in "Sudah buka app" + send feedback on Play | Mark Verified |
 | New build | Within 3 days of each build | Check in "Sudah update" | Log the build |
@@ -227,11 +249,12 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 - **FR-43** Optional daily check-in remains a Phase 2 idea (§14).
 
 ### 6.11 Reminders
+
 - **FR-44** **Email digest:** once a day at 19:00 WIB, each member with pending to-dos receives one email listing all of them (assigned apps not joined, check-ins due, feedback owed, new builds). Max one email per member per day.
 - **FR-45** Digest triggers:
 
   | Cohort day | Content |
-  |---|---|
+  | --- | --- |
   | Day 1 | Assigned apps not yet joined |
   | Day 2 | Opt-in deadline; "Belum tes" label goes live after it |
   | Day 5 | Feedback not sent yet |
@@ -242,9 +265,10 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
   Creators also get: unreplied verified feedback older than 3 days, and "Your app reached 12 eligible testers".
 - **FR-46** Members can turn digest emails off in Tugas saya (on by default). Every email links to that setting.
 - **FR-47** Each sent reminder is logged; the same reminder is never sent twice to the same member on the same day.
-- **FR-48** **WhatsApp reminder panel (admin):** for each active cohort, lists Behind members by display name and milestone, with a ready-to-copy Indonesian message mentioning them, e.g. "Halo @Budi @Sari, deadline opt-in Cohort #3 hari ini jam 19.00. Cek tugasmu di TesBareng: <link>". The admin pastes it into the cohort group manually.
+- **FR-48** **WhatsApp reminder panel (admin):** for each active cohort, lists Behind members by display name and milestone, with a ready-to-copy Indonesian message mentioning them, e.g. "Halo @Budi @Sari, deadline opt-in Cohort #3 hari ini jam 19.00. Cek tugasmu di TesBareng: ". The admin pastes it into the cohort group manually.
 
 ### 6.12 WhatsApp sub-group per cohort
+
 - **FR-49** Each cohort can have one WhatsApp sub-group link (under the admin's WhatsApp Community), set by the admin.
 - **FR-50** The link is visible only to logged-in members of that cohort and the admin.
 - **FR-51** Before showing the link the first time, the UI notes that group members can see each other's phone numbers, and joining is optional. The Google Group remains the only mandatory group because Play Console needs it.
@@ -254,7 +278,7 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 ## 7. Permissions Matrix
 
 | Action | Visitor | Member | Tester (on app) | Creator (own app) | Admin |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | View apps, progress, tester lists, engagement, builds, profiles, cohorts, matrix | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Create app | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Edit / soft-delete app | ❌ | ❌ | ❌ | ✅ | ✅ |
@@ -273,21 +297,24 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 ## 8. Privacy
 
 ### 8.1 Email masking
+
 **Rule:** keep the first 2 characters of the local part (fewer only if the local part is shorter), add `*****` (fixed, so length isn't revealed), keep the domain.
 
 | Original | Masked |
-|---|---|
+| --- | --- |
 | `budi.santoso@gmail.com` | `bu*****@gmail.com` |
 | `ab@gmail.com` | `ab*****@gmail.com` |
 | `a@company.co.id` | `a*****@company.co.id` |
 
 ### 8.2 Where the full email lives
+
 - The full email is **never stored in a public table or view**. Postgres RLS works per row, not per column, so any column in a readable table is readable by anyone.
 - The full email is read from `auth.users` only inside `security definer` functions (for masking) and by the reminder Edge Function using the service role (for sending).
 - Manually added testers: the email is masked inside the RPC and the original is discarded.
 - Creators don't need full emails because testers are managed through the shared Google Group in Play Console.
 
 ### 8.3 Other personal data
+
 - Cohort WhatsApp links are stored in a separate table readable only by cohort members and the admin.
 - Phone numbers are never collected by TesBareng. Phone visibility inside WhatsApp groups is disclosed before joining (FR-51).
 
@@ -353,6 +380,7 @@ reminder_log                  -- no client access (service role only)
 **Indexes:** apps by creator and by status; testers by app and by user; builds by app; check_ins by tester; cohort_members by user; assignments by cohort, by tester and by app.
 
 ### 9.2 Computed views (no stored counters)
+
 All views use `security_invoker = true`, so no client can tamper with counts and there is no trigger fan-out.
 
 - **`app_stats`** — per app: `active_tester_count`, `eligible_count` (Active and `now() - opted_in_at >= 14 days`), `feedback_sent_count`, `feedback_verified_count`, `replied_count` (all on Active testers), `build_count`, `last_build_at`, and the creator's reciprocity numbers.
@@ -362,10 +390,11 @@ All views use `security_invoker = true`, so no client can tamper with counts and
 Days active per tester stays a client calculation.
 
 ### 9.3 Writes go through RPC only
+
 `insert`, `update` and `delete` are revoked on every table for `anon` and `authenticated`. All writes are `security definer` Postgres functions with `set search_path = ''` and fully qualified names. Admin checks use an `is_admin()` helper reading `profiles.role`; no client-callable function can change a role.
 
 | RPC | Who | Must keep |
-|---|---|---|
+| --- | --- | --- |
 | `ensure_profile()` | Signed-in user | Refresh name/photo from Google identity; mask email server-side |
 | `create_app(...)` | Member | FR-4 validation; `group_confirmed` true; unique non-deleted package name; 5 per rolling 24 h |
 | `update_app(app_id, ...)` | Creator, admin | Editable fields only; package uniqueness |
@@ -378,7 +407,7 @@ Days active per tester stays a client calculation.
 | `add_build(app_id, version_name, uploaded_at, changelog)` | Creator, admin | 10 per app per rolling 24 h |
 | `check_in(app_id, kind, build_id?)` | Tester | Own Active entry; window rules (§6.10); once per kind (per build) |
 | `set_email_reminders(enabled)` | Signed-in user | Own profile only |
-| `create_cohort(name)` | Admin | |
+| `create_cohort(name)` | Admin |  |
 | `add_cohort_member(cohort_id, user_id, app_id?)` | Admin | Cohort Forming; app owned by user and not in another open cohort; user not Owing |
 | `remove_cohort_member(cohort_id, user_id)` | Admin | Cohort Forming only |
 | `start_cohort(cohort_id)` | Admin | ≥ 13 apps; shuffle ring; generate assignments per FR-32/33; set `day0_at` |
@@ -391,15 +420,17 @@ Days active per tester stays a client calculation.
 `mask_email(text)` is a SQL function with its own tests.
 
 ### 9.4 Errors
+
 Functions raise with an Indonesian `message` the UI shows as-is, and the error code in `hint`: `unauthenticated`, `invalid-argument`, `not-found`, `permission-denied`, `already-exists`, `failed-precondition`, `resource-exhausted`. The client maps codes back; raw Postgres error text is never shown.
 
 ### 9.5 Realtime
+
 The free plan allows 200 concurrent Realtime connections. Realtime is used only on the app detail page (testers, builds, check-ins and the app row for that app; on change, refetch `app_stats` for it). Other pages, including the cohort matrix, refetch on mount and on window focus.
 
 ## 10. Pages
 
 | Page | Route | Content |
-|---|---|---|
+| --- | --- | --- |
 | Home / App list | `/` | Search, filters (status, cohort), app cards with progress and labels |
 | App detail | `/apps/{id}` | App info, links, feedback guide, progress, tester table, build log, check-ins |
 | Add / edit app | `/apps/new`, `/apps/{id}/edit` | Form, feedback guide, Google Group confirmation, build log entry |
@@ -415,7 +446,7 @@ The free plan allows 200 concurrent Realtime connections. Realtime is used only 
 Supersedes the v1 Firebase stack (moved 31 October 2026 because Firebase's Blaze plan requires a credit card; the owner has none).
 
 | Layer | Choice |
-|---|---|
+| --- | --- |
 | Frontend | React + Vite, Tailwind CSS (UI unchanged by the migration) |
 | Auth | Supabase Auth, Google provider (redirect flow) |
 | Database | Supabase Postgres, free plan, region `ap-southeast-1` (Singapore) |
@@ -426,6 +457,7 @@ Supersedes the v1 Firebase stack (moved 31 October 2026 because Firebase's Blaze
 | Client SDK | `@supabase/supabase-js` |
 
 ### 11.1 Email reminders
+
 - Postgres can't speak SMTP (`pg_net` only makes HTTP calls), so sending is the one job that needs an Edge Function. Everything else stays in SQL.
 - **Flow:** `pg_cron` runs daily at 12:00 UTC (19:00 WIB) → `pg_net` POSTs to the `send-reminders` Edge Function with a shared secret (JWT verification off for this function; the secret is checked instead and stored in Supabase Vault / function secrets) → the function calls `due_reminders()` (executable only by the service role), builds one digest per member, sends it, and writes `reminder_log`.
 - **SMTP:** Gmail, from a dedicated community account (e.g. `tesbarengindonesia@gmail.com`) with 2-Step Verification and an **App Password**. Use `smtp.gmail.com` on **port 465** (implicit TLS): Supabase Edge Functions block outgoing connections on ports 25 and 587.
@@ -434,6 +466,7 @@ Supersedes the v1 Firebase stack (moved 31 October 2026 because Firebase's Blaze
 - **Local dev:** point SMTP at the local mail catcher that `supabase start` runs; never send real email from local.
 
 ### 11.2 Free-plan limits that matter
+
 - The project **pauses after 7 days of inactivity**; when paused, cron and reminders stop. Restore from the dashboard. Don't rely on cron as a keep-alive.
 - **No automatic backups** on the free plan; the admin exports the database manually after each cohort closes.
 - 200 concurrent Realtime connections (hence Realtime only on app detail).
@@ -441,12 +474,14 @@ Supersedes the v1 Firebase stack (moved 31 October 2026 because Firebase's Blaze
 - Edge Functions: 2 s CPU time per request (SMTP waiting doesn't count as CPU).
 
 ### 11.3 Local development
+
 - `supabase init` / `supabase start` (Docker), migrations in `supabase/migrations/*.sql`.
 - Root scripts: `db:start`, `db:reset`, `seed`, `test`.
 - Seed: same sample data as before (36 members, 14 apps + 1 deleted, 116 tester entries, 26 builds, admin Yusuf Hidayat), plus one active cohort with assignments and check-ins. Auth users are created through the admin API so profiles go through the real trigger. Never seed a remote project.
 - Tests (Vitest + supabase-js, or pgTAP): masking, constraints, view maths (13 vs 14 days, Left-before-14, Removed, deleted apps), every permission (all direct table writes denied, full email unreadable), every RPC with each error code and rate limit, assignment generation (full mesh at N = 13–16, ring k = 14 at N > 16, every app receives exactly k), and reminder selection.
 
 ### 11.4 Manual setup by the owner (later)
+
 1. Create the Supabase project in `ap-southeast-1`.
 2. Create a Google OAuth client; add Supabase callback and Cloudflare Pages URLs as redirect URIs.
 3. Disable the email/password provider in production.
@@ -463,11 +498,34 @@ Supersedes the v1 Firebase stack (moved 31 October 2026 because Firebase's Blaze
 - Rate limits: 5 apps per user per rolling 24 h; 10 builds per app per rolling 24 h; check-ins limited by uniqueness.
 - Report the main JS bundle size after the migration (274 KB gzip with Firebase).
 
-## 13. UI Design Guidelines (Anti-AI-Slop)
+## 13. Design Direction and UI Guidelines
 
-TesBareng must not look like a generic AI-generated template. All UI work uses **Taste Skill** (`design-taste-frontend`, MIT license): https://github.com/Leonxlnx/taste-skill
+### 13.0 Ambition: Awwwards-level
+
+TesBareng aims to be recognised on [Awwwards](https://www.awwwards.com/): **Honorable Mention as the minimum bar, Site of the Day as the goal.** Design work is judged against the jury's own rubric, not taste alone.
+
+**The rubric.** Each submission is scored by at least 18 jurors; the 3 scores furthest from the average are dropped.
+
+| Criterion | Weight | What it means for TesBareng |
+| --- | --- | --- |
+| Design | 40% | Distinctive typography, deliberate layout and rhythm, a visual system that holds across every screen, from landing to the tester table |
+| Usability | 30% | Fast on a mid-range Android over 4G, clear flows (join → check in → feedback), accessible, flawless on mobile |
+| Creativity | 20% | One original idea that only this product could have (see signature moment below) |
+| Content | 10% | Real copy in Bahasa Indonesia, real community apps and numbers, no placeholder text or stock-grade imagery |
+
+Design and Usability together are 70% of the score. A dazzling site that is slow or confusing does not win, so performance and clarity are design requirements, not afterthoughts.
+
+**Two surfaces, two jobs.**
+
+- **Story surface (the submission piece):** the landing / About page. Expressive: editorial typography, choreographed motion, an interactive signature moment. This is what jurors see first.
+- **Work surface:** app list, app detail, cohort matrix, Tugas saya, forms, admin. Restrained and fast, but crafted to the same standard: shared type and colour system, considered micro-interactions, perfect alignment. Jurors click through, so these screens must hold up.
+
+**Creative brief (starting point, not a fixed visual).** The concept should come from the subject: *gotong royong* (Indonesian mutual cooperation) expressed through the community's real mechanics. A strong candidate for the signature moment is the **cohort ring**: on the landing page, members appear as points on a ring and, as the visitor scrolls or taps, the assignment lines draw in until every app is held by 14 others. It explains the product in one interaction and is unique to TesBareng. The shared attendance sheet and the 12/14 countdown are secondary motifs. The design process (§13.1–13.3) may replace this if it finds a stronger idea.
+
+All UI work uses **Taste Skill** (`design-taste-frontend`, MIT license): [https://github.com/Leonxlnx/taste-skill](https://github.com/Leonxlnx/taste-skill)
 
 ### 13.1 Setup
+
 - Install for coding agents: `npx skills add https://github.com/Leonxlnx/taste-skill --skill "design-taste-frontend"`
 - Claude Code alternative: `/plugin marketplace add Leonxlnx/taste-skill` then `/plugin install taste-skill@taste-skill`
 - Requirements: Node 22+ and an installed Chrome, Edge or Chromium.
@@ -475,23 +533,65 @@ TesBareng must not look like a generic AI-generated template. All UI work uses *
 ### 13.2 Which route applies
 
 | Screen | Type | Route |
-|---|---|---|
+| --- | --- | --- |
 | About / How it works | Page (read and scrolled) | Standard page run |
 | App list, app detail, tester table, build log, cohort list and detail (matrix), member profile, Tugas saya, admin, forms | App screen (worked in) | App-screen route (`draw.mjs --app`, `inspect.mjs --app`) |
 
-The app style is already dealt (`.taste-skill/app`, accent ladder) and the About style in `.taste-skill/about`. New screens reuse them; do not re-deal a style.
+The app style is already dealt (`.taste-skill/app`, accent ladder) and the About style in `.taste-skill/about`. During the Supabase migration, do not re-deal a style. The design pass (§16) may re-deal the story surface once to meet §13.0; work screens keep their dealt style and are refined, not replaced.
 
 ### 13.3 Design requirements
-- **DR-1** The visual concept comes from the subject (community testing together, the shared spreadsheet, Indonesian developer culture), not a default template.
+
+**Concept and visual system**
+
+- **DR-1** The visual concept comes from the subject (gotong royong, the cohort ring, the shared sheet, Indonesian developer culture), not a default template.
 - **DR-2** Avoid known slop patterns: centred hero over a row of icon cards, soft gradients and glows, icons in tinted squares, rainbow charts, invented vanity numbers.
 - **DR-3** Colour is spent on data: progress bars, tester status, feedback state, check-in state, matrix cells, and the "Belum tes" label.
-- **DR-4** Tables, the matrix and figures are aligned (tabular numerals).
-- **DR-5** On mobile, navigation folds away; the tester table and obligation matrix stay readable (horizontal scroll with a sticky first column).
-- **DR-6** Any photographs come from open collections and are credited.
+- **DR-4** One type system across both surfaces: an expressive display face for the story surface and headings, a highly legible text face for work screens, tabular numerals for every count, day and date. Fonts must render Indonesian text well and be subset to keep weight down.
+- **DR-5** A spacing and grid system applied everywhere, so the tester table, the matrix and the landing page feel like one product.
+
+**Motion and interaction**
+
+- **DR-6** Motion explains, it doesn't decorate: the ring drawing assignments, progress bars filling toward 12 and 14, a matrix cell changing state after a check-in, a tester row arriving after joining.
+- **DR-7** Animate only `transform` and `opacity`; no layout-thrashing animation. Transitions on work screens stay short (roughly 150–250 ms); the story surface may run longer choreography.
+- **DR-8** No scroll hijacking. Native scrolling stays intact; scroll-linked effects layer on top of it.
+- **DR-9** `prefers-reduced-motion` is honoured everywhere, with a static but equally clear version of the signature moment.
+- **DR-10** Every interactive element has hover, focus, active and disabled states, and every async action has loading, success and error states that read as designed, not default.
+
+**Content**
+
+- **DR-11** Real content only: Bahasa Indonesia copy written for the community, real apps from members (with permission), real cohort numbers. No lorem ipsum anywhere, including empty states.
+- **DR-12** Empty, error and first-run states are written and designed as carefully as full states.
+- **DR-13** Any photographs come from open collections or the community itself and are credited.
+
+**Mobile and accessibility**
+
+- **DR-14** Mobile is designed first, not shrunk: on phones the tester table and obligation matrix stay readable (horizontal scroll with a sticky first column), touch targets are at least 44 px, and the signature moment works by tap.
+- **DR-15** WCAG 2.2 AA: text contrast, visible focus rings, full keyboard use, semantic headings and landmarks, labelled form fields, and the ring and matrix described for screen readers.
+
+**Performance budget** (measured on a mid-range Android over 4G)
+
+- **DR-16** Largest Contentful Paint under 2.5 s, Cumulative Layout Shift under 0.1, Interaction to Next Paint under 200 ms, on every page.
+- **DR-17** The story surface loads its motion code only on that page; work screens never pay for it. Prefer CSS and small libraries; heavy 3D or WebGL only if it fits the budget and has a static fallback.
+- **DR-18** Images in modern formats with explicit dimensions; fonts preloaded with `font-display: swap` and a metric-matched fallback.
+
+**Technical polish** (jurors also see the Developer Award scores)
+
+- **DR-19** Semantic HTML, page titles and meta description per route, Open Graph images for app and cohort pages, a favicon set, and a designed 404 page.
 
 ### 13.4 Acceptance
+
 - Every page and app screen passes the skill's `inspect` check at mobile, tablet and desktop, with 0 FAIL and no new WARN compared with the previous build.
-- Each new screen goes through at least one screenshot review-and-fix round.
+- Each screen goes through at least one screenshot review-and-fix round.
+- Lighthouse on mobile: Performance ≥ 90, Accessibility ≥ 95, Best Practices ≥ 95, SEO ≥ 95 on landing, app list, app detail and cohort detail.
+- Core Web Vitals within DR-16 on a real mid-range Android device, not only in emulation.
+- Reduced-motion and keyboard-only walkthroughs of the full flow (sign in → join → check in → mark feedback) pass.
+- **Pre-submission review:** at least three designers outside the project score the live site on the four Awwwards criteria. Submit only when every criterion averages 8/10 or higher; otherwise fix the weakest criterion first.
+
+### 13.5 Awwwards submission
+
+- Submit the live production site, with real content and an active cohort, after the design pass and acceptance above.
+- Submission is paid; budget the fee before the design pass ends.
+- Prepare: a short project description in English, credits (design, development, community), and screenshots or a short video of the signature moment.
 
 ## 14. Suggested Additions
 
@@ -519,8 +619,9 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 ## 16. Milestones
 
 | Phase | Scope |
-|---|---|
+| --- | --- |
 | **MVP** | Supabase migration (schema, views, RPC, RLS, tests), Google login, apps, tester registration with checklist, masked tester table, 12/14 progress, engagement tracking, feedback guide, build log, reciprocity score and profile, Tugas saya, cohorts with assignment and obligation matrix, milestone check-ins, daily email digest, admin panel (cohorts, WhatsApp reminder text, moderation), WhatsApp link per cohort |
+| **Design pass** | Story surface rebuilt to §13.0 with the signature moment; work screens refined (type, motion, states, empty states); accessibility and performance budget met; pre-submission review; Awwwards submission |
 | **Phase 2** | Optional daily check-in, web push, CSV export |
 | **Phase 3** | iOS / TestFlight support, cohort retrospective, public stats page |
 
@@ -534,3 +635,5 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 6. Is Day 21 the right hard close for a cohort, or should it stay open until every app is ready?
 7. Should a member with two apps be allowed to bring both into one cohort (testing twice as many apps in return)?
 8. Who besides the owner may act as admin for running cohorts?
+9. Should logged-out visitors land on the story page at `/` (stronger for Awwwards, since jurors open the home URL), with the app list moved to `/apps`?
+10. Will the design pass be done in-house with Taste Skill alone, or with a dedicated designer or creative developer for the signature moment?
