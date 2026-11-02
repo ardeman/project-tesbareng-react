@@ -1,0 +1,99 @@
+/* TesBareng design tokens: the single source shared by both surfaces.
+   Values come from DESIGN.md (approved by the owner, 2 Nov 2026) and ADR-001 r2 §2–§3.
+   Change only with the owner's approval. Light theme only (dark mode is out of scope for MVP). */
+:root {
+  /* Colour: "bumbu" palette. One job per colour; text on every fill is ink. */
+  --ink: #121212;          /* all text, every border, every hard shadow */
+  --kertas: #fff6e3;       /* page background */
+  --putih: #ffffff;        /* card and table surfaces */
+  --kunyit: #ffc83d;       /* primary action, active schedule day */
+  --pandan: #2fd47e;       /* eligible, verified, done, Good standing */
+  --langit: #6bb8ff;       /* opted in, informational, link hover */
+  --cabai: #ff5b4f;        /* Belum tes, Behind, errors, destructive, Owing */
+  --ubi: #b9a3ff;          /* badges and reciprocity only */
+  --muted: #57534b;        /* metadata, timestamps (7.1:1 on kertas) */
+  --surface-soft: #f7ebcf; /* disabled fields, row hover, unassigned matrix cells */
+  --primary-disabled: #f2e6c8;
+  --scrim: rgb(18 18 18 / 0.4); /* the one approved transparency: modal backdrop */
+
+  /* Badge tiers (PRD FR-27h); always with the tier name in text. */
+  --tier-bronze: #d9894a;
+  --tier-silver: #c7cdd6;
+  --tier-gold: var(--kunyit);
+  --tier-platinum: var(--ubi);
+
+  /* Type */
+  --font-text: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Archivo", "Arial Black", "Helvetica Neue", Arial, sans-serif;
+  --display-stretch: 125%;
+
+  /* Work surface scale */
+  --fs-display: 32px;
+  --fs-h1: 24px;
+  --fs-h2: 20px;
+  --fs-body: 16px;
+  --fs-small: 14px;
+  --fs-caption: 13px;
+  --fs-button: 15px;
+
+  /* Borders and shadows (work surface; story overrides below) */
+  --bw: 2px;
+  --bw-row: 1px;
+  --sh: 3px;
+  --sh-hover: 5px;
+  --lift: 2px;
+  --shadow: var(--sh) var(--sh) 0 0 var(--ink);
+  --shadow-hover: var(--sh-hover) var(--sh-hover) 0 0 var(--ink);
+  --shadow-modal: 6px 6px 0 0 var(--ink);
+
+  /* Radius */
+  --r-none: 0;
+  --r-sm: 6px;
+  --r-full: 9999px;
+
+  /* Spacing (8 px base) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 16px;
+  --s-4: 24px;
+  --s-5: 32px;
+  --s-6: 48px;
+  --s-7: 64px;
+  --s-8: 96px;
+
+  /* Touch target */
+  --target: 44px;
+
+  /* Motion: snap, not glide. No bounce. */
+  --ease: ease-out;
+  --t-press: 90ms;
+  --t-hover: 140ms;
+  --t-control: 200ms;
+  --t-enter: 360ms;
+}
+
+/* Story surface: same colours and fonts, larger borders and offsets. */
+.surface-story {
+  --bw: 3px;
+  --sh: 6px;
+  --sh-hover: 9px;
+  --lift: 3px;
+}
+@media (max-width: 479px) {
+  .surface-story { --bw: 2px; }
+}
+
+/* Focus (DESIGN.md, approved): 3 px ink outline, offset 2 px, on every surface. */
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
