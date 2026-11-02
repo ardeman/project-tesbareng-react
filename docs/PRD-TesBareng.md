@@ -3,7 +3,7 @@
 |  |  |
 | --- | --- |
 | **Product** | TesBareng ("test together") |
-| **Version** | 2.1 |
+| **Version** | 2.2 |
 | **Status** | Draft |
 | **Last updated** | 2 November 2026 |
 | **Owner** | Community Admin |
@@ -13,6 +13,12 @@
 ---
 
 ## Changelog
+
+**v2.2 — 2 November 2026**
+
+- **Cohorts and open pool become one system** (§5.8, §6.9): cohort members are either **Creators** (bring an app) or **Pure testers** (no app). Pure testers join a cohort themselves, from Forming until Day 7.
+- **Badges** (§6.7): one badge system for everyone, based on apps tested to 14+ days: Bronze ≥ 3, Silver ≥ 7, Gold ≥ 14, Platinum ≥ 25.
+- **Public member profile** expanded into its own section (§6.13).
 
 **v2.1 — 2 November 2026**
 
@@ -68,7 +74,7 @@ Today, progress is invisible, and testing is not fair by default: some members w
 | **Member** | Logged in with Google. Can create apps and register as a tester. |
 | **Creator** | A member who owns an app. Full edit rights on that app and its tester list. |
 | **Tester** | A member registered on a specific app. Updates their own engagement checklist and check-ins on that app. |
-| **Cohort member** | A member placed in a cohort, with or without an app. Has assigned apps to test and sees the cohort's WhatsApp link. |
+| **Cohort member** | A member in a cohort, as a **Creator** (brings an app, receives and gives testing) or a **Pure tester** (no app, only gives testing). Has assigned apps to test and sees the cohort's WhatsApp link. |
 | **Admin** | Community owner. Forms and runs cohorts, sends WhatsApp reminders, moderates any app, tester entry or feedback summary. Role is set only in SQL by the owner. |
 
 A single user can be a Creator of their own app(s), a Tester of other apps and a Cohort member at the same time.
@@ -119,7 +125,7 @@ On their own app only, the creator can:
 
 ### 5.6 Run a cohort (Admin)
 
-1. **Form:** create a cohort (e.g. "Cohort #3") and add members, each with the app they bring. Members without an app can join as **Helpers**. A cohort needs at least **13 apps**, so each app can receive at least 12 testers.
+1. **Form:** create a cohort (e.g. "Cohort #3") and add creators, each with the app they bring. Pure testers join on their own (§5.8). A cohort needs at least **13 apps**, so each app can receive at least 12 testers from creators alone; pure testers add buffer on top.
 2. **Link:** paste the cohort's WhatsApp sub-group link (§6.12).
 3. **Start (Day 0):** all closed tracks must be live. Starting the cohort generates assignments (§6.9) and opens the 48-hour opt-in window.
 4. **Run:** members complete milestones (§6.10). The daily digest email and the admin's WhatsApp reminders keep people on schedule (§6.11).
@@ -134,6 +140,15 @@ On their own app only, the creator can:
 4. Each new build: update the app and check in "Sudah update".
 5. Day 13: check in "Masih opt-in".
 6. Discussion and questions happen in the cohort WhatsApp group.
+
+### 5.8 Join a cohort as a pure tester (Member)
+
+For members without an app, or between their own apps, who want to help and earn a badge.
+
+1. Log in and open a cohort that is Forming, or Active up to Day 7.
+2. Click **Gabung sebagai tester (Join as tester)**. The page explains the obligations: opt in to the assigned apps within 48 hours, check in at each milestone, send feedback on Play.
+3. Confirm. If the cohort is already Active, the member is assigned apps immediately (§6.9, FR-33) and their own 48-hour opt-in window starts now.
+4. From here the journey is the same as §5.7. Every assigned app taken to 14+ days counts toward the member's badge (§6.7).
 
 ## 6. Functional Requirements
 
@@ -209,7 +224,24 @@ Feedback itself lives in Google Play. TesBareng tracks engagement around it.
 - **FR-27c** The app list can be sorted by **Creator most active**.
 - **FR-27d** Tugas saya shows the member's own numbers, with a nudge when Testing is below the number of apps they have listed.
 - **FR-27e** Numbers are computed by database views; nobody can edit them.
-- **FR-27f** A public profile page lists the apps a member created, the apps they are testing, and their cohort history (names and status only, no email).
+- **FR-27f** The full public profile is specified in §6.13.
+
+**Badges.** One badge system for everyone, creators and pure testers alike.
+
+- **FR-27g** The badge is based on **apps tested**: tester entries that reached **14+ days active** (Active with 14+ days, or Left after 14+ days). Removed entries and entries on deleted apps never count. This is stricter than the Testing number in FR-27a, so joining many apps without staying cannot raise a badge.
+- **FR-27h** Tiers:
+
+  | Badge | Apps tested |
+  | --- | --- |
+  | — (no badge yet) | 0–2 |
+  | Bronze | 3–6 |
+  | Silver | 7–13 |
+  | Gold | 14–24 |
+  | Platinum | 25+ |
+- **FR-27i** Cohort and open-pool testing both count. A pure tester who completes one full cohort (14 apps) reaches Gold.
+- **FR-27j** The badge appears on the member profile, beside the member's name in tester tables and the cohort matrix, and on app cards next to the creator's numbers.
+- **FR-27k** Tugas saya shows progress to the next tier, e.g. "5 / 7 apps menuju Silver".
+- **FR-27l** The badge is computed from current data by a view, never stored, and nobody can edit it. Feedback-based badges are a later idea (§14).
 
 ### 6.8 Tugas saya (My Testing)
 
@@ -218,18 +250,20 @@ Feedback itself lives in Google Play. TesBareng tracks engagement around it.
 ### 6.9 Cohorts and assignment
 
 - **FR-29** Admin creates a cohort with a name. Cohort status: **Forming → Active → Closed**.
-- **FR-30** While Forming, the admin adds members, each with one app they own (one app per member per cohort) or as a Helper with no app. An app can be in only one non-closed cohort at a time.
+- **FR-30** While Forming, the admin adds creators, each with one app they own (one app per member per cohort). An app can be in only one non-closed cohort at a time. Pure testers add themselves (FR-33a).
 - **FR-31** Starting a cohort requires at least 13 apps and sets Day 0 to the start time.
 - **FR-32** **Assignment rule.** Members with apps are shuffled into a random ring order. With N apps:
   - **N = 13–16 → full mesh:** every member tests every other app (k = N − 1).
   - **N > 16 → ring:** the member at position *i* tests the apps at positions *i+1 … i+14* (wrapping around), so k = 14. Every member tests exactly 14 apps and every app receives exactly 14 assigned testers.
-- **FR-33** Helpers are each assigned 14 apps (or all apps if fewer), chosen to even out coverage: apps with the fewest assigned testers first.
+- **FR-33** Pure testers are each assigned 14 apps (or all apps if fewer), chosen to even out coverage: apps with the fewest assigned testers first. Pure testers present at Day 0 are assigned when the cohort starts; later joiners are assigned at the moment they join.
+- **FR-33a** A member can join a cohort as a pure tester while it is Forming or Active up to Day 7, if they are not already in it and not Owing. Day 7 is the last join day so a pure tester can still reach 14 days before the Day 21 close.
+- **FR-33b** A pure tester's opt-in deadline is 48 hours from their own assignment time, not from Day 0. All later milestones (FR-42) use the same offset.
 - **FR-34** An assignment is **fulfilled** when the assigned member has an Active tester entry on that app. Joining uses the normal flow (§5.2).
 - **FR-35** **Opt-in deadline:** 48 hours after Day 0. After the deadline, a member with unfulfilled assignments shows as **Behind**, and their own app shows a public **"Belum tes"** label until fulfilled.
 - **FR-36** **Slot reassignment:** the admin can move an unfulfilled assignment to another cohort member who has fulfilled all their own assignments. The original assignment is marked Reassigned.
 - **FR-37** **Closing:** at close, each member's standing is set to **Good** (all obligations met) or **Owing**. Owing members cannot be added to a new cohort until the admin marks them **Settled**.
 - **FR-38** **Cohort page** shows the members, the WhatsApp button (members only, §6.12), the schedule with today's day number, and an **obligation matrix**: rows are members, columns are apps, cells show not joined / opted in / used / feedback sent / feedback verified. Unassigned cells are greyed out.
-- **FR-38a** Members outside a cohort can still join any app freely (open pool). Open-pool testing counts toward reciprocity but not toward cohort obligations.
+- **FR-38a** Cohorts and the open pool are one system. Any member can still join any app freely, including apps not in a cohort; that testing counts toward reciprocity and badges but not toward cohort obligations. Pure testers who want structure and a faster badge join a cohort (§5.8).
 
 ### 6.10 Milestone check-ins (attendance)
 
@@ -275,6 +309,20 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 - **FR-52** The admin panel provides a pinned-message template: schedule (Day 0, 2, 7, 13), link to the cohort page, and group rules ("chat for coordination; status is reported on TesBareng, not in chat").
 - **FR-53** When a cohort closes, the page reminds the admin to archive the WhatsApp group.
 
+### 6.13 Member profile (public)
+
+- **FR-54** Every member has a public profile at `/u/{id}`, viewable by anyone, including visitors who are not logged in.
+- **FR-55** The profile shows:
+  - Photo, display name, member since, and role labels earned (Creator if they have listed an app; Tester if they have tested any app).
+  - **Badge** with apps-tested count and progress to the next tier.
+  - Reciprocity numbers: Testing, apps tested (14+ days), Feedback sent (Verified).
+  - **Apps created:** name, status, active and eligible tester counts, linking to the app page.
+  - **Apps testing:** name, days active, status, feedback state.
+  - **Cohort history:** cohort name, role (Creator or Pure tester), assignments fulfilled, and standing (Good / Owing / Settled).
+- **FR-56** The profile never shows an email, masked or full, or any WhatsApp link.
+- **FR-57** The owner sees an **Edit** link to Tugas saya settings (email digest) on their own profile. Name and photo come from the Google account and update on sign-in.
+- **FR-58** Each profile has its own page title, meta description and Open Graph image showing name and badge, so it looks good when shared in WhatsApp.
+
 ## 7. Permissions Matrix
 
 | Action | Visitor | Member | Tester (on app) | Creator (own app) | Admin |
@@ -287,6 +335,7 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 | Leave testing | ❌ | ❌ | ✅ | — | ✅ |
 | Add manual tester / edit tester status, date, note | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Tick "Feedback sent" + summary (own entry) | ❌ | ❌ | ✅ | ❌ | ✅ (moderation) |
+| Join a cohort as pure tester (Forming, or Active ≤ Day 7) | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Check in (own entry) | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Set Verified / Replied | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Edit feedback guide, add build log | ❌ | ❌ | ❌ | ✅ | ✅ |
@@ -358,7 +407,8 @@ cohorts                       -- public read
   day0_at?, closed_at?, created_at
 
 cohort_members                -- public read
-  cohort_id → cohorts, user_id → profiles, app_id uuid null → apps (null = helper),
+  cohort_id → cohorts, user_id → profiles, app_id uuid null → apps (null = pure tester),
+  assigned_at?,                -- when this member's assignments were generated (FR-33b)
   ring_position int?, standing ('good' | 'owing' | 'settled')?, joined_at
   pk (cohort_id, user_id)
 
@@ -384,7 +434,7 @@ reminder_log                  -- no client access (service role only)
 All views use `security_invoker = true`, so no client can tamper with counts and there is no trigger fan-out.
 
 - **`app_stats`** — per app: `active_tester_count`, `eligible_count` (Active and `now() - opted_in_at >= 14 days`), `feedback_sent_count`, `feedback_verified_count`, `replied_count` (all on Active testers), `build_count`, `last_build_at`, and the creator's reciprocity numbers.
-- **`profile_stats`** — per user: `apps_created_count`, `testing_count` (Active, or Left with `left_at - opted_in_at >= 14 days`; never Removed; never on deleted apps), `feedback_sent_count`, `feedback_verified_count` (status ≠ removed).
+- **`profile_stats`** — per user: `apps_created_count`, `testing_count` (Active, or Left with `left_at - opted_in_at >= 14 days`; never Removed; never on deleted apps), `apps_tested_count` (entries that reached 14+ days active: Active with `now() - opted_in_at >= 14 days`, or Left with `left_at - opted_in_at >= 14 days`; never Removed; never on deleted apps), `badge_tier` (`none` | `bronze` | `silver` | `gold` | `platinum`, from `apps_tested_count` per FR-27h), `next_tier_at`, `feedback_sent_count`, `feedback_verified_count` (status ≠ removed).
 - **`cohort_obligations`** — per cohort member: assigned count, opted-in count, used-app count, feedback sent/verified counts, latest-build-updated count, still-opted-in count, `is_behind` (per FR-42), and `owes_opt_in` (drives the "Belum tes" label).
 
 Days active per tester stays a client calculation.
@@ -408,6 +458,7 @@ Days active per tester stays a client calculation.
 | `check_in(app_id, kind, build_id?)` | Tester | Own Active entry; window rules (§6.10); once per kind (per build) |
 | `set_email_reminders(enabled)` | Signed-in user | Own profile only |
 | `create_cohort(name)` | Admin |  |
+| `join_cohort_as_tester(cohort_id)` | Member | Cohort Forming, or Active and ≤ Day 7; not already a member; not Owing; if Active, assign 14 apps by lowest coverage and set `assigned_at` |
 | `add_cohort_member(cohort_id, user_id, app_id?)` | Admin | Cohort Forming; app owned by user and not in another open cohort; user not Owing |
 | `remove_cohort_member(cohort_id, user_id)` | Admin | Cohort Forming only |
 | `start_cohort(cohort_id)` | Admin | ≥ 13 apps; shuffle ring; generate assignments per FR-32/33; set `day0_at` |
@@ -435,8 +486,8 @@ The free plan allows 200 concurrent Realtime connections. Realtime is used only 
 | App detail | `/apps/{id}` | App info, links, feedback guide, progress, tester table, build log, check-ins |
 | Add / edit app | `/apps/new`, `/apps/{id}/edit` | Form, feedback guide, Google Group confirmation, build log entry |
 | Cohort list | `/cohorts` | Active, forming and closed cohorts |
-| Cohort detail | `/cohorts/{id}` | Members, schedule and day counter, obligation matrix, WhatsApp button (members only) |
-| Member profile | `/u/{id}` | Reciprocity numbers, apps created, apps testing, cohort history |
+| Cohort detail | `/cohorts/{id}` | Members (creators and pure testers, with badges), schedule and day counter, obligation matrix, "Gabung sebagai tester" button (until Day 7), WhatsApp button (members only) |
+| Member profile | `/u/{id}` | Badge and progress, reciprocity numbers, apps created, apps testing, cohort history (§6.13) |
 | Tugas saya | `/me` | Obligations, to-do list, apps created and testing, email digest toggle |
 | Admin | `/admin` | Cohort management (form, start, reassign, close, settle), WhatsApp reminder panel and pinned-message template, moderation (restore apps, edit tester entries) |
 | About / How it works | `/about` | Community rules, cohort explanation, step-by-step guide (join group → opt in → use → feedback on Play → check-ins), Google Group link |
@@ -545,7 +596,7 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 
 - **DR-1** The visual concept comes from the subject (gotong royong, the cohort ring, the shared sheet, Indonesian developer culture), not a default template.
 - **DR-2** Avoid known slop patterns: centred hero over a row of icon cards, soft gradients and glows, icons in tinted squares, rainbow charts, invented vanity numbers.
-- **DR-3** Colour is spent on data: progress bars, tester status, feedback state, check-in state, matrix cells, and the "Belum tes" label.
+- **DR-3** Colour is spent on data: progress bars, tester status, feedback state, check-in state, matrix cells, the "Belum tes" label, and badge tiers. Badges are designed as part of the type and colour system, not as generic medal icons.
 - **DR-4** One type system across both surfaces: an expressive display face for the story surface and headings, a highly legible text face for work screens, tabular numerals for every count, day and date. Fonts must render Indonesian text well and be subset to keep weight down.
 - **DR-5** A spacing and grid system applied everywhere, so the tester table, the matrix and the landing page feel like one product.
 
@@ -605,6 +656,7 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 8. **Web push notifications (Phase 2).** Works well on Android; on iPhone only after installing the PWA to the home screen.
 9. **Export tester list to CSV (Phase 2)** for the creator's records.
 10. **Cohort retrospective (Phase 3).** After close, show which apps reached production and how long it took.
+11. **Badges v2 (Phase 2).** Add verified feedback to the badge rule (e.g. a tier also requires feedback verified on half the apps tested), and special badges such as "Completed a cohort in Good standing".
 
 ## 15. Success Metrics
 
@@ -612,6 +664,8 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 - Cohort completion rate: share of apps in a cohort that reach "Ready to apply" by close.
 - Share of members closing a cohort in Good standing.
 - Average apps tested per member (reciprocity health).
+- Pure testers per cohort, and how many complete a cohort in Good standing.
+- Badge distribution across members, and time from first join to Bronze.
 - Share of eligible testers with feedback sent and verified on Play.
 - Builds logged per app during testing; creator reply rate.
 - Tester drop-off before day 14.
@@ -620,9 +674,9 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 
 | Phase | Scope |
 | --- | --- |
-| **MVP** | Supabase migration (schema, views, RPC, RLS, tests), Google login, apps, tester registration with checklist, masked tester table, 12/14 progress, engagement tracking, feedback guide, build log, reciprocity score and profile, Tugas saya, cohorts with assignment and obligation matrix, milestone check-ins, daily email digest, admin panel (cohorts, WhatsApp reminder text, moderation), WhatsApp link per cohort |
+| **MVP** | Supabase migration (schema, views, RPC, RLS, tests), Google login, apps, tester registration with checklist, masked tester table, 12/14 progress, engagement tracking, feedback guide, build log, reciprocity score, badges and public profile, pure testers in cohorts, Tugas saya, cohorts with assignment and obligation matrix, milestone check-ins, daily email digest, admin panel (cohorts, WhatsApp reminder text, moderation), WhatsApp link per cohort |
 | **Design pass** | Story surface rebuilt to §13.0 with the signature moment; work screens refined (type, motion, states, empty states); accessibility and performance budget met; pre-submission review; Awwwards submission |
-| **Phase 2** | Optional daily check-in, web push, CSV export |
+| **Phase 2** | Optional daily check-in, web push, CSV export, badges v2 |
 | **Phase 3** | iOS / TestFlight support, cohort retrospective, public stats page |
 
 ## 17. Open Questions
@@ -637,3 +691,5 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 8. Who besides the owner may act as admin for running cohorts?
 9. Should logged-out visitors land on the story page at `/` (stronger for Awwwards, since jurors open the home URL), with the app list moved to `/apps`?
 10. Will the design pass be done in-house with Taste Skill alone, or with a dedicated designer or creative developer for the signature moment?
+11. Should badge names be Indonesian (e.g. Perunggu, Perak, Emas, Platinum) or stay in English?
+12. Is there a cap on pure testers per cohort, or can any number join until Day 7?
