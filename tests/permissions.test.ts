@@ -123,6 +123,7 @@ describe("direct table writes are denied for every client role", () => {
     const db = roles()[role];
     await denied(db.from("profiles").update({ role: "admin" }).eq("id", tester.id));
     await denied(db.from("profiles").update({ display_name: "Ganti" }).eq("id", other.id));
+    await denied(db.from("profiles").update({ email_reminders: false }).eq("id", other.id));
     await denied(db.from("profiles").insert({ id: other.id, display_name: "x", masked_email: "xx*****@gmail.com" }));
     await denied(db.from("profiles").delete().eq("id", other.id));
   });

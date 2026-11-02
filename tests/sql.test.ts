@@ -260,5 +260,68 @@ describe("app_stats", () => {
         creator_feedback_verified_count: 1,
       });
     });
+
+    it("apps_tested_count counts only entries that reached 14 days (PRD FR-27g)", async () => {
+      // Of the fixtures above only the Left-after-exactly-14-days entry qualifies:
+      // Active 1 day, Left 1 s short of 14 days, Left without left_at, Removed and
+      // the deleted app never count.
+      expect(await profileStats(tester.id)).toMatchObject({ apps_tested_count: 1, badge_tier: "none", next_tier_at: 3 });
+      expect(await stats(ownAppId)).toMatchObject({ creator_badge_tier: "none" });
+    });
+  });
+
+  describe("badges (PRD FR-27g–l)", () => {
+    let m: Member;
+    const add = async (over: Record<string, unknown>) => {
+      const appId = await newApp();
+      await must(service.from("testers").insert(entry(appId, { user_id: m.id, added_by: "self", ...over })));
+    };
+    const tested = () => add({ status: "active", opted_in_at: ago(14 * DAY_MS + 60_000) });
+
+    beforeAll(async () => {
+      m = await member("rina", "Rina Wulandari");
+    });
+
+    it("Active at 13 days does not count; Active at 14 days does", async () => {
+      await add({ status: "active", opted_in_at: ago(14 * DAY_MS - 60_000) });
+      expect((await profileStats(m.id)).apps_tested_count).toBe(0);
+      await tested();
+      expect((await profileStats(m.id)).apps_tested_count).toBe(1);
+    });
+
+    it("Removed after 14 days never counts", async () => {
+      await add({ status: "removed", opted_in_at: ago(30 * DAY_MS), left_at: ago(DAY_MS) });
+      expect((await profileStats(m.id)).apps_tested_count).toBe(1);
+    });
+
+    it("tiers change exactly at 3, 7, 14 and 25 apps tested", async () => {
+      const expectations: [number, string, number | null][] = [
+        [2, "none", 3],
+        [3, "bronze", 7],
+        [6, "bronze", 7],
+        [7, "silver", 14],
+        [13, "silver", 14],
+        [14, "gold", 25],
+        [24, "gold", 25],
+        [25, "platinum", null],
+      ];
+      let count = (await profileStats(m.id)).apps_tested_count;
+      for (const [target, tier, next] of expectations) {
+        while (count < target) {
+          await tested();
+          count++;
+        }
+        expect(await profileStats(m.id), `${target} apps tested`).toMatchObject({
+          apps_tested_count: target,
+          badge_tier: tier,
+          next_tier_at: next,
+        });
+      }
+    });
+
+    it("app_stats shows the creator's badge", async () => {
+      const own = await newApp(m.id);
+      expect(await stats(own)).toMatchObject({ creator_badge_tier: "platinum" });
+    });
   });
 });
