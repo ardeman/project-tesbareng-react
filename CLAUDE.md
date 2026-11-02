@@ -23,7 +23,7 @@ Requires Node 22+ and Chrome/Edge/Chromium installed.
 
 ## Stack
 
-- Frontend: React + Vite (TypeScript) SPA + Tailwind CSS + React Router, in `web/`. Hosting: Cloudflare Pages (`web/public/_redirects` serves the SPA routes).
+- Frontend: React + Vite (TypeScript) SPA + Tailwind CSS + React Router, in `web/`. Hosting: Vercel (`web/vercel.json` rewrites SPA routes to `index.html`; project root `web`, build `npm run build`, output `dist`).
 - Backend: Supabase free plan. Postgres + Row Level Security + Postgres functions (RPC) in `supabase/migrations/`. Auth: Supabase Auth, Google provider only. No Edge Functions unless something truly cannot be done in SQL.
 - Stack moved from Firebase on 2026-10-31: Firebase needs the Blaze plan (credit card) to deploy Cloud Functions; Supabase's free plan does not.
 - Development runs against the local Supabase stack (Docker). No hosted project exists yet. Never create remote projects or deploy without asking.
@@ -34,7 +34,7 @@ Requires Node 22+ and Chrome/Edge/Chromium installed.
 - Database: `npm run db:start` (API 54321, Postgres 54322, Studio 54323). `npm run db:reset` re-applies all migrations to an empty database. `npm run db:stop` stops it.
 - Seed sample data (stack running, clears and re-seeds; refuses non-local URLs): `npm run seed`
 - Web dev server: `npm --prefix web run dev`. With no env vars it talks to the local stack.
-- Production-like preview against the local stack: `cd web && npx vite build && npx vite preview`. A deployed build needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+- Production-like preview against the local stack: `cd web && npx vite build && npx vite preview`. A deployed build needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (template: `web/.env.example`).
 - Tests (stack running; they create and remove their own members, seed data stays): `npm test`
 - Local-only sign-in shortcut for checking screens: append `?devLogin=<seeded email>` to any URL (e.g. `?devLogin=yusuf.hidayat.dev@gmail.com`, the seeded admin). It only works when the Supabase URL is 127.0.0.1/localhost; production has the email provider disabled.
 - Backend contract between web and database: `docs/contract.md`. Change both sides together, with tests in `tests/`.
