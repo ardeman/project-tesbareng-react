@@ -3,6 +3,7 @@
 
 export type AppStatus = 'recruiting' | 'testing' | 'applied' | 'live'
 export type TesterStatus = 'active' | 'left' | 'removed'
+export type BadgeTier = 'none' | 'bronze' | 'silver' | 'gold' | 'platinum'
 
 export interface AppDoc {
   id: string
@@ -29,6 +30,7 @@ export interface AppDoc {
   creatorTestingCount?: number
   creatorFeedbackSentCount?: number
   creatorFeedbackVerifiedCount?: number
+  creatorBadgeTier?: BadgeTier
   createdAt: number
   updatedAt?: number
   deleted: boolean
@@ -70,6 +72,12 @@ export interface PublicProfile {
   testingCount: number
   feedbackSentCount: number
   feedbackVerifiedCount: number
+  /** entries that reached 14+ days active (badge basis, PRD FR-27g) */
+  appsTestedCount: number
+  badgeTier: BadgeTier
+  /** apps tested needed for the next tier; null at platinum */
+  nextTierAt: number | null
+  emailReminders: boolean
   createdAt?: number
 }
 

@@ -1,301 +1,373 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { usePageMeta } from '../lib/pageMeta'
 import { Link } from 'react-router-dom'
-import { Mark } from '../components/icons'
+import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
-import { TARGET_DAYS, TARGET_TESTERS } from '../lib/progress'
 import './about.css'
 
-const P = (name: string, sm = false) => `/about/${name}${sm ? '-sm' : ''}.jpg`
-const PHOTOS = {
-  house: { src: 'gotong-royong-pindah-rumah', alt: 'Warga nelayan Binuangeun, Banten, memikul sebuah rumah panggung bersama-sama', w: 1600, h: 1067 },
-  river: { src: 'kerja-bakti-membersihkan-sungai', alt: 'Warga berdiri di aliran sungai, membersihkan sampah bersama menjelang musim hujan', w: 1600, h: 1067 },
-  field: { src: 'aktivitas-kerja-bakti-warga-4', alt: 'Warga desa di kaki bukit membersihkan lapangan bersama pada pagi hari', w: 1600, h: 1200 },
-  farm: { src: 'kerja-bakti-gapoktan', alt: 'Kelompok tani bekerja bakti membersihkan saluran air di lahan sayur', w: 1600, h: 1600 },
-  alley: { src: 'kerja-bakti-2019-12', alt: 'Warga satu RT memperbaiki saluran air di gang sempit', w: 900, h: 1600 },
-  raft: { src: 'pindah-rumah-lanting-131228002', alt: 'Rumah lanting kuning ditarik perahu di Sungai Pela, Kutai Kartanegara', w: 1600, h: 1064 },
-  street: { src: 'jakarta-street-scene-3', alt: 'Trotoar Jakarta yang ramai pedagang kaki lima dan pejalan kaki', w: 1600, h: 1181 },
-} as const
-type PhotoKey = keyof typeof PHOTOS
+/* /about: the full rules and how it works, PRD v2.2 (§1, §5–§6, §8). Story surface, same system as the landing.
+   No photos: the page uses the product's own visual language (ruled sheets, chips, 12/14 counters, the ring). */
 
-function Photo({ k, sm, eager, className }: { k: PhotoKey; sm?: boolean; eager?: boolean; className?: string }) {
-  const p = PHOTOS[k]
+const TITLE = 'Cara kerja · TesBareng'
+const DESCRIPTION =
+  'Cara kerja TesBareng: syarat closed test Google Play, cara ngetes, cohort dan pembagian tugas, tester murni, titik cek, badge, pengingat dan privasi.'
+
+const TOC = [
+  { id: 'syarat', label: 'Syarat Google Play' },
+  { id: 'ngetes', label: 'Cara ngetes satu app' },
+  { id: 'cohort', label: 'Cohort' },
+  { id: 'tester-murni', label: 'Tester murni' },
+  { id: 'titik-cek', label: 'Titik cek' },
+  { id: 'badge', label: 'Badge' },
+  { id: 'pengingat', label: 'Pengingat' },
+  { id: 'whatsapp', label: 'Grup WhatsApp' },
+  { id: 'privasi', label: 'Privasi' },
+  { id: 'aturan', label: 'Aturan main' },
+]
+
+function Section({ id, n, title, lede, children }: { id: string; n: number; title: string; lede?: ReactNode; children: ReactNode }) {
   return (
-    <img className={className} src={P(p.src, sm)} alt={p.alt} width={sm ? 560 : p.w} height={sm ? Math.round((560 * p.h) / p.w) : p.h}
-      loading={eager ? undefined : 'lazy'} decoding="async" />
+    <section className="ab-sec" id={id} aria-labelledby={`${id}-h`}>
+      <div className="ab-wrap ab-sec-grid">
+        <div className="ab-sec-head">
+          <p className="ab-label"><b>{String(n).padStart(2, '0')}</b></p>
+          <h2 id={`${id}-h`}>{title}</h2>
+          {lede && <p className="ab-lede">{lede}</p>}
+        </div>
+        <div className="ab-sec-body">{children}</div>
+      </div>
+    </section>
   )
 }
 
-const RULES: { group: string; items: { name: string; tag: string; text: string; photo: PhotoKey }[] }[] = [
+function Segments({ n, label }: { n: number; label: string }) {
+  return (
+    <div className="ab-seg" style={{ ['--n' as string]: n }} role="img" aria-label={label}>
+      {Array.from({ length: n }, (_, i) => <i key={i} />)}
+    </div>
+  )
+}
+
+function CopyEmail() {
+  const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle')
+  useEffect(() => {
+    if (state === 'idle') return
+    const id = setTimeout(() => setState('idle'), 2400)
+    return () => clearTimeout(id)
+  }, [state])
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(COMMUNITY_GROUP); setState('ok') } catch { setState('fail') }
+  }
+  return (
+    <span className="ab-copy">
+      <button type="button" className={`ab-btn ab-btn--sm ${state === 'ok' ? 'is-ok' : ''}`} onClick={copy}>
+        {state === 'ok' ? '✓ Tersalin' : 'Salin email grup'}
+      </button>
+      <span className="ab-copy-status" role="status" aria-live="polite">
+        {state === 'fail' ? 'Tidak bisa menyalin otomatis. Pilih teks emailnya, lalu salin.' : state === 'ok' ? 'Email grup tersalin.' : ''}
+      </span>
+    </span>
+  )
+}
+
+/** Ring rule for cohorts above 16 apps: the member at position i tests i+1 … i+14 (PRD FR-32). Static. */
+function RingRule() {
+  const n = 20, k = 14, c = 160, r = 132
+  const pt = (i: number) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n
+    return { x: c + r * Math.cos(a), y: c + r * Math.sin(a) }
+  }
+  const me = pt(0)
+  return (
+    <figure className="ab-ring">
+      <svg viewBox="0 0 320 320" width="320" height="320" role="img" aria-labelledby="ab-ring-t">
+        <title id="ab-ring-t">Contoh cohort 20 app: anggota di posisi pertama ngetes 14 app berikutnya searah jarum jam. 5 app sisanya dites anggota lain.</title>
+        {Array.from({ length: k }, (_, j) => {
+          const p = pt(j + 1)
+          return <line key={j} x1={me.x} y1={me.y} x2={p.x} y2={p.y} className="ab-ring-tie" />
+        })}
+        {Array.from({ length: n }, (_, i) => {
+          const p = pt(i)
+          const cls = i === 0 ? 'me' : i <= k ? 'on' : 'off'
+          return (
+            <g key={i} transform={`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`} className={`ab-ring-node ${cls}`}>
+              <rect x={-9} y={-9} width={18} height={18} />
+            </g>
+          )
+        })}
+      </svg>
+      <figcaption>
+        <span><i className="k me" aria-hidden="true" />Kamu</span>
+        <span><i className="k on" aria-hidden="true" />14 app yang kamu tes</span>
+        <span><i className="k off" aria-hidden="true" />Dites anggota lain</span>
+      </figcaption>
+    </figure>
+  )
+}
+
+const STEPS: { t: string; d: ReactNode }[] = [
+  { t: 'Gabung Google Group', d: <>Masuk ke <code className="ab-email">{COMMUNITY_GROUP}</code> dengan akun Google di HP-mu. Hanya anggota grup ini yang bisa opt-in.</> },
+  { t: 'Opt-in', d: 'Buka link opt-in di halaman app, lalu ketuk Jadi penguji di Google Play.' },
+  { t: 'Install, lalu daftar', d: 'Pasang app-nya dari Play Store dengan akun yang sama, lalu tekan Daftar jadi tester di halaman app di TesBareng.' },
+  { t: 'Pakai', d: 'Baca panduan feedback dari creator, lalu benar-benar pakai app-nya. Biarkan terpasang 14 hari.' },
+  { t: 'Kirim feedback di Google Play', d: 'Rating plus komentar yang spesifik, dengan kata-katamu sendiri: apa yang jalan, apa yang rusak, apa yang perlu diperbaiki.' },
+  { t: 'Centang di TesBareng', d: 'Tekan Tandai feedback terkirim di halaman app. Ringkasan singkat boleh ditambahkan, maksimal 500 karakter.' },
+]
+
+const COHORT_FACTS: { t: string; d: ReactNode }[] = [
+  { t: 'Minimal 13 app', d: 'Setiap creator membawa satu app. Dengan 13 app, setiap app sudah bisa dapat 12 tester dari sesama creator saja.' },
+  { t: 'Opt-in dalam 48 jam', d: <>Hitungan mulai Hari 0. Lewat 48 jam, yang belum opt-in tercatat Behind, dan app miliknya mendapat label <span className="ab-chip c-cabai">! Belum tes</span> sampai tugasnya terpenuhi. Admin bisa memindahkan slot yang kosong ke anggota lain.</> },
+  { t: 'Tutup di hari 21', d: 'Cohort ditutup saat semua app siap ajukan production, atau paling lambat hari ke-21.' },
+  { t: 'Good, Owing, Settled', d: 'Saat cohort tutup, anggota yang semua tugasnya selesai berstatus Good. Yang belum berstatus Owing dan tidak bisa ikut cohort berikutnya sampai admin menandainya Settled.' },
+]
+
+const SCHEDULE = [
+  { d: 0, t: 'Mulai', x: 'Tugas dibagi, jendela opt-in 48 jam dibuka' },
+  { d: 2, t: 'Batas opt-in', x: 'Label Belum tes mulai tampil' },
+  { d: 7, t: 'Sudah buka app', x: 'Feedback di Play. Hari terakhir tester murni bisa gabung' },
+  { d: 13, t: 'Masih opt-in', x: 'Centang terakhir sebelum 14 hari' },
+  { d: 21, t: 'Tutup', x: 'Paling lambat. Status Good atau Owing' },
+]
+
+const CHECKS = [
+  { m: 'Opt-in', when: 'Hari 0–2', what: 'Daftar jadi tester di setiap app tugasmu' },
+  { m: 'Sudah buka app', when: 'Mulai hari 5, paling lambat hari 7', what: 'Centang, lalu kirim feedback di Google Play' },
+  { m: 'Sudah update', when: 'Dalam 3 hari setelah build baru', what: 'Update app-nya, coba lagi, lalu centang' },
+  { m: 'Masih opt-in', when: 'Mulai hari 12, paling lambat hari 13', what: 'Centang sekali lagi' },
+]
+
+const TIERS = [
+  { name: 'Bronze', n: 3, cls: 't-bronze' },
+  { name: 'Silver', n: 7, cls: 't-silver' },
+  { name: 'Gold', n: 14, cls: 't-gold' },
+  { name: 'Platinum', n: 25, cls: 't-platinum' },
+]
+
+const RULES: { group: string; items: { t: string; d: string }[] }[] = [
   {
     group: 'Sebagai tester',
     items: [
-      { name: 'Biarkan terpasang 14 hari', tag: '14 hari', text: 'Google menghitung tester yang tetap opt-in 14 hari berturut-turut. Uninstall di hari ke-10 berarti mulai lagi dari nol.', photo: 'house' },
-      { name: 'Tulis feedback dengan kata sendiri', tag: 'di Play', text: 'Rating plus komentar yang spesifik: apa yang jalan, apa yang rusak, apa yang perlu diperbaiki. Ulasan salinan terlihat tidak asli.', photo: 'river' },
-      { name: 'Uji lagi setiap build baru', tag: '3 hari', text: 'Saat kreator mencatat build, perbarui dari Play Store dan coba lagi. Pengumumannya tampil tiga hari.', photo: 'field' },
-      { name: 'Tandai feedback di TesBareng', tag: '1 ketuk', text: 'Centang “feedback terkirim” supaya kreator tahu harus mengecek Play Console. Ringkasan maksimal 500 karakter.', photo: 'alley' },
-      { name: 'Berhenti dengan terus terang', tag: '1 ketuk', text: 'Kalau harus berhenti, tekan Berhenti menguji. Papan tetap jujur dan kreator tahu kursi mana yang perlu diisi.', photo: 'street' },
+      { t: 'Biarkan terpasang 14 hari', d: 'Google menghitung tester yang tetap opt-in 14 hari berturut-turut. Keluar di hari ke-10 berarti mulai lagi dari nol.' },
+      { t: 'Tulis feedback dengan kata sendiri', d: 'Ulasan yang disalin dari banyak akun terlihat tidak asli bagi Google.' },
+      { t: 'Coba lagi setiap build baru', d: 'Saat creator mencatat build, update dari Play Store, coba lagi, lalu centang Sudah update.' },
+      { t: 'Berhenti dengan terus terang', d: 'Kalau harus berhenti, tekan Berhenti menguji. Lembarnya tetap jujur dan creator tahu slot mana yang perlu diisi.' },
     ],
   },
   {
-    group: 'Sebagai kreator',
+    group: 'Sebagai creator',
     items: [
-      { name: 'Tambahkan grup komunitas', tag: 'sekali', text: `Masukkan ${COMMUNITY_GROUP} sebagai daftar penguji di jalur uji tertutup. Tanpa itu, opt-in anggota tidak terhitung.`, photo: 'farm' },
-      { name: 'Tulis panduan sebagai pertanyaan', tag: '500 karakter', text: '“Coba level 3 di layar kecil: tombol lompat mudah ditekan?” lebih berguna daripada teks ulasan siap salin.', photo: 'raft' },
-      { name: 'Balas setiap feedback', tag: 'Play Console', text: 'Balas dari Testing feedback, lalu tandai Dibalas. Google melihat apakah pengembang menanggapi penguji.', photo: 'river' },
-      { name: 'Rilis build selama uji', tag: '2–3 kali', text: 'Catat setiap unggahan di log build. Tiga pembaruan adalah target komunitas, bukan aturan resmi Google.', photo: 'field' },
-      { name: 'Uji aplikasi anggota lain', tag: 'timbal balik', text: 'Angka menguji Anda tampil di setiap aplikasi Anda. Yang membantu, lebih mudah dibantu.', photo: 'house' },
+      { t: 'Pasang grup komunitas', d: `Masukkan ${COMMUNITY_GROUP} sebagai daftar tester di closed track. Tanpa itu, opt-in anggota tidak terhitung.` },
+      { t: 'Tulis panduan feedback sebagai pertanyaan', d: '“Coba level 3 di layar kecil: tombol lompat mudah ditekan?” Bukan teks ulasan siap salin. Maksimal 500 karakter.' },
+      { t: 'Balas setiap feedback', d: 'Baca feedback di Play Console, tandai Terverifikasi, balas di sana, lalu tandai Sudah saya balas di TesBareng.' },
+      { t: 'Catat setiap build', d: 'Catat setiap upload ke closed track di log build. Dua sampai tiga build selama tes adalah target komunitas, bukan aturan resmi Google.' },
+      { t: 'Ikut ngetes app anggota lain', d: 'Angka ngetes dan feedback-mu tampil di setiap app-mu. Yang membantu, lebih mudah dibantu.' },
     ],
   },
 ]
 
-const FAQ = [
-  { tab: 'Hitungan', q: 'Kenapa harus 14 hari berturut-turut?', a: 'Akun developer pribadi baru wajib menjalankan uji tertutup dengan minimal 12 tester yang tetap opt-in selama 14 hari berturut-turut sebelum boleh mengajukan akses produksi. Keluar lalu masuk lagi memulai hitungan dari awal.' },
-  { tab: 'Privasi', q: 'Apakah email saya terlihat orang lain?', a: 'Hanya versi samaran seperti bu*****@gmail.com, dan itu berlaku juga untuk kreator. Email lengkap disimpan di data pribadi akun Anda saja, tidak pernah di halaman publik.' },
-  { tab: 'Sinkron', q: 'Apakah TesBareng tersambung ke Play Console?', a: 'Tidak. Google tidak menyediakan API publik untuk data opt-in, jadi semua dicatat sendiri oleh anggota. Kreator memverifikasi feedback dengan mengeceknya di Play Console.' },
-  { tab: 'Feedback', q: 'Di mana saya menulis feedback?', a: 'Di Google Play, pada halaman aplikasinya. Feedback itu masuk ke Play Console kreator di bagian Testing feedback. Di TesBareng Anda hanya menandai bahwa feedback sudah dikirim.' },
-  { tab: 'Build', q: 'Kenapa kreator perlu merilis build baru?', a: 'Google juga menilai apakah aplikasi diperbarui selama uji. Dua sampai tiga pembaruan adalah kebiasaan komunitas yang membantu, bukan syarat resmi.' },
-  { tab: 'Berhenti', q: 'Bagaimana kalau saya berhenti di tengah?', a: 'Tekan Berhenti menguji di halaman aplikasinya. Nama Anda tetap tercatat sebagai riwayat, tetapi tidak lagi dihitung dalam 12 kursi.' },
-]
-
-const dayFmt = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-const toIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-
-function useReveal(root: React.RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    const el = root.current
-    if (!el) return
-    document.documentElement.classList.add('js')
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target) }
-    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.08 })
-    el.querySelectorAll('[data-reveal], .ab-mark').forEach((n) => io.observe(n))
-    return () => io.disconnect()
-  }, [root])
-}
-
 export function About() {
-  const root = useRef<HTMLDivElement>(null)
-  useReveal(root)
-  useEffect(() => { document.title = 'Cara kerja · TesBareng' ; return () => { document.title = 'TesBareng' } }, [])
+  usePageMeta(TITLE, DESCRIPTION)
+  const { user } = useAuth()
 
   return (
-    <div className="about" ref={root}>
-      <a className="skip" href="#isi">Lewati ke isi</a>
+    <div className="ab surface-story">
+      <a className="ab-skip" href="#isi">Langsung ke isi</a>
+
       <header className="ab-top">
-        <Link to="/" className="ab-brand"><Mark size={28} />TesBareng</Link>
-        <nav aria-label="Navigasi utama">
-          <Link to="/">Aplikasi</Link>
-          <Link to="/me">Tugas saya</Link>
-          <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Grup</a>
-        </nav>
+        <div className="ab-wrap ab-top-row">
+          <Link to="/" className="ab-brand" aria-label="TesBareng, beranda"><span className="ab-brand-box" aria-hidden="true" />TesBareng</Link>
+          <nav className="ab-nav" aria-label="Utama">
+            {user ? <Link to="/apps">Daftar app</Link> : <Link to="/">Beranda</Link>}
+            <Link className="ab-btn ab-btn--sm" to={user ? '/me' : '/apps'}>{user ? 'Tugas saya' : 'Daftar app'}</Link>
+          </nav>
+        </div>
       </header>
 
-      <section className="ab-hero" aria-labelledby="ab-h1">
-        <div className="ab-hero-text">
-          <h1 id="ab-h1" data-reveal>12 kursi, 14&nbsp;hari, bareng.</h1>
-          <p data-reveal style={{ ['--d' as string]: '90ms' }}>
-            TesBareng adalah papan bersama komunitas Google Tester Indonesia. Anggota saling menguji aplikasi, supaya setiap aplikasi mendapat 12 tester yang bertahan 14 hari di uji tertutup Google Play.
-          </p>
-          <Link to="/" className="ab-btn" data-reveal style={{ ['--d' as string]: '180ms' }}>Lihat aplikasi yang butuh tester</Link>
-        </div>
-        <div className="ab-hero-shape" aria-hidden="false">
-          <figure className="ab-hero-photo">
-            <div className="ab-hero-img"><Photo k="house" eager /></div>
-            <figcaption>Warga Binuangeun, Banten, memindahkan rumah bersama.</figcaption>
-          </figure>
-        </div>
-      </section>
-
       <main id="isi">
-        <section className="ab-intro" aria-label="Kenapa bareng">
-          <p data-reveal>
-            Seperti warga yang memikul <Thumb k="house" /> satu rumah bersama, setiap aplikasi di sini dipikul dua belas orang <Thumb k="alley" />,
-            dan setiap orang itu bergiliran memikul aplikasi <Thumb k="raft" /> milik yang lain.
+        <div className="ab-wrap ab-hero">
+          <p className="ab-label"><b>Aturan main</b>TesBareng</p>
+          <h1>Cara kerja, tanpa basa‑basi.</h1>
+          <p className="ab-lede">
+            Semua aturan komunitas di satu halaman: syarat dari Google, cara ngetes, cohort, titik cek, badge dan privasi.
+            Melihat-lihat tidak perlu masuk; ikut ngetes perlu akun Google.
           </p>
-        </section>
+          <nav className="ab-toc" aria-label="Di halaman ini">
+            <ol>
+              {TOC.map((x, i) => (
+                <li key={x.id}><a href={`#${x.id}`}><span className="ab-toc-n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>{x.label}</a></li>
+              ))}
+            </ol>
+          </nav>
+        </div>
 
-        <section className="ab-steps" aria-labelledby="ab-steps-h">
-          <div className="ab-steps-grid">
-            <h2 id="ab-steps-h" data-reveal>Dari gabung sampai produksi</h2>
-            {[
-              { k: 'street' as PhotoKey, t: 'Gabung grupnya', d: 'Masuk ke Google Group komunitas dengan akun Google di HP Anda.' },
-              { k: 'alley' as PhotoKey, t: 'Opt-in, lalu pasang', d: 'Buka link opt-in tiap aplikasi, ketuk Jadi penguji, pasang, dan biarkan 14 hari.' },
-              { k: 'river' as PhotoKey, t: 'Pakai, lalu tulis di Play', d: 'Ikuti panduan kreator, tulis feedback dengan kata sendiri, lalu tandai di sini.' },
-              { k: 'farm' as PhotoKey, t: 'Ajukan produksi', d: '12 tester lewat 14 hari, feedback dibalas, ada build baru: kreator mengajukan akses produksi.' },
-            ].map((s, i) => (
-              <div className={`ab-step s${i + 1}`} key={s.t}>
-                <div className="ab-tile" data-reveal style={{ ['--d' as string]: `${i * 80}ms` }}><Photo k={s.k} sm={i < 2} /></div>
-                <h3 data-reveal style={{ ['--d' as string]: `${i * 80 + 60}ms` }}>{s.t}</h3>
-                <p data-reveal style={{ ['--d' as string]: `${i * 80 + 120}ms` }}>{s.d}</p>
+        <Section id="syarat" n={1} title="Syarat dari Google Play"
+          lede="Akun developer pribadi baru wajib menjalankan closed test sebelum boleh mengajukan akses production.">
+          <div className="ab-sheet">
+            <div className="ab-meter">
+              <div className="ab-meter-top"><span>Tester tetap opt-in</span><span className="num">minimal 12</span></div>
+              <Segments n={12} label="12 tester" />
+            </div>
+            <div className="ab-meter">
+              <div className="ab-meter-top"><span>Hari berturut-turut</span><span className="num">14 hari</span></div>
+              <Segments n={14} label="14 hari" />
+            </div>
+            <p className="ab-sheet-sub">Google juga melihat keterlibatan, bukan hanya jumlah tester:</p>
+            <ul className="ab-checks">
+              <li><span className="ab-tick" aria-hidden="true">✓</span>Tester mengirim feedback lewat Google Play</li>
+              <li><span className="ab-tick" aria-hidden="true">✓</span>Creator membalas feedback itu di Play Console</li>
+              <li><span className="ab-tick" aria-hidden="true">✓</span><span>Creator merilis build baru selama tes <small>biasanya 2–3 kali; target komunitas, bukan angka resmi Google</small></span></li>
+            </ul>
+            <p className="ab-sheet-foot">Tester yang keluar lalu masuk lagi mulai menghitung 14 hari dari awal.</p>
+          </div>
+        </Section>
+
+        <Section id="ngetes" n={2} title="Cara ngetes satu app" lede="Enam langkah. Langkah pertama cukup sekali untuk semua app.">
+          <ol className="ab-steps">
+            {STEPS.map((s, i) => (
+              <li key={s.t}>
+                <span className="ab-step-n num" aria-hidden="true">{i + 1}</span>
+                <div>
+                  <h3>{s.t}</h3>
+                  <p>{s.d}</p>
+                  {i === 0 && <CopyEmail />}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </Section>
+
+        <Section id="cohort" n={3} title="Cohort: tugas dibagi rata"
+          lede="Cohort mengelompokkan creator supaya tidak ada yang cuma minta dites. Siapa ngetes app siapa ditentukan sistem, bukan dipilih sendiri.">
+          <div className="ab-split">
+            <div className="ab-card-flat">
+              <h3>Pembagian tugas</h3>
+              <ul className="ab-rule-list">
+                <li><b className="num">13–16 app</b><span>Semua ngetes semua app lain.</span></li>
+                <li><b className="num">Lebih dari 16</b><span>Urutan diacak menjadi lingkaran. Kamu ngetes 14 app setelahmu, dan setiap app dapat tepat 14 tester.</span></li>
+              </ul>
+            </div>
+            <RingRule />
+          </div>
+          <dl className="ab-facts">
+            {COHORT_FACTS.map((x) => (
+              <div key={x.t}><dt>{x.t}</dt><dd>{x.d}</dd></div>
+            ))}
+          </dl>
+          <ol className="ab-schedule" aria-label="Jadwal cohort">
+            {SCHEDULE.map((x) => (
+              <li key={x.d} className={x.d === 21 ? 'end' : undefined}>
+                <p className="ab-day num"><small>Hari</small>{x.d}</p>
+                <p className="ab-day-t">{x.t}</p>
+                <p className="ab-day-x">{x.x}</p>
+              </li>
+            ))}
+          </ol>
+        </Section>
+
+        <Section id="tester-murni" n={4} title="Tester murni" lede="Belum punya app, atau sedang di antara dua app? Ikut cohort tanpa membawa app.">
+          <ul className="ab-rule-list ab-rule-list--boxed">
+            <li><b>Gabung sampai hari 7</b><span>Selama cohort masih Forming, atau sudah berjalan sampai hari ke-7. Hari 7 adalah batasnya supaya kamu masih sempat 14 hari sebelum cohort tutup di hari 21.</span></li>
+            <li><b>14 app untukmu</b><span>Kamu ditugaskan 14 app (atau semua app kalau kurang dari itu), dimulai dari app yang testernya paling sedikit.</span></li>
+            <li><b>48 jam milikmu sendiri</b><span>Batas opt-in dihitung dari saat kamu ditugaskan, bukan dari Hari 0. Titik cek berikutnya ikut bergeser.</span></li>
+          </ul>
+        </Section>
+
+        <Section id="titik-cek" n={5} title="Titik cek, bukan absen harian"
+          lede="Absen harian di 14 app berarti 14 ketukan sehari. Cukup centang di titik-titik ini.">
+          <div className="ab-table" role="region" aria-label="Tabel titik cek" tabIndex={0}>
+            <table>
+              <thead><tr><th scope="col">Titik cek</th><th scope="col">Kapan</th><th scope="col">Yang kamu lakukan</th></tr></thead>
+              <tbody>
+                {CHECKS.map((x) => (
+                  <tr key={x.m}><th scope="row">{x.m}</th><td>{x.when}</td><td>{x.what}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="ab-note">
+            <span className="ab-chip c-pandan">✓✓ Terverifikasi</span>
+            <p>Centang opt-in, buka app, update dan masih opt-in berdasarkan kejujuran. Bukti terkuat adalah feedback yang ditandai Terverifikasi, karena creator mengeceknya sendiri di Play Console.</p>
+          </div>
+        </Section>
+
+        <Section id="badge" n={6} title="Badge" lede="Dihitung dari app yang kamu tes sampai 14 hari atau lebih. Untuk creator dan tester murni sama.">
+          <ul className="ab-tiers">
+            {TIERS.map((t) => (
+              <li key={t.name}><span className={`ab-pill ${t.cls}`}>{t.name}</span><b className="num">{t.n}</b><small>app dites 14 hari</small></li>
+            ))}
+          </ul>
+          <ul className="ab-bullets">
+            <li>Yang dihitung: masih aktif dengan 14 hari atau lebih, atau keluar setelah 14 hari.</li>
+            <li>Tidak dihitung: dikeluarkan creator, keluar sebelum 14 hari, atau app yang sudah dihapus.</li>
+            <li>Satu cohort penuh sebagai tester murni berarti 14 app, langsung Gold.</li>
+            <li>Badge dihitung sistem dari data, tidak bisa diubah siapa pun.</li>
+          </ul>
+        </Section>
+
+        <Section id="pengingat" n={7} title="Pengingat" lede="Tidak ada yang perlu menagih di grup.">
+          <ul className="ab-rule-list ab-rule-list--boxed">
+            <li><b className="num">19.00 WIB</b><span>Satu email ringkasan sehari, hanya kalau ada tugas tertunda: app yang belum kamu ikuti, titik cek yang jatuh tempo, feedback yang belum dikirim, build baru.</span></li>
+            <li><b>Bisa dimatikan</b><span>Atur di <Link to="/me">Tugas saya</Link>. Setiap email juga punya tautan ke pengaturan itu.</span></li>
+            <li><b>Simpan pengirimnya</b><span>Tambahkan alamat pengirim email pengingat ke kontakmu supaya tidak masuk folder spam.</span></li>
+          </ul>
+        </Section>
+
+        <Section id="whatsapp" n={8} title="Grup WhatsApp cohort" lede="Opsional. Satu-satunya grup yang wajib adalah Google Group.">
+          <ul className="ab-bullets">
+            <li>Link grup hanya tampil untuk anggota cohort itu, setelah masuk.</li>
+            <li>Anggota grup bisa melihat nomor HP satu sama lain. Gabung hanya kalau kamu nyaman.</li>
+            <li>Chat untuk koordinasi. Status tetap dilaporkan di TesBareng, bukan di chat.</li>
+          </ul>
+        </Section>
+
+        <Section id="privasi" n={9} title="Privasi">
+          <div className="ab-privacy">
+            <span className="ab-masked">bu*****@gmail.com</span>
+            <ul className="ab-bullets">
+              <li>Email selalu tampil disamarkan seperti ini, untuk semua orang, termasuk creator app yang kamu tes.</li>
+              <li>Profil publik tidak menampilkan email sama sekali.</li>
+              <li>Alamat lengkap hanya dipakai untuk mengirim pengingat.</li>
+            </ul>
+          </div>
+        </Section>
+
+        <Section id="aturan" n={10} title="Aturan main">
+          <div className="ab-rules">
+            {RULES.map((g) => (
+              <div key={g.group} className="ab-rule-group">
+                <h3>{g.group}</h3>
+                <ul>
+                  {g.items.map((x) => (
+                    <li key={x.t}><b>{x.t}</b><span>{x.d}</span></li>
+                  ))}
+                </ul>
               </div>
             ))}
           </div>
-          <Calculator />
-        </section>
-
-        <RulesIndex />
-        <Faq />
+        </Section>
 
         <section className="ab-cta" aria-labelledby="ab-cta-h">
-          <div className="ab-cta-side left" data-reveal><Photo k="field" sm /></div>
-          <div className="ab-cta-main" data-reveal style={{ ['--d' as string]: '80ms' }}>
-            <h2 id="ab-cta-h">Isi satu kursi hari ini</h2>
-            <p>Aplikasi dengan kursi paling kosong ada di urutan teratas. Tiga langkah, lalu biarkan 14 hari.</p>
-            <div className="ab-cta-actions">
-              <Link to="/" className="ab-btn ink">Lihat aplikasi yang butuh tester</Link>
-              <a className="ab-link light" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Gabung grup dulu</a>
+          <div className="ab-wrap">
+            <h2 id="ab-cta-h">Siap ikut ngetes?</h2>
+            <p className="ab-lede">Mulai dari Google Group, lalu pilih app yang butuh tester atau tunggu cohort berikutnya.</p>
+            <div className="ab-cta-row">
+              <a className="ab-btn ab-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">
+                Gabung komunitas<span className="sr-only"> (Google Group, tab baru)</span><span aria-hidden="true"> ↗</span>
+              </a>
+              <Link className="ab-btn" to="/apps">Lihat daftar app</Link>
             </div>
           </div>
-          <div className="ab-cta-side right" data-reveal style={{ ['--d' as string]: '160ms' }} />
         </section>
       </main>
 
-      <footer className="ab-foot">
-        <FooterMark />
-        <div className="ab-foot-cols">
-          <nav aria-label="Tautan footer">
-            <Link to="/">Aplikasi</Link>
-            <Link to="/me">Tugas saya</Link>
-            <Link to="/apps/new">Tambah aplikasi</Link>
-            <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Google Group</a>
-          </nav>
-          <p>Komunitas Google Tester Indonesia<br /><a href={`mailto:${COMMUNITY_GROUP}`}>{COMMUNITY_GROUP}</a></p>
-        </div>
-        <p className="credits">
-          Foto: <a href="https://commons.wikimedia.org/wiki/File:Gotong_Royong_Pindah_Rumah.jpg">“Gotong Royong Pindah Rumah”</a> oleh Herusutimbul, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>;{' '}
-          <a href="https://commons.wikimedia.org/wiki/File:Kerja_bakti_membersihkan_sungai.jpg">“Kerja bakti membersihkan sungai”</a> oleh ERWINSALEH, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>;{' '}
-          <a href="https://commons.wikimedia.org/wiki/File:Aktivitas_Kerja_Bakti_Warga_4.jpg">“Aktivitas Kerja Bakti Warga 4”</a> oleh Fajrul Fala, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>;{' '}
-          <a href="https://commons.wikimedia.org/wiki/File:Kerja_Bakti_Gapoktan.jpg">“Kerja Bakti Gapoktan”</a> oleh Azril Joyy, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>;{' '}
-          <a href="https://commons.wikimedia.org/wiki/File:Kerja_bakti_2019_12.jpg">“Kerja bakti 2019 12”</a> oleh Dian Murdiana, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>;{' '}
-          <a href="https://commons.wikimedia.org/wiki/File:Pindah_Rumah_Lanting_131228002.JPG">“Pindah Rumah Lanting 131228002”</a> oleh Ezagren, <a href="https://creativecommons.org/licenses/by-sa/4.0">CC BY-SA 4.0</a>;{' '}
-          <a href="https://commons.wikimedia.org/wiki/File:Jakarta_street_scene_(3).jpg">“Jakarta street scene (3)”</a> oleh Radosław Botev, <a href="https://creativecommons.org/licenses/by/3.0/pl/deed.en">CC BY 3.0</a>. Semua via Wikimedia Commons.
-        </p>
-        <div className="ab-foot-last">
-          <span>TesBareng, dibuat komunitas untuk komunitas.</span>
-          <a href="#ab-h1" className="ab-btn sm">Ke atas</a>
-        </div>
+      <footer className="ab-wrap ab-foot">
+        <span>Komunitas creator Android Indonesia. Bukan layanan resmi Google.</span>
+        <nav aria-label="Kaki halaman">
+          <Link to="/">Beranda</Link>
+          <Link to="/apps">Daftar app</Link>
+          <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Google Group<span className="sr-only"> (tab baru)</span></a>
+        </nav>
       </footer>
     </div>
-  )
-}
-
-function Thumb({ k }: { k: PhotoKey }) {
-  const p = PHOTOS[k]
-  return <span className="ab-thumb"><img src={P(p.src, true)} alt={p.alt} width={56} height={44} loading="lazy" decoding="async" /></span>
-}
-
-/** The live thing: the 12 × 14 board filled to today from the date the twelfth seat was taken. */
-function Calculator() {
-  const [start, setStart] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 9); return toIso(d) })
-  const startDate = useMemo(() => new Date(`${start}T00:00:00`), [start])
-  const valid = !Number.isNaN(startDate.getTime())
-  const elapsed = valid ? Math.max(0, Math.floor((Date.now() - startDate.getTime()) / 86_400_000)) : 0
-  const [day, setDay] = useState<number | null>(null)
-  const shown = Math.min(TARGET_DAYS, day ?? elapsed)
-  const apply = valid ? new Date(startDate.getTime() + TARGET_DAYS * 86_400_000) : null
-  const left = TARGET_DAYS - Math.min(TARGET_DAYS, elapsed)
-
-  return (
-    <div className="ab-calc" data-reveal>
-      <div className="ab-calc-text">
-        <h3>Kapan aplikasi Anda boleh ajukan produksi?</h3>
-        <label className="ab-field">
-          <span>Tanggal kursi ke-12 terisi</span>
-          <input type="date" value={start} max={toIso(new Date())} onChange={(e) => { setStart(e.target.value); setDay(null) }} />
-        </label>
-        <p className="ab-calc-answer" aria-live="polite">
-          {apply ? (left === 0
-            ? <>Sudah lewat 14 hari sejak {dayFmt.format(startDate)}. Selama 12 tester tetap opt-in, Anda bisa mengajukan sekarang.</>
-            : <>Paling cepat <b>{dayFmt.format(apply)}</b>, {left} hari lagi, asal kedua belas tester tidak ada yang keluar.</>)
-            : 'Pilih tanggal untuk menghitung.'}
-        </p>
-        <label className="ab-field">
-          <span>Geser untuk melihat hari ke-{shown}</span>
-          <input type="range" min={0} max={TARGET_DAYS} value={shown} onChange={(e) => setDay(Number(e.target.value))} aria-valuetext={`Hari ke-${shown} dari ${TARGET_DAYS}`} />
-        </label>
-      </div>
-      <svg className={`ab-calc-board ${shown === TARGET_DAYS ? 'done' : ''}`} viewBox={`0 0 ${TARGET_DAYS * 34 - 6} ${TARGET_TESTERS * 26 - 6}`} role="img"
-        aria-label={`Papan 12 kursi pada hari ke-${shown}: ${shown === TARGET_DAYS ? 'semua kursi lulus 14 hari' : `${TARGET_DAYS - shown} hari lagi`}`}>
-        {Array.from({ length: TARGET_TESTERS }, (_, r) => Array.from({ length: TARGET_DAYS }, (_, c) => (
-          <rect key={`${r}-${c}`} x={c * 34} y={r * 26} width={28} height={20} rx={6} className={c < shown ? 'on' : ''} style={{ ['--i' as string]: c }} />
-        )))}
-      </svg>
-    </div>
-  )
-}
-
-function RulesIndex() {
-  const [preview, setPreview] = useState<PhotoKey>(RULES[0].items[0].photo)
-  const [label, setLabel] = useState(RULES[0].items[0].name)
-  const show = (el: HTMLElement, k: PhotoKey) => {
-    setPreview(k)
-    setLabel(el.querySelector('b')?.textContent ?? '')
-  }
-  return (
-    <section className="ab-rules" aria-labelledby="ab-rules-h">
-      <h2 id="ab-rules-h" data-reveal>Aturan main</h2>
-      <div className="ab-index">
-        <div className="ab-index-list">
-          {RULES.map((g) => (
-            <div key={g.group} className="ab-rule-group">
-              <div className="ab-rule-head" data-reveal><h3>{g.group}</h3><span>{g.items.length} kebiasaan</span></div>
-              <ul>
-                {g.items.map((it, i) => (
-                  <li key={it.name} data-reveal style={{ ['--d' as string]: `${i * 70}ms` }}>
-                    <div className="ab-rule" tabIndex={0}
-                      onPointerEnter={(e) => show(e.currentTarget, it.photo)} onFocus={(e) => show(e.currentTarget, it.photo)}>
-                      <span className="ab-bullet"><img src={P(PHOTOS[it.photo].src, true)} alt="" width={64} height={50} loading="lazy" decoding="async" /></span>
-                      <span className="ab-rule-body">
-                        <span className="ab-rule-line"><b>{it.name}</b><span className="ab-tag">{it.tag}</span></span>
-                        <span className="ab-rule-text">{it.text}</span>
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-        <figure className="ab-index-frame" aria-hidden="true">
-          <div className="ab-index-img"><img key={preview} src={P(PHOTOS[preview].src)} alt="" /></div>
-          <figcaption>{label}</figcaption>
-        </figure>
-      </div>
-    </section>
-  )
-}
-
-function Faq() {
-  const [open, setOpen] = useState(0)
-  return (
-    <section className="ab-faq" aria-labelledby="ab-faq-h">
-      <h2 id="ab-faq-h" data-reveal>Yang sering ditanyakan</h2>
-      <div className="ab-cards">
-        {FAQ.map((f, i) => (
-          <div key={f.tab} className={`ab-card c${i % 3} ${open === i ? 'open' : ''}`} style={{ ['--i' as string]: i, zIndex: i + 1 }}>
-            <span className="ab-card-tab" aria-hidden="true">{f.tab}</span>
-            <h3>
-              <button aria-expanded={open === i} aria-controls={`faq-${i}`} id={`faq-q-${i}`} onClick={() => setOpen(i)}>{f.q}</button>
-            </h3>
-            <div id={`faq-${i}`} role="region" aria-labelledby={`faq-q-${i}`} className="ab-card-a" hidden={open !== i}>
-              <p>{f.a}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function FooterMark() {
-  const heights = [100, 82, 94, 70, 100, 88, 76, 96, 64, 86, 72, 92]
-  const w = 100, gap = 4, H = 300
-  return (
-    <svg className="ab-mark" viewBox={`0 0 ${12 * w + 11 * gap} ${H}`} preserveAspectRatio="none" role="img" aria-label="TesBareng: dua belas kursi, delapan sudah terisi">
-      {heights.map((h, i) => {
-        const bh = (h / 100) * H
-        return <rect key={i} x={i * (w + gap)} y={H - bh} width={w} height={bh} rx={14} className={i < 8 ? 'on' : ''} style={{ ['--i' as string]: i }} />
-      })}
-    </svg>
   )
 }

@@ -593,3 +593,28 @@ describe("soft delete and reciprocity", () => {
     expect((await stats(appId)).creator_testing_count).toBe(before + 1);
   });
 });
+
+describe("set_email_reminders (PRD FR-46)", () => {
+  const flag = async (id: string) =>
+    (await must(anon().from("profiles").select("email_reminders").eq("id", id).single())).email_reminders as boolean;
+
+  it("is on by default", async () => {
+    expect(await flag(other.id)).toBe(true);
+  });
+
+  it("changes only the caller's own flag", async () => {
+    await must(other.db.rpc("set_email_reminders", { p_enabled: false }));
+    expect(await flag(other.id)).toBe(false);
+    expect(await flag(tester.id)).toBe(true);
+    await must(other.db.rpc("set_email_reminders", { p_enabled: true }));
+    expect(await flag(other.id)).toBe(true);
+  });
+
+  it("rejects null", async () => {
+    await expectCode(other.db.rpc("set_email_reminders", { p_enabled: null }), "invalid-argument");
+  });
+
+  it("requires auth", async () => {
+    await expectCode(anon().rpc("set_email_reminders", { p_enabled: false }), "unauthenticated");
+  });
+});

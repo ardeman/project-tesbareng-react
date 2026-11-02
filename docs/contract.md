@@ -11,7 +11,7 @@ Rows are snake_case. The web client maps them to camelCase in one place (`web/sr
 ```
 profiles            select: everyone · write: none (trigger + RPC only)
   id uuid pk → auth.users, display_name (≤ 50), photo_url, masked_email,
-  role 'member' | 'admin', created_at
+  role 'member' | 'admin', email_reminders bool (default true; daily digest opt-out, PRD FR-46), created_at
 
 apps                select: everyone where deleted = false; admin sees all · write: none (RPC only)
   id uuid pk, name (≤ 50), description (≤ 280), opt_in_url, store_url?, package_name?,
@@ -49,6 +49,7 @@ Both views use `security_invoker = true`, so the RLS of the base tables applies.
 | `feedback_sent_count` / `feedback_verified_count` / `replied_count` | active testers with that flag |
 | `build_count`, `last_build_at` | count and max `uploaded_at` of the app's builds |
 | `creator_testing_count`, `creator_feedback_sent_count`, `creator_feedback_verified_count` | the creator's `profile_stats` (FR-27b) |
+| `creator_badge_tier` | the creator's `profile_stats.badge_tier` (FR-27j) |
 
 `profile_stats` (one row per profile), entries on soft-deleted apps never count:
 
@@ -57,6 +58,9 @@ Both views use `security_invoker = true`, so the RLS of the base tables applies.
 | `apps_created_count` | the member's apps with `deleted = false` |
 | `testing_count` | entries that are Active, or Left with `left_at − opted_in_at ≥ 14 days`; Removed never |
 | `feedback_sent_count` / `feedback_verified_count` | entries with that flag and status ≠ removed |
+| `apps_tested_count` | entries that reached 14+ days active: Active with `now() − opted_in_at ≥ 14 days`, or Left with `left_at − opted_in_at ≥ 14 days`; Removed never (FR-27g) |
+| `badge_tier` | `'none'` 0–2, `'bronze'` 3–6, `'silver'` 7–13, `'gold'` 14–24, `'platinum'` 25+ (FR-27h) |
+| `next_tier_at` | apps tested needed for the next tier (3, 7, 14, 25); null at platinum (FR-27k) |
 
 Days active per tester are computed on the client (`web/src/lib/progress.ts`).
 
@@ -77,6 +81,7 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 | `add_manual_tester` | `p_app_id, p_display_name, p_email, p_opted_in_at?` | `uuid` | Creator or admin. Email is masked and discarded. `added_by = 'creator'`, opt-in not in the future (1 day slack). |
 | `update_tester` | `p_tester_id, p_patch` (JSON object, snake_case keys) | — | Creator or admin: `status, opted_in_at, left_at, note, feedback_verified, replied`. Admin also: `feedback_sent, feedback_sent_at, feedback_summary` (moderation). Any other key → `permission-denied`. Status change without `left_at`: active clears it, left/removed keep it or set now. |
 | `add_build` | `p_app_id, p_version_name, p_uploaded_at, p_changelog` | `uuid` | Creator or admin. ≤ 40 / ≤ 140, date not in the future. 10 per app per rolling 24 h → `resource-exhausted`. |
+| `set_email_reminders` | `p_enabled` | — | Signed-in member, own profile only. Null → `invalid-argument`. |
 | `mask_email` | `email` | `text` | Pure helper, callable by anyone. |
 
 Only the admin may act on a soft-deleted app (edit, manage testers, add builds, restore); for everyone else, its creator included, it is `not-found`.

@@ -482,7 +482,8 @@ The free plan allows 200 concurrent Realtime connections. Realtime is used only 
 
 | Page | Route | Content |
 | --- | --- | --- |
-| Home / App list | `/` | Search, filters (status, cohort), app cards with progress and labels |
+| Landing (story surface) | `/` | Story page with the cohort ring signature moment (ADR-001 §4, ADR-008 option A) |
+| App list | `/apps` | Search, filters (status, cohort), app cards with progress and labels |
 | App detail | `/apps/{id}` | App info, links, feedback guide, progress, tester table, build log, check-ins |
 | Add / edit app | `/apps/new`, `/apps/{id}/edit` | Form, feedback guide, Google Group confirmation, build log entry |
 | Cohort list | `/cohorts` | Active, forming and closed cohorts |
@@ -689,7 +690,7 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 6. Is Day 21 the right hard close for a cohort, or should it stay open until every app is ready?
 7. Should a member with two apps be allowed to bring both into one cohort (testing twice as many apps in return)?
 8. Who besides the owner may act as admin for running cohorts?
-9. Should logged-out visitors land on the story page at `/` (stronger for Awwwards, since jurors open the home URL), with the app list moved to `/apps`?
+9. ~~Should logged-out visitors land on the story page at `/`, with the app list moved to `/apps`?~~ **Answered 2 Nov 2026: yes, for everyone (ADR-008 option A).**
 10. Will the design pass be done in-house with Taste Skill alone, or with a dedicated designer or creative developer for the signature moment?
 11. Should badge names be Indonesian (e.g. Perunggu, Perak, Emas, Platinum) or stay in English?
 12. Is there a cap on pure testers per cohort, or can any number join until Day 7?

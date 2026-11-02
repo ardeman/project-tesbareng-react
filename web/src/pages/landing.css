@@ -1,0 +1,322 @@
+/* Landing (story surface). Tokens come from tokens.css; `.surface-story` sets 3 px borders and 6 px shadows.
+   Everything is scoped under .lp so it cannot leak into the work surface. Light theme only (ADR-001 §2.1). */
+.lp {
+  --wrap: 1240px;
+  --gutter: clamp(16px, 4vw, 40px);
+  --sec: clamp(64px, 8vw, 96px);
+  --rule: var(--bw) solid var(--ink);
+  --rule-in: 2px solid var(--ink);
+  /* Story type scale (DESIGN.md story column) */
+  --t-display: clamp(56px, 10vw, 128px);
+  --t-h1: clamp(32px, 4vw, 48px);
+  --t-h2: clamp(24px, 2.4vw, 32px);
+  --t-figure: clamp(32px, 3.4vw, 48px);
+  --t-body: 19px;
+  --t-small: 16px;
+  --t-caption: 14px;
+  --t-button: 18px;
+  background: var(--kertas);
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: var(--t-body);
+  font-weight: 500;
+  line-height: 1.5;
+  overflow-x: clip;
+}
+@media (max-width: 639px) { .lp { --t-body: 18px; } }
+.lp *, .lp *::before, .lp *::after { box-sizing: border-box; }
+.lp a { color: inherit; }
+.lp .num, .lp dd, .lp .day-n, .lp .rail-cells { font-variant-numeric: tabular-nums; }
+.lp-wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--gutter); }
+
+.lp h1, .lp h2, .lp h3 { margin: 0; color: var(--ink); }
+.lp h2 { font-family: var(--font-text); font-weight: 800; font-size: var(--t-h1); line-height: 1.12; letter-spacing: -0.01em; text-wrap: balance; }
+.lp h3 { font-weight: 800; font-size: var(--t-h2); line-height: 1.2; }
+.lp p { margin: 0; }
+.lp-lede { font-size: var(--t-body); max-width: 38em; }
+
+.lp-skip { position: absolute; left: 16px; top: -80px; z-index: 20; padding: 12px 16px; background: var(--kunyit); color: var(--ink); font-weight: 700; border: 2px solid var(--ink); text-decoration: none; }
+.lp-skip:focus { top: 16px; }
+
+/* Section label: a numbered ink tag, the page's reading order made explicit */
+.lp-label { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: var(--t-caption); font-weight: 700; line-height: 1.3; letter-spacing: 0.04em; text-transform: uppercase; }
+.lp-label b { padding: 4px 8px; background: var(--ink); color: var(--kertas); font-weight: 800; }
+.lp-label--plain { margin: 0; }
+
+/* Buttons: the only things with hard shadows besides ring nodes */
+.lp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 52px; padding: 14px 24px;
+  font: 700 var(--t-button)/1 var(--font-text); color: var(--ink); text-decoration: none; white-space: nowrap;
+  background: var(--putih); border: var(--rule); border-radius: var(--r-sm);
+  box-shadow: var(--shadow); cursor: pointer;
+  transition: transform var(--t-hover) var(--ease);
+}
+.lp-btn--primary { background: var(--kunyit); }
+.lp a.lp-btn--ink, .lp .lp-btn--ink { background: var(--ink); color: var(--kertas); }
+.lp-btn--sm { min-height: var(--target); padding: 10px 16px; font-size: var(--t-small); border-width: 2px; box-shadow: 3px 3px 0 0 var(--ink); }
+.lp-btn.is-ok { background: var(--pandan); }
+@media (hover: hover) and (pointer: fine) {
+  .lp-btn:hover { transform: translate(calc(var(--lift) * -1), calc(var(--lift) * -1)); box-shadow: var(--shadow-hover); }
+  .lp-btn--sm:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--ink); }
+}
+.lp-btn:active { transform: translate(var(--sh), var(--sh)); box-shadow: none; transition-duration: var(--t-press); }
+.lp-btn--sm:active { transform: translate(3px, 3px); }
+
+/* Chips: square, ink border, glyph + text */
+.lp .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: var(--t-caption); font-weight: 700; line-height: 1.3; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); border: 2px solid var(--ink); white-space: nowrap; }
+.lp .c-pandan { background: var(--pandan); }
+.lp .c-langit { background: var(--langit); }
+.lp .c-cabai { background: var(--cabai); }
+.lp .c-putih { background: var(--putih); }
+
+/* Segmented 12/14 counters */
+.lp .seg { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 4px; padding: 4px; border: var(--rule-in); background: var(--kertas); }
+.lp .seg i { height: 16px; border: 2px solid var(--ink); background: var(--putih); }
+.lp .seg i.on { background: var(--pandan); }
+.lp .meter { display: grid; gap: 8px; }
+.lp .meter-top { display: flex; justify-content: space-between; gap: 16px; font-size: var(--t-small); font-weight: 700; }
+
+/* ---------- Header ---------- */
+.lp-top { border-bottom: var(--rule); }
+.lp-top-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 16px; }
+.lp-brand { display: inline-flex; align-items: center; gap: 8px; min-height: var(--target); font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: 24px; line-height: 1; letter-spacing: -0.02em; text-decoration: none; }
+.lp-brand-box { width: 24px; height: 24px; flex: none; background: var(--kunyit); border: var(--rule); }
+.lp-nav { display: flex; align-items: center; gap: clamp(8px, 2.4vw, 32px); font-size: var(--t-small); font-weight: 700; }
+.lp-nav > a:not(.lp-btn) { white-space: nowrap; display: inline-flex; align-items: center; min-height: var(--target); text-decoration: none; border-bottom: 2px solid transparent; }
+@media (hover: hover) and (pointer: fine) { .lp-nav > a:not(.lp-btn):hover { border-bottom-color: var(--ink); } }
+@media (max-width: 860px) { .lp-nav > a.hide-s { display: none; } }
+@media (max-width: 380px) { .lp-brand { font-size: 20px; } }
+.lp-alert { padding-block: 0 16px; font-size: var(--t-small); font-weight: 700; }
+
+/* ---------- Hero ---------- */
+.lp .hero { padding-block: clamp(40px, 6vw, 80px) var(--sec); }
+.lp .hero h1 { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-display); line-height: 0.92; letter-spacing: -0.02em; }
+.lp .hero h1 span { display: block; }
+.lp .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 64px); align-items: start; margin-top: clamp(32px, 4vw, 48px); }
+.lp .hero-copy { display: grid; gap: 32px; }
+.lp .cta-row { display: flex; flex-wrap: wrap; gap: 16px 24px; }
+
+.lp .sheet { background: var(--putih); border: var(--rule); }
+.lp .sheet-head { padding: 16px; border-bottom: var(--rule); }
+.lp .sheet-head h2 { font-size: var(--t-h2); line-height: 1.2; }
+.lp .sheet-body { display: grid; gap: 16px; padding: 16px; }
+.lp .checks { display: grid; margin: 0; padding: 0; list-style: none; border-top: var(--rule-in); }
+.lp .checks li { display: flex; gap: 12px; align-items: baseline; padding: 12px 0; font-size: var(--t-small); font-weight: 700; border-bottom: 1px solid var(--ink); }
+.lp .checks li:last-child { border-bottom: 0; padding-bottom: 0; }
+.lp .checks small { display: block; font-size: var(--t-caption); font-weight: 500; color: var(--muted); }
+.lp .tick { display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; font-size: var(--t-caption); font-weight: 800; background: var(--pandan); border: 2px solid var(--ink); }
+.lp .legend span { white-space: normal; } /* the work-surface .legend rule must not stop wrapping here */
+.lp .sheet-foot { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 8px 16px; padding: 16px; border-top: var(--rule); background: var(--kertas); }
+.lp .sheet-foot p { font-size: var(--t-small); }
+
+/* ---------- Ring (the signature moment) ---------- */
+.lp .ring-scroll { border-top: var(--rule); }
+.lp .ring-stage { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(24px, 5vw, 64px); align-items: center; padding-block: var(--sec); }
+.lp .ring-copy { display: grid; gap: 24px; align-content: center; }
+.lp .ring-copy .lp-label { margin: 0; }
+.lp .counters { display: grid; grid-template-columns: 1fr 1fr; margin: 0; background: var(--putih); border: var(--rule); }
+.lp .counters div { padding: 12px 16px; }
+.lp .counters div + div { border-left: var(--rule); }
+.lp .counters dt { font-size: var(--t-caption); font-weight: 700; line-height: 1.3; color: var(--muted); }
+.lp .counters dd { margin: 4px 0 0; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-figure); line-height: 1; }
+.lp .counters .dim { font-family: var(--font-text); font-stretch: 100%; font-size: var(--t-small); font-weight: 700; color: var(--muted); }
+.lp .ring-status { display: grid; gap: 24px; }
+.lp .ring-final { padding: 16px; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-h2); line-height: 1.1; background: var(--pandan); border: var(--rule); }
+.lp .ring-fig { margin: 0; justify-self: center; width: 100%; max-width: 640px; }
+.lp .ring-fig svg { display: block; width: 100%; height: auto; overflow: visible; }
+.lp .ring-legend { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 16px; font-size: var(--t-caption); font-weight: 700; }
+.lp .ring-legend span { display: inline-flex; align-items: center; gap: 8px; }
+.lp .lg-sq, .lp .lg-ci, .lp .lg-ok { width: 16px; height: 16px; flex: none; background: var(--putih); border: 2px solid var(--ink); }
+.lp .lg-ci { border-radius: var(--r-full); }
+.lp .lg-ok { display: inline-grid; place-items: center; width: 20px; height: 20px; font-size: 12px; font-style: normal; background: var(--pandan); }
+.lp .lg-dash { width: 24px; border-top: 2px dashed var(--ink); }
+
+.lp .ring-fig { --u: 1; }
+.lp .tie { fill: none; stroke: var(--ink); stroke-width: calc(var(--u) * 1px); stroke-linecap: butt; }
+.lp .tie--p { stroke-dasharray: calc(var(--u) * 5px) calc(var(--u) * 4px); stroke-width: calc(var(--u) * 1.5px); }
+.lp .nbody { fill: var(--putih); stroke: var(--ink); stroke-width: calc(var(--u) * 3px); }
+.lp .nshadow { fill: var(--ink); }
+.lp .ncheck { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: square; opacity: 0; }
+.lp .node.done .nbody { fill: var(--pandan); }
+.lp .node.done .ncheck { opacity: 1; }
+.lp .node.act .nbody { fill: var(--kunyit); }
+.lp .nstamp { transform-box: fill-box; transform-origin: center; }
+
+/* Scrub mode: one viewport of pinning, then it lets go (ADR-001 §3). */
+.lp .ring-scroll.is-scrub { height: 200vh; height: 200svh; }
+.lp .is-scrub .ring-stage { position: sticky; top: 0; height: 100vh; height: 100svh; padding-block: 24px; }
+.lp .is-scrub .ring-fig { max-width: min(640px, 82svh); }
+.lp .is-scrub .tie--c { stroke-dasharray: 1 1; stroke-dashoffset: 1; }
+.lp .is-scrub .tie--p { opacity: 0; }
+.lp .is-scrub .tie.drawing { stroke-width: calc(var(--u) * 3px); }
+.lp .is-scrub .node.done .nstamp { animation: lp-stamp 240ms steps(3, end) both; }
+/* Counters and the closing line share one cell and swap by opacity, so the hidden one holds no extra space. */
+.lp .is-scrub .ring-status > * { grid-area: 1 / 1; }
+.lp .is-scrub .counters { align-self: start; }
+.lp .is-scrub .ring-final { opacity: 0; transition: opacity var(--t-control) var(--ease); }
+.lp .is-scrub .ring-final.show { opacity: 1; animation: lp-stamp 300ms steps(3, end) both; }
+.lp .is-scrub .counters { transition: opacity var(--t-control) var(--ease); }
+.lp .is-scrub .ring-status:has(.ring-final.show) .counters { opacity: 0; }
+@keyframes lp-stamp { from { transform: scale(1.3); } to { transform: none; } }
+
+/* ---------- Sections ---------- */
+.lp-sec { padding-block: var(--sec); border-top: var(--rule); }
+.lp .sec-head { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 24px 64px; align-items: end; margin-bottom: clamp(32px, 4vw, 48px); }
+.lp .sec-head .lp-lede { color: var(--ink); }
+
+/* Schedule rail */
+.lp .rail { display: grid; gap: 8px; padding: 16px; background: var(--kertas); border: var(--rule); border-bottom: 0; }
+.lp .rail-head { display: flex; justify-content: space-between; gap: 16px; font-size: var(--t-caption); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.lp .rail-cells { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)) minmax(0, 1.4fr); gap: 4px; }
+.lp .rail-cells i { display: grid; place-items: center; height: 32px; font-size: var(--t-caption); font-style: normal; font-weight: 700; color: var(--muted); background: var(--putih); border: 2px solid var(--ink); }
+.lp .rail-cells i.cp { color: var(--ink); font-weight: 800; }
+.lp .rail-cells i.c-langit { background: var(--langit); }
+.lp .rail-cells i.c-cabai { background: var(--cabai); }
+.lp .rail-cells i.c-pandan { background: var(--pandan); }
+.lp .rail-cells i.fin { background: var(--ink); color: var(--kertas); font-weight: 800; }
+.lp .rail-cells i.close { margin-left: 8px; color: var(--ink); font-weight: 800; border-style: dashed; }
+
+.lp .days { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; background: var(--putih); border: var(--rule); }
+.lp .day { display: grid; gap: 16px; align-content: start; padding: 24px; }
+.lp .day + .day { border-left: var(--rule); }
+.lp .day p { font-size: var(--t-small); }
+.lp .day .chip { justify-self: start; }
+.lp .day .day-n { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: clamp(56px, 6vw, 80px); line-height: 0.85; }
+.lp .day-n small { display: block; margin-bottom: 8px; font-family: var(--font-text); font-stretch: 100%; font-size: var(--t-caption); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.lp .build-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 16px 24px; font-size: var(--t-small); font-weight: 700; background: var(--kertas); border: var(--rule); border-top: 0; }
+
+/* Matrix demo */
+.lp .matrix-wrap { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.7fr); gap: clamp(32px, 5vw, 64px); align-items: start; }
+.lp .matrix { background: var(--putih); border: var(--rule); }
+.lp .matrix .scroller { position: relative; overflow-x: auto; }
+/* The scroller's own ring would sit on the matrix's ink border and vanish; draw it round the whole matrix instead. */
+.lp .matrix .scroller:focus-visible { outline: none; }
+.lp .matrix:has(.scroller:focus-visible) { outline: 3px solid var(--ink); outline-offset: 2px; }
+.lp .matrix table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--t-small); }
+.lp .matrix th, .lp .matrix td { padding: 8px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--ink); border-right: 1px solid var(--ink); }
+.lp .matrix thead th { font-size: var(--t-caption); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; background: var(--kertas); border-bottom: var(--rule-in); }
+.lp .matrix th:first-child { position: sticky; left: 0; z-index: 1; padding-inline: 16px; text-align: left; font-weight: 700; background: var(--putih); border-right: var(--rule-in); }
+.lp .matrix thead th:first-child { background: var(--kertas); }
+.lp .matrix th:last-child, .lp .matrix td:last-child { border-right: 0; }
+.lp .matrix tbody tr:last-child > * { border-bottom: 0; }
+.lp .matrix tr.me th:first-child { box-shadow: inset 6px 0 0 var(--kunyit); }
+.lp .matrix-note { padding: 12px 16px; font-size: var(--t-caption); color: var(--muted); border-top: var(--rule-in); }
+/* Instant swap when filtering: ADR-001 §3 animates transform and opacity only. */
+.lp .cell { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 40px; height: 32px; padding-inline: 6px; font-weight: 800; color: var(--ink); border: 2px solid var(--ink); }
+.lp .cell-t { font-size: var(--t-caption); font-weight: 700; }
+/* Glyph plus short label at every width (status never by colour or glyph alone). Narrow screens scroll the table inside .scroller; the member column stays sticky. */
+/* Below 1200 the labelled table needs the full width: stack the legend under it so all five apps show from 768 up. */
+@media (max-width: 1199px) { .lp .matrix-wrap { grid-template-columns: minmax(0, 1fr); } }
+.lp .matrix-hint { display: none; }
+@media (max-width: 767px) { .lp .matrix-hint { display: inline; } }
+.lp .legend .cell-t { display: none; }
+.lp .cell--ok2 { background: var(--pandan); }
+.lp .cell--ok { background: var(--langit); }
+.lp .cell--wait { background: var(--putih); }
+.lp .cell--late { background: var(--cabai); }
+.lp .cell--own { background: var(--surface-soft); color: var(--muted); border-style: dashed; }
+.lp .filtering tbody .cell:not(.match) { background: var(--surface-soft); color: var(--muted); }
+.lp .legend { display: grid; gap: 8px; }
+.lp .lg-btn { display: flex; align-items: center; gap: 16px; min-height: 52px; padding: 4px 8px; font: inherit; font-size: var(--t-small); font-weight: 700; color: var(--ink); text-align: left; background: none; border: 2px solid transparent; border-radius: var(--r-sm); cursor: pointer; }
+.lp .lg-row { display: flex; align-items: center; gap: 16px; min-height: 52px; padding: 4px 10px; font-size: var(--t-small); font-weight: 700; }
+.lp .lg-btn[aria-pressed="true"] { background: var(--putih); border-color: var(--ink); }
+@media (hover: hover) and (pointer: fine) { .lp .lg-btn:hover { border-color: var(--ink); border-style: dashed; } .lp .lg-btn[aria-pressed="true"]:hover { border-style: solid; } }
+.lp .privacy { display: grid; gap: 8px; margin-top: 16px; padding: 16px; background: var(--putih); border: var(--rule); }
+.lp .privacy p { font-size: var(--t-small); }
+.lp .masked { font-size: var(--t-h2); font-weight: 800; letter-spacing: 0.01em; overflow-wrap: anywhere; }
+
+/* Badges */
+.lp .tiers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; background: var(--putih); border: var(--rule); }
+.lp .tier { display: grid; gap: 8px; justify-items: start; align-content: start; padding: 24px 16px; }
+.lp .tier + .tier { border-left: var(--rule); }
+.lp .tier b { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: clamp(56px, 6vw, 80px); line-height: 0.9; }
+.lp .tier small { font-size: var(--t-caption); font-weight: 700; color: var(--muted); }
+.lp .pill { display: inline-flex; align-items: center; padding: 4px 12px; font-size: var(--t-caption); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; border: 2px solid var(--ink); border-radius: var(--r-full); }
+.lp .t-bronze { background: var(--tier-bronze); }
+.lp .t-silver { background: var(--tier-silver); }
+.lp .t-gold { background: var(--tier-gold); }
+.lp .t-platinum { background: var(--tier-platinum); }
+.lp .tier-note { margin-top: 24px; max-width: 46em; font-size: var(--t-small); }
+
+/* Join band: the one large kunyit field, because it carries the primary action */
+.lp .join { background: var(--kunyit); }
+.lp .join .lp-label b { background: var(--ink); color: var(--kunyit); }
+.lp .live { display: grid; gap: 8px; margin-top: 32px; }
+.lp .live-row { display: flex; flex-wrap: wrap; margin: 0; background: var(--kertas); border: var(--rule); }
+.lp .live-row div { display: flex; flex-direction: column-reverse; gap: 4px; padding: 12px 24px; }
+.lp .live-row div + div { border-left: var(--rule); }
+.lp .live-row dt { font-size: var(--t-caption); font-weight: 700; }
+.lp .live-row dd { margin: 0; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-figure); line-height: 1; }
+.lp .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: clamp(32px, 4vw, 48px) 0 0; padding: 0; list-style: none; background: var(--kertas); border: var(--rule); }
+.lp .steps li { display: grid; gap: 16px; align-content: start; padding: 24px; }
+.lp .steps li + li { border-left: var(--rule); }
+.lp .steps p { font-size: var(--t-small); }
+.lp .steps .n { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: 56px; line-height: 0.85; }
+.lp .email { box-decoration-break: clone; -webkit-box-decoration-break: clone; font: inherit; font-weight: 700; overflow-wrap: anywhere; background: var(--putih); padding: 0 4px; border: 1px solid var(--ink); }
+.lp .copy-row { display: grid; gap: 8px; justify-items: start; }
+.lp .copy-status { font-size: var(--t-caption); font-weight: 700; min-height: 1.3em; }
+.lp .join .cta-row { margin-top: 32px; }
+.lp .join-note { margin-top: 24px; font-size: var(--t-small); font-weight: 700; }
+
+/* FAQ: native details, no height animation */
+.lp .faq { margin-top: clamp(32px, 4vw, 48px); background: var(--putih); border: var(--rule); }
+.lp .faq details + details { border-top: var(--rule-in); }
+.lp .faq summary { display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 16px 24px; font-size: var(--t-body); font-weight: 700; cursor: pointer; list-style: none; }
+.lp .faq summary::-webkit-details-marker { display: none; }
+.lp .faq summary::after { content: "+"; display: grid; place-items: center; flex: none; width: 36px; height: 36px; margin-left: auto; font-family: var(--font-display); font-weight: 900; font-size: 24px; line-height: 1; border: 2px solid var(--ink); }
+.lp .faq details[open] summary::after { content: "–"; background: var(--kunyit); }
+@media (hover: hover) and (pointer: fine) { .lp .faq summary:hover { background: var(--surface-soft); } }
+.lp .q-n { flex: none; min-width: 2.5em; font-size: var(--t-caption); font-weight: 700; color: var(--muted); }
+.lp .q-t { flex: 1; min-width: 0; }
+.lp .faq .ans { max-width: 62ch; padding: 0 24px 24px calc(24px + 2.5em + 16px); font-size: var(--t-small); }
+.lp .faq-more { margin-top: 24px; font-size: var(--t-small); font-weight: 700; }
+.lp .faq-more a { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
+
+/* Footer */
+.lp-foot { padding-block: 48px 32px; border-top: var(--rule); max-width: none; }
+.lp .foot-word { margin: 0 0 32px; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: min(11vw, 128px); line-height: 0.8; letter-spacing: -0.03em; white-space: nowrap; }
+.lp .foot-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 24px; padding-top: 16px; font-size: var(--t-small); border-top: var(--rule); }
+.lp .foot-row nav { display: flex; flex-wrap: wrap; gap: 0 24px; font-weight: 700; }
+.lp .foot-row nav a { display: inline-flex; align-items: center; min-height: var(--target); text-decoration: underline; text-underline-offset: 4px; }
+
+/* Entrances below the fold: fade and rise, never on the hero */
+.lp.fx .rv { transition: opacity var(--t-enter) var(--ease), transform var(--t-enter) var(--ease); }
+.lp.fx .rv:not(.in) { opacity: 0; transform: translateY(16px); }
+
+/* ---------- Tablet and below ---------- */
+@media (max-width: 980px) {
+  .lp .hero-grid, .lp .ring-stage, .lp .matrix-wrap, .lp .sec-head { grid-template-columns: minmax(0, 1fr); }
+  .lp .days { grid-template-columns: 1fr 1fr; }
+  .lp .day:nth-child(3) { border-left: 0; }
+  .lp .day:nth-child(n + 3) { border-top: var(--rule); }
+  .lp .ring-fig { max-width: 520px; }
+  .lp .is-scrub .ring-stage { grid-template-rows: auto auto; align-content: center; gap: 16px; }
+  .lp .is-scrub .ring-copy { gap: 12px; }
+  .lp .is-scrub .ring-lede, .lp .is-scrub .ring-legend, .lp .is-scrub .ring-copy .lp-label { display: none; }
+  /* Ring takes whatever height the copy leaves: 100svh minus stage padding (48), gap (16) and the copy block. */
+  .lp .is-scrub .ring-fig { max-width: none; width: min(100%, 520px, calc(100svh - 64px - var(--copy-h, 200px))); }
+  .lp .is-scrub .ring-copy h2 { font-size: clamp(28px, 6vw, 40px); }
+}
+@media (max-width: 639px) {
+  .lp .days, .lp .steps { grid-template-columns: 1fr; }
+  .lp .day + .day, .lp .steps li + li { border-left: 0; border-top: var(--rule); }
+  .lp .tiers { grid-template-columns: 1fr 1fr; }
+  .lp .tier:nth-child(3) { border-left: 0; }
+  .lp .tier:nth-child(n + 3) { border-top: var(--rule); }
+  .lp .rail { padding: 12px; }
+  .lp .rail-cells { gap: 2px; }
+  .lp .rail-cells i { height: 28px; font-size: var(--fs-caption); border-width: 1px; }
+  .lp .rail-cells i.cp { border-width: 2px; }
+  .lp .rail-cells i.close { margin-left: 4px; }
+  /* Cells are ~17 px wide here: only checkpoint days keep their number, so two-digit labels never touch. */
+  .lp .rail-cells i.plain, .lp .rail-cells i.fin { font-size: 0; }
+  .lp .rail-cells i.cp { overflow: visible; letter-spacing: -0.02em; }
+  .lp .counters div { padding: 12px; }
+  .lp .faq summary { padding: 16px; }
+  .lp .faq .ans { padding: 0 16px 16px; }
+  .lp .q-n { min-width: auto; }
+  .lp .live-row div { padding: 12px 16px; }
+  .lp .cta-row .lp-btn { flex: 1 1 100%; }
+  .lp-nav .lp-btn--sm { padding-inline: 12px; }
+}

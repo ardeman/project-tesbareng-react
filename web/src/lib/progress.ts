@@ -74,20 +74,15 @@ export const appStatusLabel: Record<AppStatus, string> = {
   applied: 'Ajukan produksi',
   live: 'Rilis produksi',
 }
-export const appStatusTone: Record<AppStatus, string> = {
-  recruiting: 'acc',
-  testing: '',
-  applied: 'warn',
-  live: 'pos',
-}
 export const testerStatusLabel: Record<TesterStatus, string> = {
   active: 'Aktif',
   left: 'Berhenti',
   removed: 'Dikeluarkan',
 }
 
-const dateFmt = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
-const shortFmt = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' })
+// Dates are shown in WIB (CLAUDE.md), whatever the viewer's device time zone.
+const dateFmt = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' })
+const shortFmt = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' })
 export const fmtDate = (t?: number | null) => (t != null ? dateFmt.format(t) : '—')
 export const fmtShort = (t?: number | null) => (t != null ? shortFmt.format(t) : '—')
 /** Local calendar date (YYYY-MM-DD) for date inputs. */

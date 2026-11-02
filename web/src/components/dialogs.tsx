@@ -60,7 +60,7 @@ function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; 
           </div>
           {app.feedbackGuide && (
             <div className="stack-8">
-              <p style={{ fontWeight: 600 }}>Nanti, saat kirim feedback di Play</p>
+              <p className="strong">Nanti, saat kirim feedback di Play</p>
               <p className="guide-quote">{app.feedbackGuide}</p>
               <p className="muted small">Tulis dengan kata-kata Anda sendiri. Ulasan yang sama persis dari banyak akun bisa dianggap tidak asli oleh Google.</p>
             </div>
@@ -68,7 +68,7 @@ function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; 
           {err && <ErrorBox text={err} />}
         </div>
         <div className="sheet-foot">
-          {!all && <span className="muted small" id="join-why" style={{ marginRight: 'auto', alignSelf: 'center' }}>Centang ketiga langkah untuk lanjut.</span>}
+          {!all && <span className="why" id="join-why">Centang ketiga langkah untuk lanjut.</span>}
           <button type="button" className="btn" onClick={onClose}>Batal</button>
           <button className="btn primary" disabled={!all || busy} aria-describedby={!all ? 'join-why' : undefined}>{busy ? 'Menyimpan…' : 'Konfirmasi'}</button>
         </div>
@@ -111,7 +111,7 @@ function FeedbackForm({ onClose, app, entry }: { onClose: () => void; app: AppDo
             <a className="btn" style={{ justifySelf: 'start' }} href={app.storeUrl ?? app.optInUrl} target="_blank" rel="noreferrer"><IconExternal />Buka {app.name} di Play</a>
           )}
           <div className="field">
-            <label htmlFor="fb-sum">Ringkasan yang Anda tulis <span className="muted" style={{ fontWeight: 400 }}>(opsional)</span></label>
+            <label htmlFor="fb-sum">Ringkasan yang Anda tulis <span className="opt">(opsional)</span></label>
             <textarea id="fb-sum" className="input" maxLength={500} value={summary} onChange={(e) => setSummary(e.target.value)} aria-describedby="fb-sum-hint" />
             <span className="hint" id="fb-sum-hint">Terlihat oleh semua anggota. Maksimal 500 karakter.</span>
             <span className="count">{summary.length}/500</span>
@@ -119,7 +119,7 @@ function FeedbackForm({ onClose, app, entry }: { onClose: () => void; app: AppDo
           {err && <ErrorBox text={err} />}
         </div>
         <div className="sheet-foot">
-          {already && <button type="button" className="btn danger" style={{ marginRight: 'auto' }} disabled={busy} onClick={unmark}>Batalkan tanda terkirim</button>}
+          {already && <button type="button" className="text-action quiet" style={{ marginRight: 'auto' }} disabled={busy} onClick={unmark}>Batalkan tanda terkirim</button>}
           <button type="button" className="btn" onClick={onClose}>Batal</button>
           <button className="btn primary" disabled={busy}>{busy ? 'Menyimpan…' : already ? 'Simpan catatan' : 'Feedback sudah saya kirim'}</button>
         </div>
@@ -133,6 +133,7 @@ export function BuildDialog({ open, onClose, app }: { open: boolean; onClose: ()
   const { busy, err, run } = useSubmit(() => { toast(`Build ${f.versionName} dicatat. Tester akan melihat pengumuman build baru selama 3 hari.`); setF({ versionName: '', uploadedAt: today(), changelog: '' }); onClose() })
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    e.stopPropagation() // never let this submit reach a form the dialog is rendered beside
     run(() => api.addBuild({ appId: app.id, versionName: f.versionName.trim(), uploadedAt: f.uploadedAt, changelog: f.changelog.trim() }))
   }
   return (
@@ -218,6 +219,7 @@ function TesterForm({ app, tester, onClose }: { app: AppDoc; tester: TesterDoc; 
     feedbackVerified: tester.feedbackVerified, replied: tester.replied,
   })
   const { busy, err, run } = useSubmit(() => { toast(`Data ${tester.displayName} disimpan.`); onClose() })
+  const removing = f.status === 'removed' && tester.status !== 'removed'
   const submit = (e: FormEvent) => {
     e.preventDefault()
     run(() => updateTesterAsCreator(app.id, tester, {
@@ -238,11 +240,11 @@ function TesterForm({ app, tester, onClose }: { app: AppDoc; tester: TesterDoc; 
         {tester.feedbackSummary && <p className="guide-quote">{tester.feedbackSummary}</p>}
         <div className="field">
           <span className="label">Feedback di Play Console</span>
-          <label className="check" style={{ padding: '4px 0' }}>
+          <label className="check">
             <input type="checkbox" checked={f.feedbackVerified} onChange={(e) => setF({ ...f, feedbackVerified: e.target.checked })} />
             <span><span className="t">Terverifikasi</span><span className="d">Saya melihat feedback-nya di Testing feedback.</span></span>
           </label>
-          <label className="check" style={{ padding: '4px 0' }}>
+          <label className="check">
             <input type="checkbox" checked={f.replied} onChange={(e) => setF({ ...f, replied: e.target.checked })} />
             <span><span className="t">Sudah saya balas</span><span className="d">Balasan dikirim dari Play Console.</span></span>
           </label>
@@ -250,9 +252,11 @@ function TesterForm({ app, tester, onClose }: { app: AppDoc; tester: TesterDoc; 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
           <div className="field">
             <label htmlFor="t-s">Status</label>
-            <select id="t-s" className="input" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value as TesterStatus })}>
+            <select id="t-s" className="input" value={f.status} onChange={(e) => setF({ ...f, status: e.target.value as TesterStatus })}
+              aria-describedby={removing ? 't-s-warn' : undefined}>
               {(['active', 'left', 'removed'] as TesterStatus[]).map((s) => <option key={s} value={s}>{testerStatusLabel[s]}</option>)}
             </select>
+            {removing && <span className="hint err" id="t-s-warn" role="status">Tester yang dikeluarkan tidak bisa mendaftar lagi ke aplikasi ini.</span>}
           </div>
           <div className="field">
             <label htmlFor="t-d">Opt-in sejak</label>

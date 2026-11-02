@@ -78,7 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (returnTo?: string): Promise<never> => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: returnTo ? new URL(returnTo, location.origin).href : location.href },
+      // ADR-008: back to where the member came from; from the landing page, to the app list.
+      options: { redirectTo: new URL(returnTo ?? (location.pathname === '/' ? '/apps' : location.href), location.origin).href },
     })
     if (error) throw error
     // The browser is leaving for Google; nothing after this should run.

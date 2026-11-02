@@ -9,3 +9,5 @@ supabase/.branches
 supabase/.env
 .env*.local
 .env
+.claude
+shots/*
