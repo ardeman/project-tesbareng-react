@@ -3,9 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>TesBareng: 12 tester, 14 hari, dikerjakan bareng</title>
     <meta name="description" content="Komunitas creator Android Indonesia yang saling ngetes app: 12 tester opt-in selama 14 hari untuk closed test Google Play, dibagi rata lewat cohort." />
+    <!-- Before first paint: the saved theme (owner, 3 Nov 2026; key tb-theme) and the motion flag for the hero's CSS entrance.
+         html.fx only drives CSS animations that end in their final state by themselves, so a failed script never hides content. -->
+    <script>
+      try { var t = localStorage.getItem('tb-theme'); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t) } catch (e) {}
+      if (!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) document.documentElement.classList.add('fx')
+      window.__tbT0 = performance.now()
+    </script>
+    <meta name="color-scheme" content="light dark" />
 
     <!-- Open Graph (ADR-010 §8). The SPA serves this one file for every route, so link previews always show the landing card.
          og:image and og:url must become absolute (https://<domain>/og/landing.png) once the hosting domain is decided (ADR-003). -->
@@ -24,9 +32,14 @@
     <meta name="twitter:description" content="Komunitas creator Android Indonesia yang saling ngetes app untuk closed test Google Play." />
     <meta name="twitter:image" content="/og/landing.png" />
 
-    <!-- Fonts: self-hosted latin subsets, 2 files (ADR-001 performance budget). The display face is the hero's LCP text. -->
+    <!-- Fonts: Archivo and Jakarta self-hosted latin subsets (the display face is the hero's LCP text).
+         JetBrains Mono (data face, owner 3 Nov 2026) from Google Fonts, display=swap, loaded without blocking render. -->
     <link rel="preload" href="/fonts/archivo-expanded-black-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/plus-jakarta-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&display=swap" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&display=swap" /></noscript>
     <style>
       @font-face { font-family: "Archivo"; font-style: normal; font-weight: 900; font-stretch: 125%; font-display: swap; src: url(/fonts/archivo-expanded-black-latin.woff2) format("woff2"); }
       @font-face { font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 500 800; font-display: swap; src: url(/fonts/plus-jakarta-sans-latin.woff2) format("woff2"); }
@@ -35,122 +48,235 @@
       @font-face { font-family: "Plus Jakarta Sans Fallback"; font-weight: 500; src: local("Arial"), local("ArialMT"), local("Roboto"); size-adjust: 105%; ascent-override: 99%; descent-override: 21%; line-gap-override: 0%; }
       @font-face { font-family: "Plus Jakarta Sans Fallback"; font-weight: 700 800; src: local("Arial Bold"), local("Arial-BoldMT"), local("Roboto Bold"), local("Roboto-Bold"); size-adjust: 99.8%; ascent-override: 104.2%; descent-override: 22%; line-gap-override: 0%; }
 
-      /* Story surface critical CSS: header and hero of the landing. It lives here, not in landing.css, so the static
+      /* Story surface critical CSS: the landing's header and hero. It lives here, not in landing.css, so the static
          hero below paints before (and without) JS, and React's hero uses the very same rules: no shift on swap (ADR-010 §6).
          Everything else for the landing is in src/pages/landing.css. Tokens come from tokens.css (main stylesheet). */
       .lp, .ab {
-        /* Fallback names added for the story surface only; tokens.css keeps the approved stacks. */
         --font-text: "Plus Jakarta Sans", "Plus Jakarta Sans Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         --font-display: "Archivo", "Archivo Fallback", "Arial Black", "Helvetica Neue", Arial, sans-serif;
       }
       .lp {
-        --wrap: 1240px; --gutter: clamp(16px, 4vw, 40px); --sec: clamp(64px, 8vw, 96px);
+        --wrap: 1240px; --gutter: clamp(16px, 4vw, 40px); --sec: clamp(64px, 8vw, 112px);
         --rule: var(--bw) solid var(--ink); --rule-in: 2px solid var(--ink);
-        --t-display: clamp(56px, 10vw, 128px); --t-h1: clamp(32px, 4vw, 48px); --t-h2: clamp(24px, 2.4vw, 32px);
-        --t-figure: clamp(32px, 3.4vw, 48px); --t-body: 19px; --t-small: 16px; --t-caption: 14px; --t-button: 18px;
-        background: var(--kertas); color: var(--ink); font-family: var(--font-text); font-size: var(--t-body);
-        font-weight: 500; line-height: 1.5; overflow-x: clip;
+        /* Landing type roles (mockup v2 scale): display, h1 (section titles), h2 (card titles), body, small, caption, label (mono/chips). */
+        --t-display: clamp(40px, 5.2vw, 76px); --t-h1: clamp(32px, 3.8vw, 52px); --t-h2: clamp(20px, 1.8vw, 24px);
+        --t-figure: clamp(28px, 2.6vw, 36px); --t-lede: clamp(18px, 1.5vw, 21px); --t-body: 18px; --t-small: 16px;
+        --t-caption: 14px; --t-label: 13px; --t-button: 17px;
+        background-color: var(--kertas); color: var(--ink); font-family: var(--font-text); font-size: var(--t-body);
+        font-weight: 500; line-height: 1.6; overflow-x: clip; font-variant-numeric: tabular-nums;
+        background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 32px 32px; background-position: -1px -1px;
       }
-      @media (max-width: 639px) { .lp { --t-body: 18px; } }
       .lp *, .lp *::before, .lp *::after { box-sizing: border-box; }
       .lp a { color: inherit; }
+      .lp ::selection { background: var(--kunyit); color: var(--on-fill); }
       .lp-wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--gutter); }
-      .lp h1, .lp h2, .lp h3 { margin: 0; color: var(--ink); }
+      .lp h1, .lp h2, .lp h3 { margin: 0; color: inherit; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; line-height: 0.95; letter-spacing: -0.01em; }
       .lp p { margin: 0; }
-      .lp-lede { font-size: var(--t-body); max-width: 38em; }
-      .lp-skip { position: absolute; left: 16px; top: -80px; z-index: 20; padding: 12px 16px; background: var(--kunyit); color: var(--ink); font-weight: 700; border: 2px solid var(--ink); text-decoration: none; }
-      .lp-skip:focus { top: 16px; }
-      .lp-label { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: var(--t-caption); font-weight: 700; line-height: 1.3; letter-spacing: 0.04em; text-transform: uppercase; }
-      .lp-label b { padding: 4px 8px; background: var(--ink); color: var(--kertas); font-weight: 800; }
-      .lp-label--plain { margin: 0; }
-      .lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 14px 24px; font: 700 var(--t-button)/1 var(--font-text); color: var(--ink); text-decoration: none; white-space: nowrap; background: var(--putih); border: var(--rule); border-radius: var(--r-sm); box-shadow: var(--shadow); cursor: pointer; transition: transform var(--t-hover) var(--ease); }
-      .lp-btn--primary { background: var(--kunyit); }
-      .lp-btn--wa { background: #25D366; }
-      .lp-btn--sm { min-height: var(--target); padding: 10px 16px; font-size: var(--t-small); border-width: 2px; box-shadow: 3px 3px 0 0 var(--ink); }
-      .lp-btn.is-ok { background: var(--pandan); }
+      .lp .mono { font-family: var(--font-mono); font-weight: 700; letter-spacing: -0.01em; }
+      .lp-lede { font-size: var(--t-lede); max-width: 36em; }
+      .lp .lp-skip { position: absolute; left: 16px; top: -80px; z-index: 70; padding: 12px 16px; background: var(--kunyit); color: var(--on-fill); font-weight: 700; border: 2px solid var(--on-fill); text-decoration: none; }
+      .lp .lp-skip:focus { top: 16px; }
+      .lp-hud { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; font: 700 var(--t-label)/1.2 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+      .lp-hud b { padding: 4px 8px; background: var(--ink); color: var(--kertas); font-weight: 800; letter-spacing: 0.06em; }
+      .lp-hud::after { content: ""; flex: 0 1 140px; border-top: 2px dashed currentColor; opacity: 0.6; }
+
+      /* Buttons: the touchable things carry the hard shadow */
+      .lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 14px 24px; font: 700 var(--t-button)/1.1 var(--font-text); color: var(--ink); text-decoration: none; white-space: nowrap; background: var(--putih); border: var(--rule); border-radius: var(--r-sm); box-shadow: var(--sh) var(--sh) 0 0 var(--ink); cursor: pointer; transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease); }
+      .lp-btn svg { flex: none; fill: currentColor; }
+      .lp .lp-btn--primary { background: var(--kunyit); color: var(--on-fill); }
+      .lp .lp-btn--ink { background: var(--ink); color: var(--kertas); }
+      .lp .lp-btn--wa { background: #25d366; color: var(--on-fill); }
+      .lp-btn--primary::after, .lp-btn--ink::after { content: "→"; content: "→" / ""; font-family: var(--font-mono); transition: transform 160ms var(--ease); }
+      .lp-btn--primary[target="_blank"]::after, .lp-btn--ink[target="_blank"]::after { content: "↗"; content: "↗" / ""; }
+      .lp-btn--nav { --sh: 4px; min-height: var(--target); padding: 8px 16px; font-size: var(--t-small); border-width: 2px; }
       @media (hover: hover) and (pointer: fine) {
-        .lp-btn:hover { transform: translate(calc(var(--lift) * -1), calc(var(--lift) * -1)); box-shadow: var(--shadow-hover); }
-        .lp-btn--sm:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--ink); }
+        .lp-btn:hover { transform: translate(-3px, -3px); box-shadow: calc(var(--sh) + 3px) calc(var(--sh) + 3px) 0 0 var(--ink); }
+        .lp-btn--primary:hover::after, .lp-btn--ink:hover::after { transform: translateX(4px); }
       }
-      .lp-btn:active { transform: translate(var(--sh), var(--sh)); box-shadow: none; transition-duration: var(--t-press); }
-      .lp-btn--sm:active { transform: translate(3px, 3px); }
-      .lp-top { border-bottom: var(--rule); }
-      .lp-top-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 16px; }
-      .lp-brand { display: inline-flex; align-items: center; gap: 8px; min-height: var(--target); font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: 24px; line-height: 1; letter-spacing: -0.02em; text-decoration: none; }
-      .lp-brand-box { width: 24px; height: 24px; flex: none; background: var(--kunyit); border: var(--rule); }
-      .lp-nav { display: flex; align-items: center; gap: clamp(8px, 2.4vw, 32px); font-size: var(--t-small); font-weight: 700; }
-      .lp-nav > a, .lp-nav > .lp-navbtn { white-space: nowrap; display: inline-flex; align-items: center; min-height: var(--target); padding: 0; font: inherit; color: var(--ink); text-decoration: none; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }
-      /* Sign-in stays a quiet outlined nav item: no fill, no shadow, so it never competes with "Gabung komunitas". */
-      .lp-nav > .lp-navbtn { padding: 0 12px; border: 2px solid var(--ink); border-radius: var(--r-sm); }
-      @media (hover: hover) and (pointer: fine) { .lp-nav > a:not(.lp-navbtn):hover { border-bottom-color: var(--ink); } .lp-nav > .lp-navbtn:hover { background: var(--putih); } }
-      @media (max-width: 860px) { .lp-nav > a.hide-s { display: none; } }
-      @media (max-width: 380px) { .lp-brand { font-size: 20px; } }
+      .lp-btn:active { transform: translate(var(--sh), var(--sh)); box-shadow: 0 0 0 0 var(--ink); transition-duration: var(--t-press); }
+      .lp-sq { display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--target); height: var(--target); padding: 0; color: var(--ink); background: var(--putih); border: 2px solid var(--ink); border-radius: var(--r-sm); box-shadow: 3px 3px 0 var(--ink); cursor: pointer; transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease); }
+      @media (hover: hover) and (pointer: fine) { .lp-sq:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 var(--ink); } }
+      .lp-sq:active { transform: translate(3px, 3px); box-shadow: none; transition-duration: var(--t-press); }
+      .lp-sq svg { width: 20px; height: 20px; }
+      .lp .i-sun { display: none; }
+      .lp [aria-pressed="true"] > .i-sun { display: block; }
+      .lp [aria-pressed="true"] > .i-moon { display: none; }
+
+      /* Header: sticky, blurred paper, a rule once the page scrolls, kunyit progress line */
+      .lp-top { position: sticky; top: 0; z-index: 50; background: var(--kertas); border-bottom: var(--bw) solid transparent; transition: border-color 160ms var(--ease); }
+      @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .lp-top { background: color-mix(in srgb, var(--kertas) 86%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+      }
+      .lp-top.scrolled { border-bottom-color: var(--ink); }
+      .lp-top-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 14px; }
+      .lp-brand { display: inline-flex; align-items: center; gap: 10px; min-height: var(--target); font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: 24px; line-height: 1; letter-spacing: -0.02em; text-decoration: none; white-space: nowrap; }
+      .lp-brand-box { width: 24px; height: 24px; flex: none; background: var(--kunyit); border: var(--rule); box-shadow: 3px 3px 0 var(--ink); transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+      @media (hover: hover) and (pointer: fine) { .lp-brand:hover .lp-brand-box { transform: rotate(90deg); } }
+      .lp-nav { display: flex; align-items: center; gap: clamp(12px, 1.8vw, 28px); font-size: var(--t-small); font-weight: 700; }
+      .lp-nav > a.nl { position: relative; display: inline-flex; align-items: center; min-height: var(--target); white-space: nowrap; text-decoration: none; border-bottom: 2px solid transparent; }
+      .lp-nav > a.nl.active { border-bottom-color: var(--ink); }
+      .lp-nav > a.nl.active::before { content: ""; position: absolute; left: -13px; top: 50%; width: 7px; height: 7px; background: var(--kunyit); border: 1.5px solid var(--ink); transform: translateY(-50%); }
+      @media (hover: hover) and (pointer: fine) { .lp-nav > a.nl:hover { border-bottom-color: var(--ink); } }
+      .lp-nav .nav-tools { display: flex; align-items: center; gap: 12px; }
+      .lp .menu-btn { display: none; flex-direction: column; gap: 5px; }
+      .lp .menu-btn span { display: block; width: 18px; height: 2.5px; background: currentColor; transition: transform 180ms var(--ease), opacity 120ms; }
+      .lp .menu-btn[aria-expanded="true"] span:nth-child(1) { transform: translateY(7.5px) rotate(45deg); }
+      .lp .menu-btn[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+      .lp .menu-btn[aria-expanded="true"] span:nth-child(3) { transform: translateY(-7.5px) rotate(-45deg); }
+      .lp-scrollbar { position: absolute; left: 0; right: 0; bottom: calc(var(--bw) * -1); height: var(--bw); pointer-events: none; }
+      .lp-scrollbar i { display: block; height: 100%; background: var(--kunyit); transform-origin: 0 50%; transform: scaleX(var(--sp, 0)); }
+      @media (max-width: 1100px) { .lp-nav > a.nl.sec-link { display: none; } .lp .menu-btn { display: inline-flex; } }
+      @media (max-width: 860px) { .lp-nav > a.nl { display: none; } }
+      @media (max-width: 520px) { .lp .theme-btn { display: none; } }
+      @media (max-width: 420px) { .lp .hide-xs { display: none; } .lp-brand { font-size: 20px; } }
       .lp-alert { padding-block: 0 16px; font-size: var(--t-small); font-weight: 700; }
-      .lp .hero { padding-block: clamp(40px, 6vw, 80px) var(--sec); }
-      .lp .hero h1 { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-display); line-height: 0.92; letter-spacing: -0.02em; }
-      .lp .hero h1 span { display: block; }
-      .lp .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 64px); align-items: start; margin-top: clamp(32px, 4vw, 48px); }
-      .lp .hero-copy { display: grid; gap: 32px; }
+
+      /* Hero: billboard copy left, the shared tester sheet right */
+      .lp .hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(32px, 5vw, 72px); align-items: end; padding-block: clamp(40px, 7vw, 96px) clamp(48px, 8vw, 112px); }
+      .lp .hero h1 { font-size: var(--t-display); line-height: 0.9; }
+      .lp .hero h1 > span { display: block; }
+      .lp .hero-copy { display: grid; gap: 28px; }
+      .lp .hero-copy .lp-hud { margin: 0 0 -8px; }
       .lp .cta-row { display: flex; flex-wrap: wrap; gap: 16px 24px; }
-      /* The ring's first frame: every member in place, nothing assigned yet. The scrubbed ring further down draws the rest. */
-      .lp .hero-ring { margin: 0; justify-self: end; width: 100%; max-width: 420px; }
-      .lp .hero-ring svg { display: block; width: 100%; height: auto; aspect-ratio: 1; overflow: visible; }
-      .lp .hero-ring .hb { fill: var(--putih); stroke: var(--ink); stroke-width: 3px; vector-effect: non-scaling-stroke; }
-      .lp .hero-ring .hs { fill: var(--ink); }
-      .lp .hero-ring figcaption { margin-top: 16px; font-size: var(--t-caption); font-weight: 700; line-height: 1.4; }
-      @media (max-width: 980px) {
-        .lp .hero-grid { grid-template-columns: minmax(0, 1fr); }
-        .lp .hero-ring { justify-self: start; max-width: 360px; }
+      .lp .caret { display: inline-block; width: 0.38em; height: 0.72em; margin-left: 0.14em; vertical-align: -0.02em; background: var(--kunyit); border: var(--bw) solid var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+
+      .lp .lp-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font: 800 var(--t-label)/1 var(--font-text); letter-spacing: 0.04em; text-transform: uppercase; color: var(--on-fill); border: 2px solid var(--ink); white-space: nowrap; }
+      .lp .c-pandan { background: var(--pandan); } .lp .c-langit { background: var(--langit); } .lp .c-cabai { background: var(--cabai); }
+      .lp .c-kunyit { background: var(--kunyit); } .lp .c-ubi { background: var(--ubi); } .lp .c-putih { background: var(--putih); color: var(--ink); }
+      .lp .seg { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 3px; padding: 3px; background: var(--kertas); border: 2px solid var(--ink); }
+      .lp .seg i { height: 14px; background: var(--putih); border: 1.5px solid var(--ink); }
+      .lp .seg i.on { background: var(--c, var(--kunyit)); }
+      .lp .lp-meter { display: grid; gap: 8px; }
+      .lp .meter-top { display: flex; justify-content: space-between; gap: 16px; font-size: var(--t-caption); font-weight: 700; }
+      .lp .meter-top > span:last-child { font-family: var(--font-mono); white-space: nowrap; }
+
+      .lp .sheet { position: relative; background: var(--putih); border: var(--rule); border-radius: var(--r-sm); box-shadow: var(--sh) var(--sh) 0 0 var(--ink); }
+      .lp .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: var(--rule); }
+      .lp .sheet-head strong { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: 20px; line-height: 1; }
+      .lp .scroller { overflow-x: auto; }
+      .lp .scroller:focus-visible { outline-offset: -3px; }
+      .lp .tsheet { width: 100%; border-collapse: collapse; font-size: var(--t-caption); }
+      .lp .tsheet th, .lp .tsheet td { padding: 10px 12px; text-align: left; white-space: nowrap; border-bottom: 2px solid var(--ink); }
+      .lp .tsheet thead th { font-size: var(--t-label); font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; background: var(--kertas); }
+      .lp .tsheet tbody th { font-weight: 700; }
+      .lp .tsheet th:first-child { position: sticky; left: 0; z-index: 1; background: var(--putih); border-right: 2px solid var(--ink); }
+      .lp .tsheet thead th:first-child { background: var(--kertas); }
+      .lp .tsheet td.n { text-align: right; font-family: var(--font-mono); font-weight: 700; }
+      .lp .tsheet tbody tr:last-child > * { border-bottom: 0; }
+      .lp .sheet-more { padding: 10px 16px; font-size: var(--t-caption); font-weight: 700; color: var(--muted); border-top: 2px solid var(--ink); }
+      .lp .sheet-ft { display: grid; gap: 16px; padding: 16px; border-top: var(--rule); }
+      .lp .sample { padding: 0 16px 14px; font-size: var(--t-label); color: var(--muted); }
+      .lp .sample b { color: var(--ink); }
+
+      /* Hero entrance (html.fx, set before paint): CSS only, so it always finishes in the final state.
+         --hero-off lets React's copy continue where the static copy was, instead of replaying. */
+      html.fx .lp .hero h1 > span { animation: lp-rise 720ms cubic-bezier(0.2, 0.8, 0.2, 1) var(--hero-off, 0ms) both; }
+      html.fx .lp .hero h1 > span:nth-child(2) { animation-delay: calc(var(--hero-off, 0ms) + 90ms); }
+      html.fx .lp .hero h1 > span:nth-child(3) { animation-delay: calc(var(--hero-off, 0ms) + 180ms); }
+      html.fx .lp .hero h1 { animation: lp-glitch 520ms steps(1, end) calc(var(--hero-off, 0ms) + 820ms) both; }
+      html.fx .lp .caret { animation: lp-blink 1.1s steps(1) infinite; }
+      html.fx .lp .hero-sheet { animation: lp-wipe 760ms cubic-bezier(0.7, 0, 0.2, 1) calc(var(--hero-off, 0ms) + 240ms) both; }
+      html.fx .lp .hero-sheet::after { content: ""; position: absolute; left: -8px; right: -8px; top: 0; height: 100%; border-top: 3px solid var(--kunyit); pointer-events: none; z-index: 4; animation: lp-scan 760ms cubic-bezier(0.7, 0, 0.2, 1) calc(var(--hero-off, 0ms) + 240ms) both; }
+      html.fx .lp .hero .seg i.on { animation: lp-segon 200ms steps(2, end) calc(var(--hero-off, 0ms) + 760ms + var(--k, 0) * 55ms) both; }
+      @keyframes lp-rise { from { opacity: 0; transform: translateY(0.35em); clip-path: inset(0 0 100% 0); } to { opacity: 1; transform: none; clip-path: inset(-30% -5% -30% -5%); } }
+      @keyframes lp-glitch {
+        0% { transform: none; text-shadow: none; }
+        15% { transform: translate(-3px, 1px); text-shadow: 3px 0 var(--cabai), -3px 0 var(--langit); }
+        30% { transform: translate(3px, -1px); text-shadow: -4px 0 var(--cabai), 4px 0 var(--langit); clip-path: inset(18% 0 34% 0); }
+        45% { transform: translate(-2px, 0); text-shadow: 2px 0 var(--cabai), -2px 0 var(--langit); clip-path: inset(52% 0 6% 0); }
+        60% { transform: translate(1px, 0); text-shadow: -2px 0 var(--langit); clip-path: none; }
+        100% { transform: none; text-shadow: none; clip-path: none; }
       }
+      @keyframes lp-blink { 50% { opacity: 0; } }
+      @keyframes lp-wipe { from { clip-path: inset(0 -16px 100% -16px); } to { clip-path: inset(-16px -16px -16px -16px); } }
+      @keyframes lp-scan { 0% { transform: translateY(0); opacity: 1; } 88% { opacity: 1; } 100% { transform: translateY(100%); opacity: 0; } }
+      @keyframes lp-segon { from { background: var(--putih); transform: scaleY(0.4); } to { background: var(--c, var(--kunyit)); transform: none; } }
+
+      @media (max-width: 980px) { .lp .hero { grid-template-columns: minmax(0, 1fr); align-items: start; } }
       @media (max-width: 639px) {
+        .lp-top-row { padding-block: 12px; }
         .lp .cta-row .lp-btn { flex: 1 1 100%; }
-        .lp .hero-ring { max-width: 280px; }
       }
     </style>
   </head>
   <body>
-    <!-- Static hero for first paint and for visitors without JS (ADR-010 pre-ship check). Keep its markup in step with
-         the header and Hero in src/pages/Landing.tsx: same classes, so swapping in React's copy moves nothing.
-         Landing removes it on mount; the script below removes it at once on every other route. -->
-    <div id="boot" class="lp surface-story">
+    <!-- Static header and hero for first paint and for visitors without JS (ADR-010 pre-ship check). Keep this markup
+         identical to the header and Hero in src/pages/Landing.tsx: same classes and text, so React's copy moves nothing.
+         Landing removes it in useLayoutEffect; the script below removes it at once on every other route. -->
+    <div id="boot" class="lp surface-story dark-ready">
+      <a class="lp-skip" href="#isi">Langsung ke isi</a>
       <header class="lp-top">
         <div class="lp-wrap lp-top-row">
-          <a href="/" class="lp-brand" aria-label="TesBareng, beranda"><span class="lp-brand-box" aria-hidden="true"></span>TesBareng</a>
+          <a class="lp-brand" href="/" aria-label="TesBareng, beranda"><span class="lp-brand-box" aria-hidden="true"></span>TesBareng</a>
           <nav class="lp-nav" aria-label="Utama">
-            <a class="hide-s" href="#cara-kerja">Cara kerja</a>
-            <a class="hide-s" href="#badge">Badge</a>
-            <a class="hide-s" href="/about">Aturan main</a>
-            <a href="/apps">Daftar app</a>
-            <a class="lp-navbtn" href="/apps">Masuk</a>
+            <a class="nl sec-link" href="#cara-kerja">Cara kerja</a>
+            <a class="nl sec-link" href="#transparansi">Transparansi</a>
+            <a class="nl sec-link" href="#badge">Badge</a>
+            <a class="nl sec-link" href="#faq">FAQ</a>
+            <a class="nl" href="/about">Aturan main</a>
+            <a class="nl" href="/apps">Daftar app</a>
+            <div class="nav-tools">
+              <button type="button" class="lp-sq theme-btn" aria-pressed="false" aria-label="Mode gelap"><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"></path></svg><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"></path></svg></button>
+              <button type="button" class="lp-btn lp-btn--nav"><span>Masuk<span class="hide-xs"> dengan Google</span></span></button>
+              <button type="button" class="lp-sq menu-btn" aria-expanded="false" aria-controls="lp-menu" aria-label="Menu"><span></span><span></span><span></span></button>
+            </div>
           </nav>
         </div>
+        <div class="lp-scrollbar" aria-hidden="true"><i></i></div>
       </header>
-      <main>
+      <main id="isi">
         <section class="lp-wrap hero" aria-labelledby="boot-hero-h">
-          <p class="lp-label"><b>00</b>Komunitas creator Android Indonesia</p>
-          <h1 id="boot-hero-h"><span>12 tester.</span><span>14 hari.</span><span>Bareng.</span></h1>
-          <div class="hero-grid">
-            <div class="hero-copy">
-              <p class="lp-lede">Itu syarat closed test Google Play untuk akun developer pribadi baru. Di TesBareng, creator Android saling ngetes lewat cohort: kamu tes app mereka, mereka tes app kamu, dan semua orang bisa melihat siapa sudah ngetes siapa.</p>
-              <div class="cta-row">
-                <a class="lp-btn lp-btn--wa" href="https://chat.whatsapp.com/DGV6U43cbG10QWGJVO3bcY?mode=gi_t" target="_blank" rel="noopener noreferrer">
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" style="fill:currentColor;flex:none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.122 1.524 5.855L0 24l6.335-1.505A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.804 9.804 0 01-5.032-1.385l-.36-.214-3.762.894.953-3.667-.235-.376A9.798 9.798 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
-                  Grup WhatsApp
-                </a>
-                <a class="lp-btn lp-btn--primary" href="https://groups.google.com/g/google-tester-indonesia">Gabung komunitas</a>
-                <a class="lp-btn" href="/apps">Lihat daftar app</a>
+          <div class="hero-copy">
+            <p class="lp-hud"><b aria-hidden="true">00</b>Komunitas creator Android Indonesia</p>
+            <h1 id="boot-hero-h"><span>12 tester.</span><span>14 hari.</span><span>Bareng.<i class="caret" aria-hidden="true"></i></span></h1>
+            <p class="lp-lede">Syarat closed test Google Play untuk akun developer pribadi baru. Creator Android Indonesia saling ngetes lewat cohort: kamu tes app mereka, mereka tes app kamu.</p>
+            <div class="cta-row">
+              <a class="lp-btn lp-btn--primary" href="#gabung">Gabung komunitas</a>
+              <a class="lp-btn lp-btn--wa" href="https://chat.whatsapp.com/DGV6U43cbG10QWGJVO3bcY?mode=gi_t" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"></path><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.122 1.524 5.855L0 24l6.335-1.505A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.804 9.804 0 01-5.032-1.385l-.36-.214-3.762.894.953-3.667-.235-.376A9.798 9.798 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"></path></svg>Grup WhatsApp<span class="sr-only"> (tab baru)</span></a>
+              <a class="lp-btn" href="#cara-kerja">Lihat cara kerjanya</a>
+            </div>
+          </div>
+          <div class="sheet hero-sheet" role="group" aria-labelledby="boot-sheet-h">
+            <div class="sheet-head"><strong id="boot-sheet-h">Kopi Catat</strong><span class="lp-chip c-langit">Cohort #3</span></div>
+            <div class="scroller" role="region" aria-label="Contoh daftar tester Kopi Catat" tabindex="0">
+              <table class="tsheet">
+                <caption class="sr-only">Data contoh: daftar tester app Kopi Catat</caption>
+                <thead><tr><th scope="col">Tester</th><th scope="col">Email</th><th scope="col">Hari</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row">Budi S.</th><td>bu*****@gmail.com</td><td class="n">15</td><td><span class="lp-chip c-pandan">✓ Eligible</span></td></tr>
+                  <tr><th scope="row">Sari A.</th><td>sa*****@gmail.com</td><td class="n">14</td><td><span class="lp-chip c-pandan">✓ Eligible</span></td></tr>
+                  <tr><th scope="row">Dimas P.</th><td>di*****@studio.co.id</td><td class="n">9</td><td><span class="lp-chip c-langit">→ Aktif</span></td></tr>
+                  <tr><th scope="row">Wulan L.</th><td>wu*****@gmail.com</td><td class="n">3</td><td><span class="lp-chip c-langit">→ Aktif</span></td></tr>
+                  <tr><th scope="row">Rizky H.</th><td>ri*****@gmail.com</td><td class="n">—</td><td><span class="lp-chip c-cabai">! Belum tes</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="sheet-more">+7 tester lain, semuanya eligible</p>
+            <div class="sheet-ft">
+              <div class="lp-meter">
+                <div class="meter-top"><span>Tester eligible</span><span>9 / 12</span></div>
+                <div class="seg" style="--n:12;--c:var(--pandan)" aria-hidden="true"><i class="on" style="--k:0"></i><i class="on" style="--k:1"></i><i class="on" style="--k:2"></i><i class="on" style="--k:3"></i><i class="on" style="--k:4"></i><i class="on" style="--k:5"></i><i class="on" style="--k:6"></i><i class="on" style="--k:7"></i><i class="on" style="--k:8"></i><i style="--k:9"></i><i style="--k:10"></i><i style="--k:11"></i></div>
+              </div>
+              <div class="lp-meter">
+                <div class="meter-top"><span>Dimas P., hari ke-9 dari 14</span><span>5 hari lagi</span></div>
+                <div class="seg" style="--n:14;--c:var(--kunyit)" aria-hidden="true"><i class="on" style="--k:0"></i><i class="on" style="--k:1"></i><i class="on" style="--k:2"></i><i class="on" style="--k:3"></i><i class="on" style="--k:4"></i><i class="on" style="--k:5"></i><i class="on" style="--k:6"></i><i class="on" style="--k:7"></i><i class="on" style="--k:8"></i><i style="--k:9"></i><i style="--k:10"></i><i style="--k:11"></i><i style="--k:12"></i><i style="--k:13"></i></div>
               </div>
             </div>
-            <figure class="hero-ring">
-              <svg viewBox="0 0 600 600" width="600" height="600" aria-hidden="true" focusable="false"><g transform="translate(300.0 48.0)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(402.5 69.8)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(487.3 131.4)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(539.7 222.1)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(550.6 326.3)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(518.2 426.0)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(448.1 503.9)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(352.4 546.5)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(247.6 546.5)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(151.9 503.9)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(81.8 426.0)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(49.4 326.3)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(60.3 222.1)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(112.7 131.4)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(197.5 69.8)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(300.0 230.0)"><circle class="hs" cx="4" cy="4" r="18"/><circle class="hb" r="18"/></g><g transform="translate(360.6 335.0)"><circle class="hs" cx="4" cy="4" r="18"/><circle class="hb" r="18"/></g><g transform="translate(239.4 335.0)"><circle class="hs" cx="4" cy="4" r="18"/><circle class="hb" r="18"/></g></svg>
-              <figcaption>Satu cohort: 15 creator dengan app-nya dan 3 tester murni. Siapa ngetes siapa ditentukan saat cohort mulai.</figcaption>
-            </figure>
+            <p class="sample"><b>Data contoh.</b> Email selalu tampil disamarkan.</p>
           </div>
         </section>
       </main>
     </div>
     <script>
-      if (location.pathname !== '/') document.getElementById('boot').remove()
+      (function () {
+        var boot = document.getElementById('boot')
+        if (location.pathname !== '/') { boot.remove(); return }
+        // Theme button state from the saved choice (or the device), so the icon does not flip when React takes over.
+        var t = document.documentElement.getAttribute('data-theme')
+        var dark = t ? t === 'dark' : !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches)
+        boot.querySelector('.theme-btn').setAttribute('aria-pressed', dark ? 'true' : 'false')
+      })()
     </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

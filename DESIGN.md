@@ -5,7 +5,7 @@ description: This project's actual design tokens — colors, typography, spacing
 
 # DESIGN.md — TesBareng
 
-> **Status: APPROVED by the owner, 2 Nov 2026**, including every **[proposed]** value below. Modal scrim: the one allowed transparency, `#121212` at 40%. Code tokens live in `web/src/tokens.css`.
+> **Status: APPROVED by the owner, 2 Nov 2026**, including every **[proposed]** value below. **Dark mode and JetBrains Mono approved by the owner, 3 Nov 2026** (landing page mockup v2). Modal scrim: the one allowed transparency, `#121212` at 40%. Code tokens live in `web/src/tokens.css`.
 >
 > Source: ADR-001 r2 §2–§4 (neubrutalism, "bumbu" palette). ADR-001 wins over this file's template defaults and over the CRM-oriented agents wherever they disagree (e.g. the template's 2-family / 10 px radius / soft shadow defaults do not apply). Values marked **[proposed]** are not in ADR-001 and are the draft author's suggestion; everything else is copied from ADR-001.
 >
@@ -19,7 +19,9 @@ description: This project's actual design tokens — colors, typography, spacing
 
 ## Colors
 
-Every fill has **one job** (PRD DR-3). Text on any fill is `{colors.ink}`; never white text on a saturated fill. No gradients, glows, transparency or blur. Max two fill colours per screen besides paper and white, unless the screen shows data (the matrix may use all status colours). Dark mode: out of scope for MVP (ADR-001 §2.1).
+Every fill has **one job** (PRD DR-3). Text on any fill is `{colors.ink}`; never white text on a saturated fill. No gradients, glows, transparency or blur. Max two fill colours per screen besides paper and white, unless the screen shows data (the matrix may use all status colours).
+
+**Dark mode (approved by the owner, 3 Nov 2026).** Paper, white, ink and muted swap (values in the dark column); every colour fill keeps its hex and carries `{colors.on-fill}` `#121212` text. In code the dark values apply only while a surface marked `.dark-ready` is on screen (today: the landing page), via `@media (prefers-color-scheme: dark) :root:not([data-theme="light"]):has(.dark-ready)` and `:root[data-theme="dark"]:has(.dark-ready)`; the choice is saved in `localStorage` key `tb-theme`. The work surface and `/about` stay light until they use `on-fill` for text on fills. `.theme-light` pins a block to the light palette (the landing's kunyit join section). Contrast in dark (computed 3 Nov 2026): ink on kertas 17.1, ink on putih 15.1, muted on kertas 11.0, muted on putih 9.7, ink on surface-soft 13.7; text on fills unchanged (on-fill).
 
 Contrast of ink `#121212` text on each fill (computed 2 Nov 2026): kertas 17.4, putih 18.7, kunyit 12.1, pandan 9.7, langit 8.9, ubi 8.7, silver 11.7, bronze 6.8, cabai 6.1 — all ≥ 4.5:1 (AA normal text).
 
@@ -27,42 +29,42 @@ Contrast of ink `#121212` text on each fill (computed 2 Nov 2026): kertas 17.4, 
 
 | Token | Hex (light) | Hex (dark) | Use |
 |---|---|---|---|
-| `{colors.primary}` = `--kunyit` (turmeric) | `#FFC83D` | — | Primary action fill, the active day on the cohort schedule, focus highlight (see focus rule) |
-| `{colors.primary-active}` | `#FFC83D` | — | Same fill; pressed state is shown by movement (translate + shadow 0), not a colour change |
-| `{colors.primary-disabled}` **[proposed]** | `#F2E6C8` | — | Disabled primary fill, with ink text at 4.5:1+ and no shadow |
-| `{colors.accent}` = `--ubi` (purple yam) | `#B9A3FF` | — | Badges and reciprocity **only** |
+| `{colors.primary}` = `--kunyit` (turmeric) | `#FFC83D` | `#FFC83D` | Primary action fill, the active day on the cohort schedule, focus highlight (see focus rule) |
+| `{colors.primary-active}` | `#FFC83D` | `#FFC83D` | Same fill; pressed state is shown by movement (translate + shadow 0), not a colour change |
+| `{colors.primary-disabled}` **[proposed]** | `#F2E6C8` | `#3A362F` | Disabled primary fill, with ink text at 4.5:1+ and no shadow |
+| `{colors.accent}` = `--ubi` (purple yam) | `#B9A3FF` | `#B9A3FF` | Badges and reciprocity **only** |
 
 ### Surface
 
 | Token | Hex (light) | Hex (dark) | Use |
 |---|---|---|---|
-| `{colors.canvas}` = `--kertas` (paper) | `#FFF6E3` | — | Page background |
-| `{colors.surface-soft}` **[proposed]** | `#F7EBCF` | — | Disabled fields, row hover, greyed-out unassigned matrix cells |
-| `{colors.surface-strong}` = `--putih` | `#FFFFFF` | — | Card and table surfaces |
+| `{colors.canvas}` = `--kertas` (paper) | `#FFF6E3` | `#151412` | Page background |
+| `{colors.surface-soft}` **[proposed]** | `#F7EBCF` | `#2B2823` | Disabled fields, row hover, greyed-out unassigned matrix cells |
+| `{colors.surface-strong}` = `--putih` | `#FFFFFF` | `#22201C` | Card and table surfaces |
 
 ### Border & hairline
 
 | Token | Hex (light) | Hex (dark) | Use |
 |---|---|---|---|
-| `{colors.hairline}` = `--ink` | `#121212` | — | Table row rules (1 px **[proposed]** inside tables so rows don't all weigh the same as section rules) |
-| `{colors.border-strong}` = `--ink` | `#121212` | — | 2 px (work) / 3 px (story) borders, exposed-grid section rules, input outlines |
+| `{colors.hairline}` = `--ink` | `#121212` | `#FFF6E3` | Table row rules (1 px **[proposed]** inside tables so rows don't all weigh the same as section rules) |
+| `{colors.border-strong}` = `--ink` | `#121212` | `#FFF6E3` | 2 px (work) / 3 px (story) borders, exposed-grid section rules, input outlines |
 
 ### Text
 
 | Token | Hex (light) | Hex (dark) | Use |
 |---|---|---|---|
-| `{colors.ink}` = `--ink` | `#121212` | — | All text, every border, every hard shadow |
-| `{colors.body}` | `#121212` | — | Running text (same as ink) |
-| `{colors.muted}` **[proposed]** | `#57534B` | — | Metadata, timestamps. 7.1:1 on kertas, 7.7:1 on putih, 4.95:1 on kunyit |
-| `{colors.on-primary}` | `#121212` | — | Text on every fill |
+| `{colors.ink}` = `--ink` | `#121212` | `#FFF6E3` | All text, every border, every hard shadow |
+| `{colors.body}` | `#121212` | `#FFF6E3` | Running text (same as ink) |
+| `{colors.muted}` **[proposed]** | `#57534B` | `#CFC7B8` | Metadata, timestamps. 7.1:1 on kertas, 7.7:1 on putih, 4.95:1 on kunyit |
+| `{colors.on-primary}` = `{colors.on-fill}` = `--on-fill` | `#121212` | `#121212` | Text, borders and glyphs on every colour fill; never changes with the theme |
 
 ### Semantic (status; one job each)
 
 | Token | Hex (light) | Hex (dark) | Use |
 |---|---|---|---|
-| `{colors.success}` = `--pandan` | `#2FD47E` | — | Eligible, verified, done, Good standing |
-| `{colors.info}` = `--langit` (sky) | `#6BB8FF` | — | Opted in, informational, link hover |
-| `{colors.danger}` = `--cabai` (chilli) | `#FF5B4F` | — | "Belum tes", Behind, errors, destructive actions, Owing |
+| `{colors.success}` = `--pandan` | `#2FD47E` | `#2FD47E` | Eligible, verified, done, Good standing |
+| `{colors.info}` = `--langit` (sky) | `#6BB8FF` | `#6BB8FF` | Opted in, informational, link hover |
+| `{colors.danger}` = `--cabai` (chilli) | `#FF5B4F` | `#FF5B4F` | "Belum tes", Behind, errors, destructive actions, Owing |
 | `{colors.warning}` | — | — | **Not defined in ADR-001.** Proposal: no separate warning colour; "needs attention" uses a `--putih` chip with an ink `!` glyph. Owner to confirm. |
 
 ### Badge tiers (PRD FR-27h; always with the tier name in text)
@@ -76,7 +78,7 @@ Contrast of ink `#121212` text on each fill (computed 2 Nov 2026): kertas 17.4, 
 
 ## Typography
 
-**Font family:** text/UI: **Plus Jakarta Sans** (Tokotype, Jakarta). Display: **Archivo** at Black, Expanded width **[proposed; ADR-001 lists it as a candidate, final choice is in story Step 1]**. Data: Plus Jakarta Sans tabular figures (`font-variant-numeric: tabular-nums`); if they are weak at 13 px, **JetBrains Mono** for data cells and counters only **[proposed]**. Three families maximum (ADR-001 overrides the template's 2-family default). **Never Space Grotesk.**
+**Font family:** text/UI: **Plus Jakarta Sans** (Tokotype, Jakarta). Display: **Archivo** at Black, Expanded width **[proposed; ADR-001 lists it as a candidate, final choice is in story Step 1]**. Data: Plus Jakarta Sans tabular figures (`font-variant-numeric: tabular-nums`), plus **JetBrains Mono** 500/700/800 (`--font-mono`) for data cells, counters and mono labels (**approved by the owner, 3 Nov 2026**; loaded from Google Fonts with `display=swap`, in use on the landing page). Three families maximum (ADR-001 overrides the template's 2-family default). **Never Space Grotesk.**
 **Fallback stack:** metric-matched fallback via `size-adjust`, then `-apple-system, system-ui, sans-serif`.
 **Loading:** ≤ 3 font files, subset (Latin + Indonesian), preloaded, `font-display: swap`.
 
@@ -202,12 +204,12 @@ Emails are only ever shown masked, to everyone; profiles show none.
 ## Known gaps
 
 - [ ] Display face final choice (Archivo Black/Expanded proposed; ADR-001 story Step 1).
-- [ ] Data face: Jakarta tabular vs JetBrains Mono (decide after a 13 px render test).
+- [x] Data face: JetBrains Mono for data and counters (owner, 3 Nov 2026).
 - [ ] Warning colour (proposed: none).
 - [ ] Focus ring (proposed: ink outline, because kunyit fails 3:1).
 - [ ] Modal scrim vs "no transparency" rule.
 - [ ] `muted`, `surface-soft`, `primary-disabled` hexes (proposed above).
-- [ ] Dark mode: out of scope for MVP.
+- [x] Dark mode: approved by the owner, 3 Nov 2026 (landing page first; work surface and /about not yet opted in).
 - [ ] Logo / favicon set: not delivered.
 
 ## Quick reference for generation prompts

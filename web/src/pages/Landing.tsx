@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { usePageMeta } from '../lib/pageMeta'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
@@ -6,15 +6,18 @@ import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL, WHATSAPP_URL } from '../lib/commu
 import { supabase } from '../lib/supabase'
 import './landing.css'
 
-/* Story surface: the landing page at `/` (ADR-001 §2–§4, ADR-008 option A, ADR-010).
-   The cohort ring is the only loud moment. Its scrub is a small rAF loop instead of GSAP,
-   which keeps this chunk far below the 80 KB budget. */
+/* Story surface: the landing page at `/` (ADR-001 §2–§4, ADR-008 option A, ADR-010), rebuilt on the
+   landing-page-ui-v2 mockup (docs/design). Owner decisions 3 Nov 2026: dark mode + JetBrains Mono, the mockup's
+   sample content (labelled "Data contoh"), and all of the mockup's motion. Every effect is plain CSS or a small
+   rAF/IntersectionObserver loop (no animation library), switches off live under prefers-reduced-motion, and the
+   markup always carries the final state, so nothing depends on an effect having run. */
 
 const TITLE = 'TesBareng: 12 tester, 14 hari, dikerjakan bareng'
 const DESCRIPTION =
   'Komunitas creator Android Indonesia yang saling ngetes app: 12 tester opt-in selama 14 hari untuk closed test Google Play, dibagi rata lewat cohort.'
 
 const RM_QUERY = '(prefers-reduced-motion: reduce)'
+const nf = new Intl.NumberFormat('id-ID')
 
 /** Live `prefers-reduced-motion`: follows the OS setting if it changes while the page is open. */
 function useReducedMotion() {
@@ -30,24 +33,177 @@ function useReducedMotion() {
   return reduced
 }
 
-/** Fade-and-rise entrances for `.rv` blocks below the fold. The hero is never animated. */
+/* ---------------------------------------------------------------------------
+   Theme: saved choice in localStorage `tb-theme`, otherwise the device setting.
+   web/index.html applies the saved choice before first paint.
+   --------------------------------------------------------------------------- */
+const THEME_KEY = 'tb-theme'
+const darkQuery = () => (typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null)
+function readDark() {
+  const t = document.documentElement.getAttribute('data-theme')
+  return t ? t === 'dark' : !!darkQuery()?.matches
+}
+function useTheme(reduced: boolean) {
+  const [dark, setDark] = useState(readDark)
+  useEffect(() => {
+    const mq = darkQuery()
+    if (!mq) return
+    const on = () => setDark(readDark())
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  const toggle = useCallback(() => {
+    const next = readDark() ? 'light' : 'dark'
+    const root = document.documentElement
+    if (!reduced) {
+      root.classList.add('theme-anim')
+      window.setTimeout(() => root.classList.remove('theme-anim'), 320)
+    }
+    root.setAttribute('data-theme', next)
+    try { localStorage.setItem(THEME_KEY, next) } catch { /* private mode: the choice lasts for this page only */ }
+    setDark(next === 'dark')
+  }, [reduced])
+  return { dark, toggle }
+}
+
+/* Header height, shared with the ring's sticky stage (CSS reads --hh, the scrub reads HH). */
+let HH = 0
+
+/** Sticky header: --hh, the `scrolled` rule, the page progress line and the back-to-top button. Direct DOM writes, no re-render per frame. */
+function usePageChrome(header: React.RefObject<HTMLElement | null>, fill: React.RefObject<HTMLElement | null>, totop: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const bar = header.current
+    if (!bar) return
+    const root = document.documentElement
+    const row = bar.firstElementChild as HTMLElement | null
+    const setHH = () => {
+      HH = (row?.offsetHeight ?? bar.offsetHeight) + (parseFloat(getComputedStyle(bar).borderBottomWidth) || 0)
+      root.style.setProperty('--hh', `${HH}px`)
+    }
+    setHH()
+    const ro = 'ResizeObserver' in window ? new ResizeObserver(setHH) : null
+    if (row) ro?.observe(row)
+    let raf = 0
+    const frame = () => {
+      raf = 0
+      const y = window.scrollY, max = root.scrollHeight - window.innerHeight
+      bar.classList.toggle('scrolled', y > 8)
+      fill.current?.style.setProperty('--sp', max > 0 ? Math.min(1, y / max).toFixed(4) : '0')
+      totop.current?.classList.toggle('show', y > window.innerHeight * 1.2)
+    }
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(frame) }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    frame()
+    return () => {
+      ro?.disconnect()
+      cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      root.style.removeProperty('--hh')
+    }
+  }, [header, fill, totop])
+}
+
+/** Which section sits in the middle of the viewport, for the nav's active state. */
+function useActiveSection(ids: string[]) {
+  const [active, setActive] = useState<string | null>(null)
+  const key = ids.join(',')
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) return
+    const io = new IntersectionObserver(
+      (es) => { for (const e of es) if (e.isIntersecting) setActive(e.target.id || null) },
+      { rootMargin: '-45% 0px -50% 0px' },
+    )
+    for (const id of key.split(',')) { const el = document.getElementById(id); if (el) io.observe(el) }
+    return () => io.disconnect()
+  }, [key])
+  return active
+}
+
+/* ---------------------------------------------------------------------------
+   Reveal effects (.lp.fx): scan-line wipe on .rv blocks, h2 glitch, segment fill,
+   count-up and masked-email scramble. Each effect starts from the final state already
+   in the markup, so a missed observer or reduced motion leaves correct content.
+   --------------------------------------------------------------------------- */
+/** Running effects, so unmount (or reduced motion switching on) can stop them and write the final value. */
+type Running = Map<HTMLElement, () => void>
+function countUp(el: HTMLElement, running: Running) {
+  const n = Number(el.dataset.count)
+  if (!Number.isFinite(n) || n <= 0) return
+  const final = nf.format(n)
+  let t0 = 0, raf = 0
+  el.textContent = nf.format(0)
+  const stop = () => { cancelAnimationFrame(raf); el.textContent = final; running.delete(el) }
+  const st = (ts: number) => {
+    if (!t0) t0 = ts
+    const p = Math.min(1, (ts - t0) / 700)
+    el.textContent = nf.format(Math.round(n * (1 - Math.pow(1 - p, 3))))
+    if (p < 1) raf = requestAnimationFrame(st)
+    else stop()
+  }
+  running.set(el, stop)
+  raf = requestAnimationFrame(st)
+}
+const GLYPHS = '█▓▒░<>/#*01'
+function scramble(el: HTMLElement, running: Running) {
+  const target = el.dataset.scramble ?? el.textContent ?? ''
+  let i = 0
+  const steps = 18
+  const stop = () => { window.clearInterval(id); el.textContent = target; running.delete(el) }
+  const id = window.setInterval(() => {
+    i++
+    let out = ''
+    for (let k = 0; k < target.length; k++) out += k < (i / steps) * target.length ? target[k] : GLYPHS[Math.floor(Math.random() * GLYPHS.length)]
+    el.textContent = out
+    if (i >= steps) stop()
+  }, 45)
+  running.set(el, stop)
+}
+
 function useReveal(root: React.RefObject<HTMLElement | null>, reduced: boolean) {
   useEffect(() => {
     const el = root.current
     if (!el) return
+    const html = document.documentElement
     if (reduced || !('IntersectionObserver' in window)) {
       el.classList.remove('fx')
+      html.classList.remove('fx')
       return
     }
+    html.classList.add('fx')
     el.classList.add('fx')
+    const FX = '.seg, [data-count], [data-scramble]'
+    const timers: number[] = []
+    const running: Running = new Map()
+    const play = (n: Element) => {
+      if (n.classList.contains('seg')) n.classList.add('go')
+      else if (n instanceof HTMLElement && n.dataset.count) countUp(n, running)
+      else if (n instanceof HTMLElement && n.dataset.scramble) scramble(n, running)
+      else n.classList.add('in')
+    }
     const io = new IntersectionObserver(
       (entries) => {
-        for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
+        for (const e of entries) {
+          if (!e.isIntersecting) continue
+          const n = e.target
+          io.unobserve(n)
+          play(n)
+          if (n.classList.contains('rv')) timers.push(window.setTimeout(() => n.querySelectorAll(FX).forEach(play), 420))
+        }
       },
-      { rootMargin: '0px 0px -8% 0px', threshold: 0.1 },
+      { threshold: 0.12, rootMargin: '0px 0px -6% 0px' },
     )
-    el.querySelectorAll('.rv').forEach((n) => io.observe(n))
-    return () => io.disconnect()
+    el.querySelectorAll('main .rv, main h2').forEach((n) => io.observe(n))
+    el.querySelectorAll(FX).forEach((n) => { if (!n.closest('.rv') && !n.closest('.hero')) io.observe(n) })
+    return () => {
+      io.disconnect()
+      timers.forEach(clearTimeout)
+      for (const stop of [...running.values()]) stop()
+      el.classList.remove('fx')
+      html.classList.remove('fx')
+      el.querySelectorAll('.in, .go').forEach((n) => n.classList.remove('in', 'go'))
+    }
   }, [root, reduced])
 }
 
@@ -68,9 +224,11 @@ const onCircle = (i: number, n: number, r: number): Pt => {
   const a = -Math.PI / 2 + (i * 2 * Math.PI) / n
   return { x: C + r * Math.cos(a), y: C + r * Math.sin(a) }
 }
-const CREATORS = Array.from({ length: N_APPS }, (_, i) => onCircle(i, N_APPS, 252))
-const PURES = Array.from({ length: N_PURE }, (_, i) => onCircle(i, N_PURE, 70))
+const CREATORS = Array.from({ length: N_APPS }, (_, i) => onCircle(i, N_APPS, 250))
+const PURES = Array.from({ length: N_PURE }, (_, i) => onCircle(i, N_PURE, 74))
 const NODES = [...CREATORS, ...PURES]
+/** Sample initials (mockup v2). Creators first, then the pure testers. */
+const INITIALS = ['AR', 'BN', 'CS', 'DW', 'EK', 'FP', 'GH', 'IS', 'JN', 'KM', 'LT', 'MY', 'NR', 'OP', 'RA', 'SW', 'TY', 'YH']
 const f = (n: number) => n.toFixed(1)
 
 function curve(a: Pt, b: Pt, bow: number) {
@@ -98,7 +256,7 @@ const RING = (() => {
       (a, b) => load[a] - load[b] || ((a - p * 5 + N_APPS) % N_APPS) - ((b - p * 5 + N_APPS) % N_APPS),
     )
     for (const t of order.slice(0, Math.min(K, N_APPS))) {
-      ties.push({ o: N_APPS + p, t, d: curve(PURES[p], CREATORS[t], 0), pure: true })
+      ties.push({ o: N_APPS + p, t, d: curve(PURES[p], CREATORS[t], 0.04), pure: true })
       load[t]++
     }
   }
@@ -111,6 +269,22 @@ const RING_DESC =
   `dan ${N_PURE} tester murni tanpa app ada di tengah sebagai lingkaran. Karena jumlah app antara 13 dan 16, setiap creator ngetes semua app lain, ` +
   `yaitu ${N_APPS - 1} app. Setiap tester murni ngetes ${K} app, dimulai dari app yang testernya paling sedikit. ` +
   `Totalnya ${RING.total} tugas, dan setiap app dites ${RING.min} sampai ${RING.max} orang.`
+
+/** Scrub (pin + draw) only where the pinned ring still gets a usable size: tall enough for the stacked layout on narrow
+ *  screens, or side by side on wide ones. Landscape phones and short windows get the completed static ring. */
+const SCRUB_QUERY = '(min-height: 640px), (min-width: 981px) and (min-height: 480px)'
+function useMedia(q: string) {
+  const [m, setM] = useState(() => typeof matchMedia !== 'function' || matchMedia(q).matches)
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return
+    const mq = matchMedia(q)
+    const on = () => setM(mq.matches)
+    on()
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [q])
+  return m
+}
 
 /** True when the device can afford the scroll-scrubbed ring (reduced motion is checked separately, live). */
 function deviceCanScrub() {
@@ -125,25 +299,31 @@ const Ring = memo(function Ring({ reduced }: { reduced: boolean }) {
   const figRef = useRef<HTMLElement>(null)
   const copyRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const countersRef = useRef<HTMLDListElement>(null)
   const drawnRef = useRef<HTMLSpanElement>(null)
   const minRef = useRef<HTMLSpanElement>(null)
   const finalRef = useRef<HTMLParagraphElement>(null)
+  const hintRef = useRef<HTMLParagraphElement>(null)
   // Client-only SPA, so the device check can run on first render (no static frame flash).
   const [deviceOk] = useState(deviceCanScrub)
-  const scrub = deviceOk && !reduced
+  const roomy = useMedia(SCRUB_QUERY)
+  const scrub = deviceOk && roomy && !reduced
+  const legRef = useRef<HTMLElement>(null)
 
   // Strokes are specified in screen pixels: 1 user unit = 600 / rendered width.
   useEffect(() => {
-    const fig = figRef.current, svg = svgRef.current, copy = copyRef.current
+    const fig = figRef.current, svg = svgRef.current, copy = copyRef.current, leg = legRef.current
     if (!fig || !svg || !('ResizeObserver' in window)) return
     // Also hands the copy block's height to CSS, so the pinned ring on narrow screens can take the rest of the viewport.
     const ro = new ResizeObserver(() => {
       const w = svg.getBoundingClientRect().width
       if (w > 0) fig.style.setProperty('--u', (600 / w).toFixed(3))
       if (copy) fig.style.setProperty('--copy-h', `${copy.offsetHeight}px`)
+      if (leg) fig.style.setProperty('--leg-h', `${leg.offsetHeight}px`)
     })
     ro.observe(svg)
     if (copy) ro.observe(copy)
+    if (leg) ro.observe(leg)
     return () => ro.disconnect()
   }, [])
 
@@ -156,6 +336,7 @@ const Ring = memo(function Ring({ reduced }: { reduced: boolean }) {
     const nodeEls = Array.from(svg.querySelectorAll<SVGGElement>('.node'))
     const prev = new Array<number>(M).fill(-1)
     const drawnEl = drawnRef.current, minEl = minRef.current, finalEl = finalRef.current
+    const countersEl = countersRef.current, hintEl = hintRef.current
     let cur = 0, target = 0, raf = 0, last = 0, lastDrawn = -1, lastMin = -1
 
     const render = (t: number) => {
@@ -170,22 +351,23 @@ const Ring = memo(function Ring({ reduced }: { reduced: boolean }) {
         prev[o] = w
         const live = w > 0 && w < 1
         for (const p of list) {
-          if (o < N_APPS) p.style.strokeDashoffset = (1 - w).toFixed(3)
-          else p.style.opacity = w.toFixed(3)
+          p.style.strokeDashoffset = (1 - w).toFixed(3)
           p.classList.toggle('drawing', live)
         }
         nodeEls[o].classList.toggle('act', live)
         nodeEls[o].classList.toggle('done', w >= 1)
       }
       const min = Math.min(...load)
-      if (drawn !== lastDrawn && drawnEl) { drawnEl.textContent = String(drawn); lastDrawn = drawn }
-      if (min !== lastMin && minEl) { minEl.textContent = String(min); lastMin = min }
+      if (drawn !== lastDrawn && drawnEl) { drawnEl.textContent = nf.format(drawn); lastDrawn = drawn }
+      if (min !== lastMin && minEl) { minEl.textContent = nf.format(min); lastMin = min }
       finalEl?.classList.toggle('show', t >= 0.999)
+      countersEl?.style.setProperty('--rp', t.toFixed(3))
     }
     const measure = () => {
       const r = sec.getBoundingClientRect()
-      const span = sec.offsetHeight - window.innerHeight
-      const p = span > 0 ? Math.min(1, Math.max(0, -r.top / span)) : 1
+      const span = sec.offsetHeight - (window.innerHeight - HH)
+      const p = span > 0 ? Math.min(1, Math.max(0, (HH - r.top) / span)) : 1
+      hintEl?.classList.toggle('gone', p > 0.04)
       target = Math.min(1, Math.max(0, (p - 0.05) / 0.82))
     }
     // Scrub ≈ 0.5 s: ease the drawn state toward the scroll position (ADR-001 §3).
@@ -212,30 +394,33 @@ const Ring = memo(function Ring({ reduced }: { reduced: boolean }) {
       cancelAnimationFrame(raf)
       sec.classList.remove('is-scrub')
       // Back to the completed static frame (e.g. reduced motion switched on mid-scroll).
-      for (const list of tieEls) for (const p of list) { p.style.strokeDashoffset = ''; p.style.opacity = ''; p.classList.remove('drawing') }
+      for (const list of tieEls) for (const p of list) { p.style.strokeDashoffset = ''; p.classList.remove('drawing') }
       for (const n of nodeEls) { n.classList.remove('act'); n.classList.add('done') }
-      if (drawnEl) drawnEl.textContent = String(RING.total)
-      if (minEl) minEl.textContent = String(RING.min)
+      if (drawnEl) drawnEl.textContent = nf.format(RING.total)
+      if (minEl) minEl.textContent = nf.format(RING.min)
       finalEl?.classList.remove('show')
+      countersEl?.style.removeProperty('--rp')
+      hintEl?.classList.remove('gone')
     }
   }, [scrub])
 
   return (
-    <section className="ring-scroll" ref={secRef} id="cohort-ring" aria-labelledby="ring-h">
+    <section className="ring-scroll" ref={secRef} id="cohort" aria-labelledby="ring-h">
       <div className="lp-wrap ring-stage">
         <div className="ring-copy" ref={copyRef}>
-          <p className="lp-label"><b>02</b>Cohort</p>
+          <p className="lp-hud"><b aria-hidden="true">01</b>Contoh cohort</p>
           <h2 id="ring-h">Tidak ada yang cuma minta dites.</h2>
           <p className="lp-lede ring-lede">
-            Contoh cohort berisi {N_APPS} app. Dengan 13 sampai 16 app, setiap creator ngetes semua app lain. Tester murni tanpa app ikut ngetes {K} app,
-            dimulai dari app yang testernya paling sedikit.
+            Satu contoh cohort berisi {N_APPS} creator. Setiap creator ditugaskan ngetes {N_APPS - 1} app milik yang lain, dan {N_PURE} tester murni
+            tanpa app ikut ngetes {K} app masing-masing, dimulai dari app yang testernya paling sedikit. Begitu cohort dimulai, tugasnya terbagi rata.
           </p>
+          {/* The scrubbed numbers are visual only; screen readers get the final values, and the closing line is never hidden from them. */}
           <div className="ring-status">
-          <dl className="counters">
-            <div><dt>Tugas terbagi</dt><dd><span ref={drawnRef}>{RING.total}</span><span className="dim"> / {RING.total}</span></dd></div>
-            <div><dt>Tester paling sedikit di satu app</dt><dd><span ref={minRef}>{RING.min}</span><span className="dim"> orang</span></dd></div>
-          </dl>
-          <p className="ring-final" ref={finalRef}>{N_APPS} app. Setiap app dites {N_APPS - 1} creator lain. Semua ikut ngetes.</p>
+            <dl className="counters" ref={countersRef}>
+              <div><dt>Tugas terbagi</dt><dd><span aria-hidden="true"><span ref={drawnRef}>{nf.format(RING.total)}</span><span className="dim"> / {nf.format(RING.total)}</span></span><span className="sr-only">{nf.format(RING.total)} dari {nf.format(RING.total)}</span></dd></div>
+              <div><dt>Tester paling sedikit di satu app</dt><dd><span aria-hidden="true"><span ref={minRef}>{nf.format(RING.min)}</span><span className="dim"> orang</span></span><span className="sr-only">{nf.format(RING.min)} orang</span></dd></div>
+            </dl>
+            <p className="ring-final theme-light" ref={finalRef}>Setiap app dites minimal {RING.min} orang. Setiap orang ikut ngetes.</p>
           </div>
         </div>
         <figure className="ring-fig" ref={figRef}>
@@ -252,82 +437,120 @@ const Ring = memo(function Ring({ reduced }: { reduced: boolean }) {
                 <g key={i} className={`node done ${i < N_APPS ? 'node--c' : 'node--p'}`} transform={`translate(${f(p.x)} ${f(p.y)})`}>
                   <g className="nstamp">
                     {i < N_APPS ? (
-                      <><rect className="nshadow" x={-13} y={-13} width={34} height={34} /><rect className="nbody" x={-17} y={-17} width={34} height={34} /></>
+                      <><rect className="nshadow" x={-14} y={-14} width={34} height={34} /><rect className="nbody" x={-17} y={-17} width={34} height={34} /></>
                     ) : (
-                      <><circle className="nshadow" cx={4} cy={4} r={18} /><circle className="nbody" r={18} /></>
+                      <><circle className="nshadow" cx={3} cy={3} r={17} /><circle className="nbody" r={17} /></>
                     )}
-                    <path className="ncheck" d="M-7 0.5l4.5 4.5 9-9.5" />
+                    <text y={4.5}>{INITIALS[i]}</text>
+                    <g className="ncheck"><rect x={8} y={-27} width={18} height={18} /><path d="M12 -18.5l3.5 3.5 6.5-7" /></g>
                   </g>
                 </g>
               ))}
             </g>
           </svg>
-          <figcaption className="ring-legend">
+          <figcaption className="ring-legend" ref={legRef}>
             <span><i className="lg-sq" aria-hidden="true" />Creator, membawa app</span>
             <span><i className="lg-ci" aria-hidden="true" />Tester murni</span>
-            <span><i className="lg-dash" aria-hidden="true" />Tugas tester murni</span>
-            <span><i className="lg-ok" aria-hidden="true">✓</i>Semua {K} tugasnya terbagi</span>
+            <span><i className="lg-line" aria-hidden="true" />Tugas tester murni</span>
+            <span><i className="lg-ok" aria-hidden="true">✓</i>Semua tugasnya terbagi</span>
           </figcaption>
         </figure>
+        <p className="ring-hint" ref={hintRef} aria-hidden="true">Gulir <b>↓</b></p>
       </div>
     </section>
   )
 })
 
-/** The ring's first frame for the hero: every member in place, nothing assigned yet.
- *  Same markup as the static hero in web/index.html (keep both in step). */
-function HeroRing() {
-  return (
-    <figure className="hero-ring">
-      <svg viewBox="0 0 600 600" width="600" height="600" aria-hidden="true" focusable="false">
-        {NODES.map((p, i) => (
-          <g key={i} transform={`translate(${f(p.x)} ${f(p.y)})`}>
-            {i < N_APPS ? (
-              <><rect className="hs" x={-13} y={-13} width={34} height={34} /><rect className="hb" x={-17} y={-17} width={34} height={34} /></>
-            ) : (
-              <><circle className="hs" cx={4} cy={4} r={18} /><circle className="hb" r={18} /></>
-            )}
-          </g>
-        ))}
-      </svg>
-      <figcaption>Satu cohort: {N_APPS} creator dengan app-nya dan {N_PURE} tester murni. Siapa ngetes siapa ditentukan saat cohort mulai.</figcaption>
-    </figure>
-  )
-}
-
 /* ---------------------------------------------------------------------------
    Small pieces
    --------------------------------------------------------------------------- */
-function Segments({ n, on, label }: { n: number; on: number; label: string }) {
+/** Segment meter. aria-hidden: the label next to it carries the same numbers in text. */
+function Seg({ n, on, c }: { n: number; on: number; c: string }) {
   return (
-    <div className="seg" style={{ ['--n' as string]: n }} role="img" aria-label={label}>
-      {Array.from({ length: n }, (_, i) => <i key={i} className={i < on ? 'on' : undefined} />)}
+    <div className="seg" style={{ ['--n' as string]: n, ['--c' as string]: `var(--${c})` }} aria-hidden="true">
+      {Array.from({ length: n }, (_, k) => <i key={k} className={k < on ? 'on' : undefined} style={{ ['--k' as string]: k }} />)}
     </div>
   )
 }
 
-function CopyEmail() {
+/** A horizontal scroller is a tab stop (keyboard scrolling) only while its content actually overflows. */
+function useOverflowTab<T extends HTMLElement>() {
+  const ref = useRef<T>(null)
+  const [over, setOver] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !('ResizeObserver' in window)) return
+    const ro = new ResizeObserver(() => setOver(el.scrollWidth > el.clientWidth + 1))
+    ro.observe(el)
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+    return () => ro.disconnect()
+  }, [])
+  return [ref, over ? 0 : undefined] as const
+}
+
+/** Sample tester sheet for the hero (mockup v2). Same markup as the static hero in web/index.html: keep both in step. */
+const SHEET_ROWS: { who: string; email: string; days: string; chip: string; status: string }[] = [
+  { who: 'Budi S.', email: 'bu*****@gmail.com', days: '15', chip: 'c-pandan', status: '✓ Eligible' },
+  { who: 'Sari A.', email: 'sa*****@gmail.com', days: '14', chip: 'c-pandan', status: '✓ Eligible' },
+  { who: 'Dimas P.', email: 'di*****@studio.co.id', days: '9', chip: 'c-langit', status: '→ Aktif' },
+  { who: 'Wulan L.', email: 'wu*****@gmail.com', days: '3', chip: 'c-langit', status: '→ Aktif' },
+  { who: 'Rizky H.', email: 'ri*****@gmail.com', days: '—', chip: 'c-cabai', status: '! Belum tes' },
+]
+function HeroSheet() {
+  const [scRef, scTab] = useOverflowTab<HTMLDivElement>()
+  return (
+    <div className="sheet hero-sheet" role="group" aria-labelledby="sheet-h">
+      <div className="sheet-head"><strong id="sheet-h">Kopi Catat</strong><span className="lp-chip c-langit">Cohort #3</span></div>
+      <div className="scroller" ref={scRef} role="region" aria-label="Contoh daftar tester Kopi Catat" tabIndex={scTab}>
+        <table className="tsheet">
+          <caption className="sr-only">Data contoh: daftar tester app Kopi Catat</caption>
+          <thead><tr><th scope="col">Tester</th><th scope="col">Email</th><th scope="col">Hari</th><th scope="col">Status</th></tr></thead>
+          <tbody>
+            {SHEET_ROWS.map((r) => (
+              <tr key={r.who}><th scope="row">{r.who}</th><td>{r.email}</td><td className="n">{r.days}</td><td><span className={`lp-chip ${r.chip}`}>{r.status}</span></td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="sheet-more">+7 tester lain, semuanya eligible</p>
+      <div className="sheet-ft">
+        <div className="lp-meter">
+          <div className="meter-top"><span>Tester eligible</span><span>9 / 12</span></div>
+          <Seg n={12} on={9} c="pandan" />
+        </div>
+        <div className="lp-meter">
+          <div className="meter-top"><span>Dimas P., hari ke-9 dari 14</span><span>5 hari lagi</span></div>
+          <Seg n={14} on={9} c="kunyit" />
+        </div>
+      </div>
+      <p className="sample"><b>Data contoh.</b> Email selalu tampil disamarkan.</p>
+    </div>
+  )
+}
+
+function CopyEmail({ onCopied }: { onCopied: () => void }) {
   const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle')
   useEffect(() => {
     if (state === 'idle') return
-    const id = setTimeout(() => setState('idle'), 2400)
+    const id = setTimeout(() => setState('idle'), state === 'fail' ? 6000 : 2000)
     return () => clearTimeout(id)
   }, [state])
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(COMMUNITY_GROUP)
       setState('ok')
+      onCopied()
     } catch {
       setState('fail')
     }
   }
   return (
     <div className="copy-row">
-      <button type="button" className={`lp-btn lp-btn--sm ${state === 'ok' ? 'is-ok' : ''}`} onClick={copy}>
-        {state === 'ok' ? '✓ Tersalin' : 'Salin email grup'}
+      <button type="button" className={`copy ${state === 'ok' ? 'ok' : ''}`} onClick={copy}>
+        {state === 'ok' ? 'Tersalin ✓' : 'Salin email grup'}
       </button>
       <span className="copy-status" role="status" aria-live="polite">
-        {state === 'fail' ? 'Tidak bisa menyalin otomatis. Pilih teks email di atas, lalu salin.' : state === 'ok' ? 'Email grup tersalin.' : ''}
+        {state === 'fail' ? 'Tidak bisa menyalin otomatis. Pilih teks email di atas, lalu salin.' : ''}
       </span>
     </div>
   )
@@ -350,27 +573,25 @@ function useLiveStats() {
       else clearTimeout(idle)
     }
     function load() {
-    const head = { count: 'exact' as const, head: true }
-    const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
-    Promise.race([
-      Promise.all([
-        supabase.from('apps').select('id', head).eq('deleted', false),
-        supabase.from('profiles').select('id', head),
-        supabase.from('app_stats').select('app_id', head).gte('eligible_count', 12),
-      ]),
-      timeout,
-    ])
-      .then(([a, m, r]) => {
-        if (!alive || a.error || m.error || r.error) return
-        setStats({ apps: a.count ?? 0, members: m.count ?? 0, ready: r.count ?? 0 })
-      })
-      .catch(() => {})
+      const head = { count: 'exact' as const, head: true }
+      const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
+      Promise.race([
+        Promise.all([
+          supabase.from('apps').select('id', head).eq('deleted', false),
+          supabase.from('profiles').select('id', head),
+          supabase.from('app_stats').select('app_id', head).gte('eligible_count', 12),
+        ]),
+        timeout,
+      ])
+        .then(([a, m, r]) => {
+          if (!alive || a.error || m.error || r.error) return
+          setStats({ apps: a.count ?? 0, members: m.count ?? 0, ready: r.count ?? 0 })
+        })
+        .catch(() => {})
     }
   }, [])
   return stats
 }
-
-const nf = new Intl.NumberFormat('id-ID')
 
 /** Proof (ADR-010 §2.6, §4): real counts only. The whole section is left out when there is nothing real to show. */
 function Proof() {
@@ -385,8 +606,8 @@ function Proof() {
   return (
     <section className="lp-sec" id="bukti" aria-labelledby="bukti-h">
       <div className="lp-wrap">
-        <p className="lp-label">Data langsung</p>
-        <h2 id="bukti-h">Yang sudah tercatat di TesBareng.</h2>
+        <p className="lp-hud"><b>Data</b>Langsung dari TesBareng</p>
+        <h2 id="bukti-h">Yang sudah tercatat.</h2>
         <dl className="live-row">
           {items.map((x) => (
             <div key={x.l}><dt>{x.l}</dt><dd>{nf.format(x.n)}</dd></div>
@@ -398,32 +619,49 @@ function Proof() {
   )
 }
 
+/* Matrix demo. Sample cohort, consistent with the hero: "Kamu" is the creator of Kopi Catat,
+   and its column matches the hero sheet (Budi and Sari verified, Dimas active, Rizky late). "Aktif" uses → everywhere, as on the work surface; ✓✓ is verified. */
 type CellKind = 'ok2' | 'ok' | 'wait' | 'late' | 'own'
-const CELL: Record<CellKind, { glyph: string; short: string; label: string }> = {
-  ok2: { glyph: '✓✓', short: 'Verified', label: 'Feedback diverifikasi creator' },
-  ok: { glyph: '✓', short: 'Aktif', label: 'Sudah opt-in dan aktif' },
-  wait: { glyph: '—', short: 'Belum', label: 'Belum, masih dalam batas waktu' },
-  late: { glyph: '!', short: 'Belum tes', label: 'Lewat batas opt-in (Belum tes)' },
-  own: { glyph: '·', short: 'Sendiri', label: 'App sendiri, tidak ditugaskan' },
+const CELL: Record<CellKind, { glyph: string; short: string; label: string; cls: string }> = {
+  ok2: { glyph: '✓✓', short: 'Verified', label: 'Feedback sudah diverifikasi creator', cls: 'c-pandan' },
+  ok: { glyph: '→', short: 'Aktif', label: 'Sudah opt-in dan aktif', cls: 'c-langit' },
+  wait: { glyph: '—', short: 'Belum', label: 'Belum, masih dalam batas waktu', cls: 'none' },
+  late: { glyph: '!', short: 'Belum tes', label: 'Lewat batas opt-in (Belum tes)', cls: 'c-cabai' },
+  own: { glyph: '·', short: 'Sendiri', label: 'App sendiri, tidak ditugaskan', cls: 'own' },
 }
-const MATRIX_APPS = ['App A', 'App B', 'App C', 'App D', 'App E']
+const MATRIX_APPS = ['Kopi Catat', 'Resep Ibu', 'Angkot Kita', 'Hafalan', 'Jajan']
 const MATRIX_ROWS: { who: string; me?: boolean; cells: CellKind[] }[] = [
-  { who: 'Anggota 1', cells: ['own', 'ok2', 'ok2', 'ok', 'ok'] },
-  { who: 'Kamu', me: true, cells: ['ok', 'own', 'ok', 'ok2', 'wait'] },
-  { who: 'Anggota 3', cells: ['ok2', 'ok2', 'own', 'ok2', 'ok'] },
-  { who: 'Anggota 4', cells: ['late', 'late', 'ok', 'own', 'late'] },
-  { who: 'Anggota 5', cells: ['ok', 'ok', 'ok2', 'ok', 'own'] },
+  { who: 'Budi S.', cells: ['ok2', 'own', 'ok2', 'ok', 'ok'] },
+  { who: 'Kamu', me: true, cells: ['own', 'ok', 'ok', 'ok2', 'wait'] },
+  { who: 'Sari A.', cells: ['ok2', 'ok2', 'own', 'ok2', 'ok'] },
+  { who: 'Rizky H.', cells: ['late', 'late', 'ok', 'own', 'late'] },
+  { who: 'Dimas P.', cells: ['ok', 'ok', 'ok2', 'ok', 'own'] },
 ]
 const FILTERS: CellKind[] = ['ok2', 'ok', 'wait', 'late']
 
 function MatrixDemo() {
   const [filter, setFilter] = useState<CellKind | null>(null)
+  const tblRef = useRef<HTMLTableElement>(null)
+  const [scRef, scTab] = useOverflowTab<HTMLDivElement>()
+  // Crosshair: highlight the hovered cell's row and column. Direct class toggles, no re-render per pointer move.
+  const clearX = () => tblRef.current?.querySelectorAll('.x-col, .x-row, .x-hit').forEach((n) => n.classList.remove('x-col', 'x-row', 'x-hit'))
+  const onOver = (e: React.PointerEvent<HTMLTableElement>) => {
+    if (e.pointerType !== 'mouse') return
+    const tbl = tblRef.current
+    const cell = (e.target as Element).closest('td, th') as HTMLTableCellElement | null
+    if (!tbl || !cell) return
+    clearX()
+    const idx = cell.cellIndex, tr = cell.parentElement as HTMLTableRowElement
+    if (idx > 0) for (const r of Array.from(tbl.rows)) r.cells[idx]?.classList.add('x-col')
+    if (tr.parentElement?.tagName === 'TBODY') tr.classList.add('x-row')
+    if (cell.tagName === 'TD') cell.classList.add('x-hit')
+  }
   return (
     <div className="matrix-wrap rv">
       <div className={`matrix ${filter ? 'filtering' : ''}`}>
-        <div className="scroller" role="region" aria-label="Contoh matriks kewajiban cohort" tabIndex={0}>
-          <table>
-            <caption className="sr-only">Contoh matriks: baris adalah anggota, kolom adalah app yang ditugaskan</caption>
+        <div className="scroller" ref={scRef} role="region" aria-label="Contoh matriks kewajiban cohort" tabIndex={scTab}>
+          <table ref={tblRef} onPointerOver={onOver} onPointerLeave={clearX}>
+            <caption className="sr-only">Data contoh: baris adalah anggota, kolom adalah app yang ditugaskan</caption>
             <thead>
               <tr><th scope="col">Anggota</th>{MATRIX_APPS.map((a) => <th key={a} scope="col">{a}</th>)}</tr>
             </thead>
@@ -433,7 +671,7 @@ function MatrixDemo() {
                   <th scope="row">{r.who}</th>
                   {r.cells.map((c, i) => (
                     <td key={i}>
-                      <span className={`cell cell--${c} ${filter === c ? 'match' : ''}`}>
+                      <span className={`cell ${CELL[c].cls} ${filter === c ? 'match' : ''}`}>
                         <span aria-hidden="true">{CELL[c].glyph}</span>
                         <span className="cell-t" aria-hidden="true">{CELL[c].short}</span>
                         <span className="sr-only">{CELL[c].label}</span>
@@ -445,24 +683,25 @@ function MatrixDemo() {
             </tbody>
           </table>
         </div>
-        <p className="matrix-note"><span className="matrix-hint" aria-hidden="true">Geser tabel ke samping untuk melihat semua app. </span>Contoh. Nama anggota dan app di cohort sungguhan tampil di halaman cohort.</p>
+        <p className="matrix-note"><b>Data contoh.</b><span className="matrix-hint" aria-hidden="true"> Geser tabel ke samping untuk melihat semua app.</span> Nama anggota dan app di cohort sungguhan tampil di halaman cohort.</p>
       </div>
-      <div className="legend">
-        <p className="lp-label lp-label--plain">Ketuk status untuk menyorot</p>
+      <div className="lp-legend">
+        <p className="lp-hud"><b>Filter</b>Ketuk status untuk menyorot</p>
         {FILTERS.map((k) => (
           <button key={k} type="button" className="lg-btn" aria-pressed={filter === k} onClick={() => setFilter(filter === k ? null : k)}>
-            <span className={`cell cell--${k}`} aria-hidden="true">{CELL[k].glyph}</span>
+            <span className={`cell ${CELL[k].cls}`} aria-hidden="true">{CELL[k].glyph}</span>
             <span>{CELL[k].label}</span>
           </button>
         ))}
         <p className="lg-row">
-          <span className="cell cell--own" aria-hidden="true">{CELL.own.glyph}</span>
+          <span className="cell own" aria-hidden="true">{CELL.own.glyph}</span>
           <span>{CELL.own.label}</span>
         </p>
         <div className="privacy">
           <strong>Emailmu tetap rahasia</strong>
-          <span className="masked">bu*****@gmail.com</span>
-          <p>Di halaman mana pun, email hanya tampil disamarkan seperti ini, termasuk untuk creator. Alamat lengkap hanya dipakai untuk mengirim pengingat.</p>
+          <span className="masked" aria-hidden="true" data-scramble="bu*****@gmail.com">bu*****@gmail.com</span>
+          <span className="sr-only">Contoh: bu*****@gmail.com</span>
+          <p>Di halaman mana pun, email hanya tampil disamarkan seperti ini, termasuk untuk creator. Alamat lengkapmu dipakai untuk mengirim pengingat, bukan untuk ditampilkan.</p>
         </div>
       </div>
     </div>
@@ -470,28 +709,112 @@ function MatrixDemo() {
 }
 
 const DAYS = [
-  { d: 0, title: 'Opt-in dan install', text: 'Daftar app tugasmu muncul di Tugas saya. Buka link opt-in tiap app, jadi tester, lalu install. Batasnya 48 jam.', chip: 'c-langit', chipText: '✓ Opt-in' },
-  { d: 2, title: 'Batas opt-in', text: 'Lewat 48 jam, yang belum opt-in tercatat Behind, dan app miliknya mendapat label Belum tes yang terlihat semua orang.', chip: 'c-cabai', chipText: '! Belum tes' },
-  { d: 7, title: 'Sudah buka app', text: 'Pakai app-nya, centang Sudah buka app, lalu kirim feedback di Google Play dengan kata-katamu sendiri. Creator menandai Verified.', chip: 'c-pandan', chipText: '✓✓ Verified' },
-  { d: 13, title: 'Masih opt-in', text: 'Centang sekali lagi. App dengan 12 tester yang sudah 14 hari siap diajukan ke production.', chip: 'c-langit', chipText: '✓ Masih opt-in' },
+  { d: 0, title: 'Opt-in dan install', text: 'Daftar app tugasmu muncul di Tugas saya. Gabung Google Group, buka link opt-in tiap app, lalu install. Batasnya 48 jam.', chip: 'c-putih', chipText: '✓ Opt-in' },
+  { d: 2, title: 'Batas opt-in', text: 'Lewat 48 jam, yang belum opt-in tercatat Behind, dan app miliknya sendiri mendapat label Belum tes yang terlihat semua anggota.', chip: 'c-cabai', chipText: '! Belum tes' },
+  { d: 7, title: 'Pakai, lalu kirim feedback', text: 'Buka app-nya dan centang Sudah buka app. Tulis feedback di Google Play dengan kata-katamu sendiri; creator menandai Verified setelah membacanya.', chip: 'c-pandan', chipText: '✓✓ Verified' },
+  { d: 13, title: 'Masih opt-in?', text: 'Centang sekali lagi. Besoknya, app dengan 12 tester eligible siap diajukan ke production.', chip: 'c-langit', chipText: '✓ Masih opt-in' },
 ]
-const RAIL: Record<number, string> = { 0: 'c-langit', 2: 'c-cabai', 7: 'c-pandan', 13: 'c-langit' }
+const RAIL: Record<number, string> = { 0: 'c-kunyit', 2: 'c-cabai', 7: 'c-pandan', 13: 'c-langit' }
+
+function Schedule() {
+  const [hot, setHot] = useState<number | null>(null)
+  return (
+    <>
+      <p className="sr-only">Jadwal cohort: hari 0 sampai 14. Cohort ditutup saat semua app siap diajukan, paling lambat hari ke-21.</p>
+      <div className="rail rv" aria-hidden="true">
+        <div className="rail-head"><span>Hari 0 → 14</span><span>Tutup <span className="long">paling lambat </span>hari 21</span></div>
+        <div className="rail-cells">
+          {Array.from({ length: 15 }, (_, d) => (
+            <i key={d} className={`${d === 14 ? 'fin' : RAIL[d] ? `cp ${RAIL[d]}` : 'plain'}${hot === d ? ' hot' : ''}`}>{d}</i>
+          ))}
+          <i className="close">21</i>
+        </div>
+      </div>
+      <ol className="days rv">
+        {DAYS.map((x) => (
+          <li className={`day${x.d === 0 ? ' now theme-light' : ''}`} key={x.d} onPointerEnter={() => setHot(x.d)} onPointerLeave={() => setHot(null)}>
+            <p className="day-n"><small>Hari ke</small>{x.d}</p>
+            <h3>{x.title}</h3>
+            <p className="day-t">{x.text}</p>
+            <span className={`lp-chip ${x.chip}`}>{x.chipText}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="build-strip rv"><span className="lp-chip c-kunyit">Build baru</span><span>Setiap kali creator mencatat build baru: update app-nya, coba lagi, lalu centang Sudah update dalam 3 hari.</span></p>
+    </>
+  )
+}
 
 const TIERS = [
   { name: 'Bronze', n: 3, cls: 't-bronze', note: 'app dites 14 hari' },
   { name: 'Silver', n: 7, cls: 't-silver', note: 'app dites 14 hari' },
-  { name: 'Gold', n: 14, cls: 't-gold', note: 'satu cohort penuh sebagai tester murni' },
+  { name: 'Gold', n: 14, cls: 't-gold', note: 'satu cohort penuh' },
   { name: 'Platinum', n: 25, cls: 't-platinum', note: 'app dites 14 hari' },
 ]
 
 const FAQ = [
   { q: 'Apakah TesBareng layanan resmi Google?', a: 'Bukan. TesBareng dibuat oleh komunitas creator Android Indonesia untuk saling membantu memenuhi syarat closed test Google Play.' },
   { q: 'Apakah TesBareng tersambung ke Play Console?', a: 'Tidak. Google tidak menyediakan data opt-in untuk aplikasi lain, jadi semua dicatat sendiri oleh anggota. Feedback yang ditandai Verified adalah bukti terkuat, karena creator mengeceknya langsung di Play Console.' },
-  { q: 'Kenapa feedback harus dikirim di Google Play?', a: 'Feedback di Play masuk ke Play Console milik creator, lengkap dengan nama pengirimnya. TesBareng hanya mencatat bahwa kamu sudah mengirimnya. Tulis dengan kata-katamu sendiri: ulasan yang disalin dari banyak akun terlihat tidak asli.' },
+  { q: 'Kenapa feedback harus dikirim di Google Play?', a: 'Feedback di Play masuk langsung ke Play Console milik creator, lengkap dengan nama pengirimnya. TesBareng hanya mencatat bahwa kamu sudah mengirimnya, lalu creator menandainya Verified. Tulis dengan kata-katamu sendiri: ulasan yang disalin dari banyak akun terlihat tidak asli.' },
   { q: 'Bagaimana kalau ada anggota yang tidak ikut ngetes?', a: 'Lewat 48 jam, app miliknya mendapat label Belum tes, dan admin bisa memindahkan slotnya ke anggota lain. Saat cohort ditutup, kewajiban yang belum selesai tercatat Owing. Dia tidak bisa ikut cohort berikutnya sampai admin menandainya Settled.' },
   { q: 'Wajib gabung grup WhatsApp cohort?', a: 'Tidak. Grup WhatsApp cohort opsional, dan anggota grup bisa melihat nomor HP satu sama lain. Status tetap dilaporkan di TesBareng, bukan di chat. Yang wajib hanya Google Group, karena Play Console membutuhkannya.' },
   { q: 'Siapa yang bisa melihat emailku?', a: 'Tidak ada. Di semua halaman, email tampil disamarkan, misalnya bu*****@gmail.com. Alamat lengkap hanya dipakai sistem untuk mengirim pengingat.' },
 ]
+
+/** FAQ: animate the details height open and closed (owner decision; off under reduced motion). */
+function Faq({ reduced }: { reduced: boolean }) {
+  const onSummary = (e: React.MouseEvent<HTMLElement>) => {
+    const d = e.currentTarget.parentElement as HTMLDetailsElement | null
+    if (!d || reduced || !('animate' in Element.prototype)) return
+    e.preventDefault()
+    if (d.dataset.busy) return
+    d.dataset.busy = '1'
+    const s = e.currentTarget
+    const closing = d.open
+    const bw = d.offsetHeight - d.clientHeight
+    const from = d.offsetHeight
+    let to: number
+    d.style.overflow = 'hidden'
+    if (closing) to = s.offsetHeight + bw
+    else { d.open = true; to = d.offsetHeight }
+    const a = d.animate({ height: [`${from}px`, `${to}px`] }, { duration: closing ? 200 : 280, easing: 'cubic-bezier(.2,.8,.2,1)' })
+    const end = () => { if (closing) d.open = false; d.style.overflow = ''; delete d.dataset.busy }
+    a.onfinish = end
+    a.oncancel = end
+  }
+  return (
+    <div className="faq rv">
+      {FAQ.map((x, i) => (
+        <details key={x.q}>
+          <summary onClick={onSummary}><span className="q-n" aria-hidden="true">Q.{String(i + 1).padStart(2, '0')}</span><span className="q-t">{x.q}</span></summary>
+          <p className="ans">{x.a}</p>
+        </details>
+      ))}
+    </div>
+  )
+}
+
+function WaIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" /><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.122 1.524 5.855L0 24l6.335-1.505A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.804 9.804 0 01-5.032-1.385l-.36-.214-3.762.894.953-3.667-.235-.376A9.798 9.798 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z" /></svg>
+  )
+}
+function MoonSun() {
+  return (
+    <>
+      <svg className="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" /></svg>
+      <svg className="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" /></svg>
+    </>
+  )
+}
+
+const SECTIONS = [
+  { id: 'cara-kerja', label: 'Cara kerja' },
+  { id: 'transparansi', label: 'Transparansi' },
+  { id: 'badge', label: 'Badge' },
+  { id: 'faq', label: 'FAQ' },
+]
+const OBSERVED = ['cohort', 'cara-kerja', 'transparansi', 'badge', 'bukti', 'gabung', 'faq']
 
 /* ---------------------------------------------------------------------------
    Page
@@ -499,35 +822,138 @@ const FAQ = [
 export function Landing() {
   usePageMeta(TITLE, DESCRIPTION)
   const root = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
+  const fillRef = useRef<HTMLElement>(null)
+  const totopRef = useRef<HTMLButtonElement>(null)
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
+  const brandRef = useRef<HTMLAnchorElement>(null)
   const reduced = useReducedMotion()
   useReveal(root, reduced)
+  usePageChrome(headerRef, fillRef, totopRef)
+  const active = useActiveSection(OBSERVED)
+  const { dark, toggle } = useTheme(reduced)
   const { user, signIn } = useAuth()
   const [signInError, setSignInError] = useState(false)
   const startSignIn = () => { setSignInError(false); signIn().catch(() => setSignInError(true)) }
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [toast, setToast] = useState('')
+  const [toastOn, setToastOn] = useState(false)
 
-  // The static hero in index.html covers first paint; this copy is identical, so drop that one now (before paint).
-  useLayoutEffect(() => { document.getElementById('boot')?.remove() }, [])
+  // The static header and hero in index.html cover first paint; this copy is identical, so drop that one now (before paint).
+  // If the static hero's CSS entrance is already running, continue from the same point instead of replaying it.
+  useLayoutEffect(() => {
+    const boot = document.getElementById('boot')
+    const t0 = (window as unknown as { __tbT0?: number }).__tbT0
+    if (boot && root.current && typeof t0 === 'number') root.current.style.setProperty('--hero-off', `${-Math.round(performance.now() - t0)}ms`)
+    boot?.remove()
+  }, [])
+
+  // CSS smooth scroll for in-page links, only while the landing is mounted and only without reduced motion.
+  useEffect(() => {
+    const html = document.documentElement
+    html.classList.toggle('lp-smooth', !reduced)
+    return () => html.classList.remove('lp-smooth')
+  }, [reduced])
+
+  // Mobile menu: Esc closes it and returns focus to the button; closes when the layout gets wide.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setMenuOpen(false); menuBtnRef.current?.focus() } }
+    const wide = matchMedia('(min-width: 1101px)')
+    const onWide = () => { if (wide.matches) setMenuOpen(false) }
+    document.addEventListener('keydown', onKey)
+    wide.addEventListener('change', onWide)
+    return () => { document.removeEventListener('keydown', onKey); wide.removeEventListener('change', onWide) }
+  }, [menuOpen])
+
+  const say = useCallback((msg: string) => { setToast(msg); setToastOn(true) }, [])
+  useEffect(() => {
+    if (!toastOn) return
+    const id = setTimeout(() => setToastOn(false), 2200)
+    return () => clearTimeout(id)
+  }, [toastOn, toast])
+  useEffect(() => {
+    if (toastOn || !toast) return
+    const id = setTimeout(() => setToast(''), 240) // after the 180 ms fade-out
+    return () => clearTimeout(id)
+  }, [toastOn, toast])
+
+  /** Scroll to a section and move focus to its heading, so keyboard users are not left on a link that just disappeared. */
+  const goTo = useCallback((id: string, smooth: boolean) => {
+    const sec = document.getElementById(id)
+    if (!sec) return false
+    const target = (sec.querySelector('h2') as HTMLElement | null) ?? sec
+    if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1')
+    sec.scrollIntoView({ behavior: smooth && !reduced ? 'smooth' : 'auto', block: 'start' })
+    target.focus({ preventScroll: true })
+    return true
+  }, [reduced])
+
+  // Deep links such as /#faq: the page is built after load, so scroll there once after mount.
+  const goToRef = useRef(goTo)
+  goToRef.current = goTo
+  useEffect(() => {
+    const id = decodeURIComponent(location.hash.slice(1))
+    if (!id) return
+    const raf = requestAnimationFrame(() => { goToRef.current(id, false) })
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  const onSheetClick = (e: React.MouseEvent<HTMLElement>) => {
+    const a = (e.target as Element).closest('a')
+    if (!a) return
+    setMenuOpen(false)
+    const href = a.getAttribute('href') ?? ''
+    if (href.startsWith('#') && goTo(href.slice(1), true)) {
+      e.preventDefault()
+      history.replaceState(null, '', href)
+    }
+  }
+
+  const toTop = () => {
+    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' })
+    brandRef.current?.focus({ preventScroll: true })
+  }
+
+  const signInBtn = (cls: string, long: boolean) =>
+    user ? (
+      <Link className={cls} to="/me">Tugas saya</Link>
+    ) : (
+      <button type="button" className={cls} onClick={startSignIn}><span>Masuk{long ? ' dengan Google' : <span className="hide-xs"> dengan Google</span>}</span></button>
+    )
 
   return (
-    <div className="lp surface-story" ref={root}>
+    <div className="lp surface-story dark-ready" ref={root}>
       <a className="lp-skip" href="#isi">Langsung ke isi</a>
 
       {/* Header and hero: keep in step with the static copy in web/index.html (same classes and text). */}
-      <header className="lp-top">
+      <header className="lp-top" ref={headerRef}>
         <div className="lp-wrap lp-top-row">
-          <Link to="/" className="lp-brand" aria-label="TesBareng, beranda"><span className="lp-brand-box" aria-hidden="true" />TesBareng</Link>
+          <Link to="/" className="lp-brand" aria-label="TesBareng, beranda" ref={brandRef}><span className="lp-brand-box" aria-hidden="true" />TesBareng</Link>
           <nav className="lp-nav" aria-label="Utama">
-            <a className="hide-s" href="#cara-kerja">Cara kerja</a>
-            <a className="hide-s" href="#badge">Badge</a>
-            <Link className="hide-s" to="/about">Aturan main</Link>
-            <Link to="/apps">Daftar app</Link>
-            {user ? (
-              <Link className="lp-navbtn" to="/me">Tugas saya</Link>
-            ) : (
-              <button type="button" className="lp-navbtn" onClick={startSignIn}>Masuk</button>
-            )}
+            {SECTIONS.map((s) => (
+              <a key={s.id} className={`nl sec-link${active === s.id ? ' active' : ''}`} href={`#${s.id}`} aria-current={active === s.id ? 'location' : undefined}>{s.label}</a>
+            ))}
+            <Link className="nl" to="/about">Aturan main</Link>
+            <Link className="nl" to="/apps">Daftar app</Link>
+            <div className="nav-tools">
+              <button type="button" className="lp-sq theme-btn" aria-pressed={dark} aria-label="Mode gelap" onClick={toggle}><MoonSun /></button>
+              {signInBtn('lp-btn lp-btn--nav', false)}
+              <button type="button" className="lp-sq menu-btn" ref={menuBtnRef} aria-expanded={menuOpen} aria-controls="lp-menu" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}><span /><span /><span /></button>
+            </div>
           </nav>
         </div>
+        <nav className="nav-sheet" id="lp-menu" aria-label="Menu" hidden={!menuOpen} onClick={onSheetClick}>
+          {SECTIONS.map((s) => (
+            <a key={s.id} className={active === s.id ? 'active' : undefined} href={`#${s.id}`}>{s.label}</a>
+          ))}
+          <Link to="/about">Aturan main</Link>
+          <Link to="/apps">Daftar app</Link>
+          <button type="button" className="sheet-theme" aria-pressed={dark} onClick={toggle}>
+            <span>Mode gelap <small className="mono">{dark ? 'Nyala' : 'Mati'}</small></span><MoonSun />
+          </button>
+        </nav>
+        <div className="lp-scrollbar" aria-hidden="true"><i ref={fillRef} /></div>
         {signInError && (
           <p className="lp-wrap lp-alert" role="alert">Halaman masuk Google tidak bisa dibuka. Periksa koneksi, lalu coba lagi.</p>
         )}
@@ -535,61 +961,17 @@ export function Landing() {
 
       <main id="isi">
         <section className="lp-wrap hero" aria-labelledby="hero-h">
-          <p className="lp-label"><b>00</b>Komunitas creator Android Indonesia</p>
-          <h1 id="hero-h"><span>12 tester.</span><span>14 hari.</span><span>Bareng.</span></h1>
-          <div className="hero-grid">
-            <div className="hero-copy">
-              <p className="lp-lede">
-                Itu syarat closed test Google Play untuk akun developer pribadi baru. Di TesBareng, creator Android saling ngetes lewat cohort:
-                kamu tes app mereka, mereka tes app kamu, dan semua orang bisa melihat siapa sudah ngetes siapa.
-              </p>
-              <div className="cta-row">
-                <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
-                  <svg className="wa-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.122 1.524 5.855L0 24l6.335-1.505A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.804 9.804 0 01-5.032-1.385l-.36-.214-3.762.894.953-3.667-.235-.376A9.798 9.798 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
-                  Grup WhatsApp<span className="sr-only"> (tab baru)</span>
-                </a>
-                <a className="lp-btn lp-btn--primary" href="#gabung">Gabung komunitas</a>
-                <Link className="lp-btn" to="/apps">Lihat daftar app</Link>
-              </div>
-            </div>
-            <HeroRing />
-          </div>
-        </section>
-
-        <section className="lp-sec" id="syarat" aria-labelledby="syarat-h">
-          <div className="lp-wrap problem">
-            <div className="problem-copy">
-              <div><p className="lp-label"><b>01</b>Syarat Google Play</p><h2 id="syarat-h">Sebelum rilis, app-mu harus lolos closed test.</h2></div>
-              <p className="lp-lede">
-                Akun developer pribadi yang baru wajib menjalankan closed test dulu sebelum boleh mengajukan akses production.
-                Bagian tersulitnya bukan app-nya, tapi mencari 12 orang yang mau bertahan 14 hari tanpa putus.
-              </p>
-            </div>
-            <div className="sheet rv" role="group" aria-labelledby="sheet-h">
-              <div className="sheet-head">
-                <h3 id="sheet-h">Syarat closed test Google Play</h3>
-              </div>
-              <div className="sheet-body">
-                <div className="meter">
-                  <div className="meter-top"><span>Tester tetap opt-in</span><span className="num">12 / 12</span></div>
-                  <Segments n={12} on={12} label="12 dari 12 tester" />
-                </div>
-                <div className="meter">
-                  <div className="meter-top"><span>Hari berturut-turut</span><span className="num">14 / 14</span></div>
-                  <Segments n={14} on={14} label="14 dari 14 hari" />
-                </div>
-                <ul className="checks">
-                  <li><span className="tick" aria-hidden="true">✓</span>Tester mengirim feedback di Google Play</li>
-                  <li><span className="tick" aria-hidden="true">✓</span>Creator membalas feedback di Play Console</li>
-                  <li><span className="tick" aria-hidden="true">✓</span><span>2–3 build baru selama tes <small>kebiasaan komunitas, bukan aturan resmi Google</small></span></li>
-                </ul>
-              </div>
-              <div className="sheet-foot">
-                <span className="chip c-pandan">✓ Siap ajukan production</span>
-                <p>Tester yang keluar sebelum 14 hari mulai lagi dari nol.</p>
-              </div>
+          <div className="hero-copy">
+            <p className="lp-hud"><b aria-hidden="true">00</b>Komunitas creator Android Indonesia</p>
+            <h1 id="hero-h"><span>12 tester.</span><span>14 hari.</span><span>Bareng.<i className="caret" aria-hidden="true" /></span></h1>
+            <p className="lp-lede">Syarat closed test Google Play untuk akun developer pribadi baru. Creator Android Indonesia saling ngetes lewat cohort: kamu tes app mereka, mereka tes app kamu.</p>
+            <div className="cta-row">
+              <a className="lp-btn lp-btn--primary" href="#gabung">Gabung komunitas</a>
+              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />Grup WhatsApp<span className="sr-only"> (tab baru)</span></a>
+              <a className="lp-btn" href="#cara-kerja">Lihat cara kerjanya</a>
             </div>
           </div>
+          <HeroSheet />
         </section>
 
         <Ring reduced={reduced} />
@@ -597,37 +979,18 @@ export function Landing() {
         <section className="lp-sec" id="cara-kerja" aria-labelledby="cara-h">
           <div className="lp-wrap">
             <div className="sec-head">
-              <div><p className="lp-label"><b>03</b>Cara kerja</p><h2 id="cara-h">Satu cohort, empat titik cek.</h2></div>
-              <p className="lp-lede">Tidak ada absen harian. Cukup centang di empat titik ini. Kalau ada yang terlewat, satu email ringkasan datang jam 19.00 WIB.</p>
+              <div><p className="lp-hud"><b aria-hidden="true">02</b>Cara kerja</p><h2 id="cara-h">Satu cohort, empat titik cek.</h2></div>
+              <p className="lp-lede dim">Tidak ada absen harian. Cukup centang di empat titik ini. Kalau ada yang terlewat, satu email ringkasan datang jam 19.00 WIB.</p>
             </div>
-            <div className="rail rv" aria-hidden="true">
-              <div className="rail-head"><span>Hari</span><span>Tutup paling lambat hari 21</span></div>
-              <div className="rail-cells">
-                {Array.from({ length: 15 }, (_, d) => (
-                  <i key={d} className={d === 14 ? 'fin' : RAIL[d] ? `cp ${RAIL[d]}` : 'plain'}>{d}</i>
-                ))}
-                <i className="close">21</i>
-              </div>
-            </div>
-            <ol className="days rv">
-              {DAYS.map((x) => (
-                <li className="day" key={x.d}>
-                  <p className="day-n"><small>Hari ke</small>{x.d}</p>
-                  <h3>{x.title}</h3>
-                  <p>{x.text}</p>
-                  <span className={`chip ${x.chip}`}>{x.chipText}</span>
-                </li>
-              ))}
-            </ol>
-            <p className="build-strip rv"><span className="chip c-putih">Build baru</span><span>Setiap kali creator mencatat build baru: update app-nya, coba lagi, lalu centang Sudah update dalam 3 hari.</span></p>
+            <Schedule />
           </div>
         </section>
 
         <section className="lp-sec" id="transparansi" aria-labelledby="lembar-h">
           <div className="lp-wrap">
             <div className="sec-head">
-              <div><p className="lp-label"><b>04</b>Transparansi</p><h2 id="lembar-h">Semua lihat lembar yang sama.</h2></div>
-              <p className="lp-lede">Siapa sudah ngetes siapa terlihat di matriks cohort. Tidak perlu menagih satu per satu di grup.</p>
+              <div><p className="lp-hud"><b aria-hidden="true">03</b>Transparansi</p><h2 id="lembar-h">Semua lihat lembar yang sama.</h2></div>
+              <p className="lp-lede dim">Siapa sudah ngetes siapa terlihat di matriks cohort. Tidak perlu menagih satu per satu di grup.</p>
             </div>
             <MatrixDemo />
           </div>
@@ -636,89 +999,94 @@ export function Landing() {
         <section className="lp-sec" id="badge" aria-labelledby="badge-h">
           <div className="lp-wrap">
             <div className="sec-head">
-              <div><p className="lp-label"><b>05</b>Tester murni</p><h2 id="badge-h">Belum punya app? Ikut ngetes saja.</h2></div>
-              <p className="lp-lede">Gabung cohort sampai hari ke-7. Setiap app yang kamu temani sampai 14 hari dihitung untuk badge di profilmu.</p>
+              <div><p className="lp-hud"><b aria-hidden="true">04</b>Badge</p><h2 id="badge-h">Belum punya app? Ikut sebagai tester murni.</h2></div>
+              <p className="lp-lede dim">Gabung cohort sampai hari ke-7. Setiap app yang kamu temani sampai 14 hari menambah badge di profilmu.</p>
             </div>
-            <ul className="tiers rv">
-              {TIERS.map((t) => (
-                <li className="tier" key={t.name}>
-                  <span className={`pill ${t.cls}`}>{t.name}</span>
-                  <b className="num">{t.n}</b>
-                  <small>{t.note}</small>
-                </li>
-              ))}
-            </ul>
-            <p className="tier-note rv">Badge dihitung dari data, tidak bisa diklaim. Keluar sebelum 14 hari, dikeluarkan creator, atau app yang dihapus tidak dihitung.</p>
+            <div className="badge-grid">
+              <div className="badge-side">
+                <ul className="tiers rv">
+                  {TIERS.map((t) => (
+                    <li className="tier" key={t.name}>
+                      <span className={`pill ${t.cls}`}>{t.name}</span>
+                      <b data-count={t.n}>{nf.format(t.n)}</b>
+                      <small>{t.note}</small>
+                    </li>
+                  ))}
+                </ul>
+                <p className="tier-note">Badge dihitung dari data, tidak bisa diklaim. Keluar sebelum 14 hari, dikeluarkan creator, atau app yang dihapus tidak dihitung.</p>
+              </div>
+              <article className="profile rv" aria-labelledby="wl-h">
+                <div className="who">
+                  <span className="lp-avatar" aria-hidden="true">WL</span>
+                  <div><strong id="wl-h">Wulan L.</strong><span className="dim">Tester murni sejak Cohort #2</span></div>
+                  <span className="pill t-silver">Silver</span>
+                </div>
+                <div className="lp-meter">
+                  <div className="meter-top"><span>Menuju Gold</span><span>9 / 14 app</span></div>
+                  <Seg n={14} on={9} c="ubi" />
+                </div>
+                <dl className="stats">
+                  <div><dt>Sedang ngetes</dt><dd data-count={12}>12</dd></div>
+                  <div><dt>Tuntas 14 hari</dt><dd data-count={9}>9</dd></div>
+                  <div><dt>Feedback verified</dt><dd data-count={8}>8</dd></div>
+                </dl>
+                <p className="sample-tag"><b>Data contoh.</b> Profil sungguhan tampil di halaman anggota.</p>
+              </article>
+            </div>
           </div>
         </section>
 
         <Proof />
 
-        <section className="lp-sec" id="gabung" aria-labelledby="gabung-h">
+        <section className="lp-sec join theme-light" id="gabung" aria-labelledby="gabung-h">
           <div className="lp-wrap">
-            <div className="sec-head">
-              <div><p className="lp-label"><b>06</b>Gabung</p><h2 id="gabung-h">Dua langkah untuk mulai.</h2></div>
-              <p className="lp-lede">Melihat-lihat tidak perlu daftar. Ikut cohort perlu dua hal: Google Group untuk Play Console, dan akun Google untuk TesBareng.</p>
-            </div>
+            <p className="lp-hud"><b aria-hidden="true">05</b>Gabung</p>
+            <h2 id="gabung-h">Mulai dari tiga langkah.</h2>
             <ol className="steps rv">
               <li>
                 <span className="n" aria-hidden="true">1</span>
                 <h3>Gabung Google Group</h3>
                 <p>Masuk ke <code className="email">{COMMUNITY_GROUP}</code> dengan akun Google yang ada di HP-mu. Creator memasang grup ini sebagai daftar tester di Play Console, jadi cukup sekali untuk semua app.</p>
-                <div className="step-actions">
-                  <a className="lp-btn lp-btn--primary" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">
-                    Gabung komunitas<span className="sr-only"> (Google Group, tab baru)</span><span aria-hidden="true"> ↗</span>
-                  </a>
-                  <CopyEmail />
-                </div>
+                <CopyEmail onCopied={() => say('Email grup tersalin')} />
               </li>
               <li>
                 <span className="n" aria-hidden="true">2</span>
                 <h3>Masuk dengan Google</h3>
-                <p>Daftarkan app-mu atau pilih app yang mau kamu bantu tes, lalu ikut cohort berikutnya sebagai creator atau tester murni.</p>
-                {user ? (
-                  <Link className="lp-btn" to="/me">Buka Tugas saya</Link>
-                ) : (
-                  <button type="button" className="lp-btn" onClick={startSignIn}>Masuk dengan Google</button>
-                )}
+                <p>Daftarkan app-mu, atau langsung pilih app yang ingin kamu bantu tes. Melihat-lihat tidak perlu daftar.</p>
+              </li>
+              <li>
+                <span className="n" aria-hidden="true">3</span>
+                <h3>Ikut cohort berikutnya</h3>
+                <p>Sebagai creator atau tester murni. Link grup WhatsApp cohort dibagikan setelah kamu masuk.</p>
               </li>
             </ol>
+            <div className="cta-row join-cta">
+              <a className="lp-btn lp-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Gabung Google Group<span className="sr-only"> (tab baru)</span></a>
+              {signInBtn('lp-btn', true)}
+              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />Grup WhatsApp komunitas<span className="sr-only"> (tab baru)</span></a>
+            </div>
+            <p className="wa-note">Grup WhatsApp komunitas adalah tempat diskusi utama. Opsional, dan nomor HP hanya terlihat sesama anggota grup.</p>
             <div className="duty rv">
               <h3>Yang kamu janjikan saat ikut cohort</h3>
               <ul>
                 <li><b>Opt-in dalam 48 jam</b><span>Ke semua app yang ditugaskan padamu, dihitung dari Hari 0.</span></li>
-                <li><b>Centang di titik cek</b><span>Sudah buka app di hari 7, Masih opt-in di hari 13, dan Sudah update setiap ada build baru.</span></li>
+                <li><b>Centang di titik cek</b><span>Sudah buka app di hari 7, Masih opt-in di hari 13, dan Sudah update dalam 3 hari setiap ada build baru.</span></li>
                 <li><b>Kirim feedback di Google Play</b><span>Dengan kata-katamu sendiri, lalu tekan Tandai sudah kirim di TesBareng.</span></li>
                 <li><b>Tetap opt-in 14 hari</b><span>Keluar lebih awal berarti hitungan app itu mulai lagi dari nol.</span></li>
               </ul>
             </div>
-            <div className="wa-join rv">
-              <a className="lp-btn lp-btn--wa lp-btn--wa-block" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
-                <svg className="wa-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.122 1.524 5.855L0 24l6.335-1.505A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.804 9.804 0 01-5.032-1.385l-.36-.214-3.762.894.953-3.667-.235-.376A9.798 9.798 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
-                Gabung Grup WhatsApp Komunitas<span className="sr-only"> (tab baru)</span><span aria-hidden="true"> ↗</span>
-              </a>
-              <p className="wa-note">Tempat diskusi utama komunitas. Opsional, dan nomor HP hanya terlihat sesama anggota grup.</p>
-            </div>
             <div className="join-notes">
               <p>Email selalu tampil disamarkan, misalnya bu*****@gmail.com. Nomor HP tidak pernah diminta di TesBareng.</p>
-              <p>Grup WhatsApp per cohort opsional, dan hanya untuk koordinasi.</p>
               <p>Cuma mau lihat-lihat dulu? <Link to="/apps">Lihat daftar app</Link></p>
             </div>
           </div>
         </section>
 
-        <section className="lp-sec" id="faq" aria-labelledby="faq-h">
+        <section className="lp-sec lp-sec--faq" id="faq" aria-labelledby="faq-h">
           <div className="lp-wrap">
-            <p className="lp-label"><b>07</b>FAQ</p>
+            <p className="lp-hud"><b aria-hidden="true">06</b>FAQ</p>
             <h2 id="faq-h">Pertanyaan yang sering muncul.</h2>
-            <div className="faq rv">
-              {FAQ.map((x, i) => (
-                <details key={x.q}>
-                  <summary><span className="q-n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><span className="q-t">{x.q}</span></summary>
-                  <p className="ans">{x.a}</p>
-                </details>
-              ))}
-            </div>
+            <Faq reduced={reduced} />
             <p className="faq-more">Aturan lengkapnya ada di <Link to="/about">halaman aturan main</Link>.</p>
           </div>
         </section>
@@ -727,8 +1095,11 @@ export function Landing() {
       <footer className="lp-wrap lp-foot">
         <p className="foot-word" aria-hidden="true">TesBareng</p>
         <div className="foot-row">
-          <span>Komunitas creator Android Indonesia. Bukan layanan resmi Google.</span>
+          <span className="dim">Komunitas creator Android Indonesia. Bukan layanan resmi Google.</span>
           <nav aria-label="Kaki halaman">
+            <a href="#cara-kerja">Cara kerja</a>
+            <a href="#badge">Badge</a>
+            <a href="#faq">FAQ</a>
             <Link to="/about">Aturan main</Link>
             <Link to="/apps">Daftar app</Link>
             <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Google Group<span className="sr-only"> (tab baru)</span></a>
@@ -736,6 +1107,11 @@ export function Landing() {
           </nav>
         </div>
       </footer>
+
+      <button type="button" className="totop" ref={totopRef} aria-label="Kembali ke atas" onClick={toTop}><span aria-hidden="true">↑</span></button>
+      <div className="lp-toast-region theme-light" role="status" aria-live="polite">
+        <p className={`lp-toast${toastOn ? ' show' : ''}`}>{toast}</p>
+      </div>
     </div>
   )
 }

@@ -1,19 +1,26 @@
 /* TesBareng design tokens: the single source shared by both surfaces.
-   Values come from DESIGN.md (approved by the owner, 2 Nov 2026) and ADR-001 r2 §2–§3.
-   Change only with the owner's approval. Light theme only (dark mode is out of scope for MVP). */
-:root {
-  /* Colour: "bumbu" palette. One job per colour; text on every fill is ink. */
-  --ink: #121212;          /* all text, every border, every hard shadow */
+   Values come from DESIGN.md (approved by the owner, 2 Nov 2026; dark mode and JetBrains Mono approved 3 Nov 2026)
+   and ADR-001 r2 §2–§3. Change only with the owner's approval. */
+
+/* Colour: "bumbu" palette, light values. One job per colour.
+   `.theme-light` pins a block to the light palette inside a dark page (the landing's kunyit join section). */
+:root, .theme-light {
+  --ink: #121212;          /* all text, every border, every hard shadow (cream in dark mode) */
   --kertas: #fff6e3;       /* page background */
   --putih: #ffffff;        /* card and table surfaces */
+  --muted: #57534b;        /* metadata, timestamps (7.1:1 on kertas) */
+  --surface-soft: #f7ebcf; /* disabled fields, row hover, unassigned matrix cells */
+  --primary-disabled: #f2e6c8;
+  --grid: rgb(18 18 18 / 0.05);   /* story surface: ruled paper lines behind the page */
+  --hl: rgb(255 200 61 / 0.34);   /* story surface: matrix crosshair highlight */
+}
+:root {
+  --on-fill: #121212;      /* text, borders and glyphs ON a colour fill; never changes with the theme */
   --kunyit: #ffc83d;       /* primary action, active schedule day */
   --pandan: #2fd47e;       /* eligible, verified, done, Good standing */
   --langit: #6bb8ff;       /* opted in, informational, link hover */
   --cabai: #ff5b4f;        /* Belum tes, Behind, errors, destructive, Owing */
   --ubi: #b9a3ff;          /* badges and reciprocity only */
-  --muted: #57534b;        /* metadata, timestamps (7.1:1 on kertas) */
-  --surface-soft: #f7ebcf; /* disabled fields, row hover, unassigned matrix cells */
-  --primary-disabled: #f2e6c8;
   --scrim: rgb(18 18 18 / 0.4); /* the one approved transparency: modal backdrop */
 
   /* Badge tiers (PRD FR-27h); always with the tier name in text. */
@@ -25,6 +32,7 @@
   /* Type */
   --font-text: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Archivo", "Arial Black", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; /* data cells, counters, HUD labels */
   --display-stretch: 125%;
 
   /* Work surface scale */
@@ -71,6 +79,35 @@
   --t-control: 200ms;
   --t-enter: 360ms;
 }
+
+/* Dark mode (owner, 3 Nov 2026). Fills keep their hex and always carry --on-fill text.
+   Scoped with :has(.dark-ready): only surfaces that opt in go dark. The work surface sets ink text on colour
+   fills (e.g. .btn.primary), which would turn cream-on-turmeric in dark, so it does not opt in yet. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):has(.dark-ready) {
+    --ink: #fff6e3;
+    --kertas: #151412;
+    --putih: #22201c;
+    --muted: #cfc7b8;
+    --surface-soft: #2b2823;
+    --primary-disabled: #3a362f;
+    --grid: rgb(255 246 227 / 0.045);
+    --hl: rgb(255 200 61 / 0.22);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]:has(.dark-ready) {
+  --ink: #fff6e3;
+  --kertas: #151412;
+  --putih: #22201c;
+  --muted: #cfc7b8;
+  --surface-soft: #2b2823;
+  --primary-disabled: #3a362f;
+  --grid: rgb(255 246 227 / 0.045);
+  --hl: rgb(255 200 61 / 0.22);
+  color-scheme: dark;
+}
+.theme-light { color-scheme: light; }
 
 /* Story surface: same colours and fonts, larger borders and offsets. */
 .surface-story {
