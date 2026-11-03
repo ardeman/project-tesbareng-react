@@ -422,3 +422,8 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# ADR-006: pg_cron calls this through pg_net with a shared secret (header
+# x-reminder-secret), not a user JWT, so the gateway must not require one.
+[functions.send-reminders]
+verify_jwt = false

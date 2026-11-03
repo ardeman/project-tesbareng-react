@@ -68,8 +68,8 @@ Status values: Not started / In progress / In review / Done.
 
 | ID | Task | Owner | Days | Waits for | Status |
 | --- | --- | --- | --- | --- | --- |
-| A7 | `reassign_slot` and `close_cohort` (Day 21 hard close; only milestones due before close count), with tests | A | 1.5 | A5 | Not started |
-| A8 | Reminders: cohort-day kinds (Day 1, 2, 5, 7, 13) and check-ins due in `due_reminders()`, `setup_cron.sql`, tests for `due_reminders()` | A | 2 | A5 | Not started |
+| A7 | `reassign_slot` and `close_cohort` (Day 21 hard close; only milestones due before close count), with tests | A | 1.5 | A5 | In review |
+| A8 | Reminders: cohort-day kinds (Day 1, 2, 5, 7, 13) and check-ins due in `due_reminders()`, `setup_cron.sql`, tests for `due_reminders()` | A | 2 | A5 | In review |
 | B7 | Admin: reassign and close screens, WhatsApp reminder panel (FR-48), archive reminder (FR-53) | B | 1.5 | A7 | Not started |
 | B8 | "Belum tes" label on app cards, cohort obligations and to-do order on `/me` (FR-28), cohort history on profiles (FR-55) | B | 2 | A5 | Not started |
 

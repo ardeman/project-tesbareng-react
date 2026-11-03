@@ -451,3 +451,194 @@ describe("check_in (FR-39–41)", () => {
     await expectCode(checkIn(other.m, other.app, "used_app"), "not-found");
   });
 });
+
+// ---------------------------------------------------------------- reassign and close (A7)
+
+describe("reassign_slot and close_cohort (FR-36, FR-37)", () => {
+  let creator: Member;
+  let creator2: Member;
+  let ghost: Member;
+  let helper: Member;
+  let slacker: Member;
+
+  beforeAll(async () => {
+    [creator, creator2, ghost, helper, slacker] = await Promise.all([
+      member("indah", "Indah Permatasari"),
+      member("teguh", "Teguh Wibowo"),
+      member("putu", "Putu Ary Wiradana"),
+      member("zaki", "Ahmad Zaki Mubarak"),
+      member("anisa", "Anisa Rahmawati"),
+    ]);
+  });
+
+  const masked = (m: Member) => `${m.email.slice(0, 2)}*****@gmail.com`;
+  async function join(m: Member, app: string, optedDaysAgo = 1) {
+    await must(service.from("testers").insert({
+      app_id: app, user_id: m.id, display_name: m.name, masked_email: masked(m), opted_in_at: ago(optedDaysAgo * DAY_MS), added_by: "self",
+    }));
+  }
+
+  /**
+   * Active cohort, Day `day`: creator brings `app`. `ghost` is assigned it and never joins;
+   * `helper` has fulfilled their own slot on `app2`; `slacker` has an open, unfulfilled slot on `app2`.
+   */
+  async function running(day = 4) {
+    const app = await createApp(creator);
+    const app2 = await createApp(creator2);
+    const id = await createCohort(admin);
+    await must(service.from("cohort_members").insert([
+      { cohort_id: id, user_id: creator.id, app_id: app },
+      { cohort_id: id, user_id: creator2.id, app_id: app2 },
+      { cohort_id: id, user_id: ghost.id },
+      { cohort_id: id, user_id: helper.id },
+      { cohort_id: id, user_id: slacker.id },
+    ]));
+    await forceActive(id, day);
+    const at = ago(day * DAY_MS);
+    const insert = async (user: string, appId: string) =>
+      (await must(service.from("assignments").insert({ cohort_id: id, tester_user_id: user, app_id: appId, assigned_at: at }).select("id").single())).id as string;
+    const ghostSlot = await insert(ghost.id, app);
+    await insert(helper.id, app2);
+    await join(helper, app2, day);
+    const slackerSlot = await insert(slacker.id, app2);
+    return { id, app, app2, ghostSlot, slackerSlot };
+  }
+  const reassign = (db: Member["db"], assignment: string, to: string) =>
+    db.rpc("reassign_slot", { p_assignment_id: assignment, p_to_user_id: to });
+
+  it("moves an unfulfilled slot to a member who fulfilled all of theirs", async () => {
+    const { id, app, ghostSlot } = await running();
+    const moved = (await must(reassign(admin.db, ghostSlot, helper.id))) as string;
+    const rows = await must(anon().from("assignments").select("id, tester_user_id, app_id, state, reassigned_to, assigned_at").eq("cohort_id", id));
+    expect(rows.find((r) => r.id === ghostSlot)).toMatchObject({ state: "reassigned", reassigned_to: moved });
+    const fresh = rows.find((r) => r.id === moved)!;
+    expect(fresh).toMatchObject({ tester_user_id: helper.id, app_id: app, state: "open", reassigned_to: null });
+    expect(Date.now() - Date.parse(fresh.assigned_at as string)).toBeLessThan(60_000);
+    const o = await must(anon().from("cohort_obligations").select("assigned_count, is_behind").eq("cohort_id", id).eq("user_id", ghost.id).single());
+    expect(o).toEqual({ assigned_count: 0, is_behind: false });
+  });
+
+  it("refuses moved or fulfilled slots, bad targets, the wrong status and non-admins", async () => {
+    const { id, app, ghostSlot, slackerSlot } = await running();
+    await expectCode(reassign(creator.db, ghostSlot, helper.id), "permission-denied");
+    await expectCode(reassign(admin.db, randomUUID(), helper.id), "not-found");
+    const outsider = await member("ketut", "Ketut Arsana");
+    await expectCode(reassign(admin.db, ghostSlot, outsider.id), "not-found");
+    await expectCode(reassign(admin.db, ghostSlot, ghost.id), "invalid-argument");
+    await expectCode(reassign(admin.db, ghostSlot, creator.id), "invalid-argument", /aplikasinya sendiri/);
+    await expectCode(reassign(admin.db, ghostSlot, slacker.id), "failed-precondition", /belum memenuhi/);
+    // creator2 has no assignments, so "all fulfilled", but is already assigned this app after a first move.
+    const moved = (await must(reassign(admin.db, ghostSlot, creator2.id))) as string;
+    await expectCode(reassign(admin.db, ghostSlot, helper.id), "failed-precondition", /sudah dipindahkan/);
+    await must(service.from("assignments").update({ state: "reassigned", reassigned_to: moved }).eq("id", slackerSlot));
+    await expectCode(reassign(admin.db, moved, creator2.id), "invalid-argument");
+    // A fulfilled slot does not need moving.
+    await join(creator2, app);
+    await expectCode(reassign(admin.db, moved, helper.id), "failed-precondition", /sudah dipenuhi/);
+    // Only while Active.
+    await forceClosed(id);
+    await expectCode(reassign(admin.db, moved, helper.id), "failed-precondition");
+  });
+
+  it("refuses a target already assigned that app", async () => {
+    const { app2, slackerSlot, id } = await running();
+    // helper already holds a slot on app2.
+    expect((await must(anon().from("assignments").select("id").eq("cohort_id", id).eq("tester_user_id", helper.id).eq("app_id", app2))).length).toBe(1);
+    await expectCode(reassign(admin.db, slackerSlot, helper.id), "already-exists");
+  });
+
+  it("before Day 21, closes only when every app is Ready to apply", async () => {
+    const { id, app, app2 } = await running(5);
+    await expectCode(admin.db.rpc("close_cohort", { p_cohort_id: id }), "failed-precondition", /hari ke-21/);
+    // 12 testers past 14 days on both apps (manual entries).
+    for (const a of [app, app2]) {
+      await must(service.from("testers").insert(range(12).map((i) => ({
+        app_id: a, display_name: `Tester ${i}`, masked_email: "te*****@gmail.com", opted_in_at: ago(15 * DAY_MS), added_by: "creator",
+      }))));
+    }
+    await must(admin.db.rpc("close_cohort", { p_cohort_id: id }));
+    const c = await must(anon().from("cohorts").select("status, closed_at").eq("id", id).single());
+    expect(c.status).toBe("closed");
+    expect(c.closed_at).not.toBeNull();
+  });
+
+  it("from Day 21 closes anyway and sets Good or Owing per member", async () => {
+    const { id } = await running(21.1);
+    await must(admin.db.rpc("close_cohort", { p_cohort_id: id }));
+    const rows = await must(anon().from("cohort_members").select("user_id, standing").eq("cohort_id", id));
+    const standing = new Map(rows.map((r) => [r.user_id, r.standing]));
+    expect(standing.get(ghost.id)).toBe("owing");
+    expect(standing.get(slacker.id)).toBe("owing");
+    // helper opted in but never checked in or sent feedback: Behind on Day 7 and 13 milestones.
+    expect(standing.get(helper.id)).toBe("owing");
+    // Creators with no assignments owe nothing.
+    expect(standing.get(creator.id)).toBe("good");
+    expect(standing.get(creator2.id)).toBe("good");
+  });
+
+  it("a member who met every milestone is Good", async () => {
+    const { id, app2 } = await running(21.1);
+    const entry = (await must(service.from("testers").select("id").eq("app_id", app2).eq("user_id", helper.id).single())).id;
+    await must(service.from("testers").update({ feedback_sent: true, feedback_sent_at: ago(10 * DAY_MS) }).eq("id", entry));
+    await must(service.from("check_ins").insert([
+      { tester_id: entry, kind: "used_app", created_at: ago(15 * DAY_MS) },
+      { tester_id: entry, kind: "still_opted_in", created_at: ago(8 * DAY_MS) },
+    ]));
+    await must(admin.db.rpc("close_cohort", { p_cohort_id: id }));
+    const row = await must(anon().from("cohort_members").select("standing").eq("cohort_id", id).eq("user_id", helper.id).single());
+    expect(row.standing).toBe("good");
+  });
+
+  it("a slot on an app deleted during the cohort never makes anyone Owing", async () => {
+    const { id, app } = await running(21.1);
+    await must(service.from("assignments").delete().eq("cohort_id", id).neq("tester_user_id", ghost.id));
+    await must(creator.db.rpc("delete_app", { p_app_id: app }));
+    await must(admin.db.rpc("close_cohort", { p_cohort_id: id }));
+    const row = await must(anon().from("cohort_members").select("standing").eq("cohort_id", id).eq("user_id", ghost.id).single());
+    expect(row.standing).toBe("good");
+  });
+
+  it("refuses Forming or Closed cohorts and non-admins; an Owing member is then blocked", async () => {
+    const { id } = await running(21.1);
+    await expectCode(creator.db.rpc("close_cohort", { p_cohort_id: id }), "permission-denied");
+    await expectCode(admin.db.rpc("close_cohort", { p_cohort_id: randomUUID() }), "not-found");
+    await must(admin.db.rpc("close_cohort", { p_cohort_id: id }));
+    await expectCode(admin.db.rpc("close_cohort", { p_cohort_id: id }), "failed-precondition");
+    const forming = await createCohort(admin);
+    await expectCode(admin.db.rpc("close_cohort", { p_cohort_id: forming }), "failed-precondition");
+    await expectCode(ghost.db.rpc("join_cohort_as_tester", { p_cohort_id: forming }), "failed-precondition", /Owing/);
+  });
+});
+
+// ---------------------------------------------------------------- owner decisions 2026-11-03
+
+describe("re-joining and the Anda copy", () => {
+  it("re-joining after Left clears the entry's check-ins; the windows start again", async () => {
+    const creator = await member("hendra", "Hendra Gunawan");
+    const m = await member("lukman", "Lukman Hakim");
+    const app = await createApp(creator);
+    const list = { joinedGroup: true, optedIn: true, installed: true };
+    await must(m.db.rpc("join_as_tester", { p_app_id: app, p_checklist: list }));
+    const entry = (await must(service.from("testers").select("id").eq("app_id", app).eq("user_id", m.id).single())).id;
+    await must(service.from("testers").update({ opted_in_at: ago(6 * DAY_MS) }).eq("id", entry));
+    await must(m.db.rpc("check_in", { p_app_id: app, p_kind: "used_app", p_build_id: null }));
+    await must(m.db.rpc("leave_testing", { p_app_id: app }));
+    await must(m.db.rpc("join_as_tester", { p_app_id: app, p_checklist: list }));
+    expect(await must(anon().from("check_ins").select("id").eq("tester_id", entry))).toHaveLength(0);
+    await expectCode(m.db.rpc("check_in", { p_app_id: app, p_kind: "used_app", p_build_id: null }), "failed-precondition");
+  });
+
+  it("server messages address the member as Anda", async () => {
+    const creator = await member("bagus", "Bagus Wicaksono");
+    const m = await member("rudi", "Rudi Hartono");
+    const app = await createApp(creator);
+    const list = { joinedGroup: true, optedIn: true, installed: true };
+    await expectCode(creator.db.rpc("join_as_tester", { p_app_id: app, p_checklist: list }), "permission-denied", /^Anda tidak bisa jadi tester untuk aplikasi Anda sendiri\.$/);
+    await expectCode(m.db.rpc("leave_testing", { p_app_id: app }), "not-found", /^Anda belum terdaftar/);
+    await must(m.db.rpc("join_as_tester", { p_app_id: app, p_checklist: list }));
+    await expectCode(m.db.rpc("join_as_tester", { p_app_id: app, p_checklist: list }), "already-exists", /^Anda sudah terdaftar/);
+    await expectCode(m.db.rpc("check_in", { p_app_id: app, p_kind: "updated_build", p_build_id: null }), "invalid-argument", /Anda pasang/);
+    const left = await createCohort(admin);
+    await expectCode(m.db.rpc("leave_cohort", { p_cohort_id: left }), "not-found", /^Anda bukan anggota/);
+  });
+});
