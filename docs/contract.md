@@ -155,7 +155,7 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 | `update_app` | `p_app_id`, same fields as create, `p_status?` | — | Creator or admin. Replaces the editable fields; null `p_status` keeps the status. Package uniqueness checked. |
 | `delete_app` | `p_app_id` | — | Creator or admin. Soft delete (`deleted = true`, `deleted_at = now()`). |
 | `restore_app` | `p_app_id` | — | Admin any time; the creator only within 10 minutes of deleting (the "Urungkan" undo, ADR-009 §7), otherwise `permission-denied`. Refuses if the package name was taken meanwhile (`already-exists`). |
-| `join_as_tester` | `p_app_id, p_checklist {joinedGroup, optedIn, installed}` | — | All three must be JSON `true`. Creator → `permission-denied`. Existing entry: active → `already-exists`; removed → `permission-denied`; left → re-activated with a new `opted_in_at` and `left_at` cleared. Masks the email. |
+| `join_as_tester` | `p_app_id, p_checklist {joinedGroup, optedIn, installed}` | — | All three must be JSON `true`. Creator → `permission-denied`. Existing entry: active → `already-exists`; removed → `permission-denied`; left → re-activated with a new `opted_in_at`, `left_at` cleared and the entry's check-ins deleted (owner decision 2026-11-03). Masks the email. |
 | `leave_testing` | `p_app_id` | — | Own active entry → left, `left_at = now()`. Not active → `failed-precondition`; no entry → `not-found`. |
 | `mark_feedback_sent` | `p_app_id, p_sent, p_summary?` | — | Own **active** entry only. `true`: `feedback_sent_at = now()`, summary trimmed (≤ 500, empty → null). `false`: clears all three. |
 | `add_manual_tester` | `p_app_id, p_display_name, p_email, p_opted_in_at?` | `uuid` | Creator or admin. Email is masked and discarded. `added_by = 'creator'`, opt-in not in the future (1 day slack). |
@@ -170,7 +170,7 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 | `leave_cohort` | `p_cohort_id` | — | The caller, pure testers only, while `forming` (owner decision 2026-11-03). Not a member → `not-found`; has an app in the cohort → `permission-denied` (the admin removes creators); not `forming` → `failed-precondition`. |
 | `start_cohort` | `p_cohort_id` | — | Admin. Not `forming` → `failed-precondition`. Fewer than 13 members with an app, or any of their apps soft-deleted → `failed-precondition`. Shuffles members with an app into `ring_position` 0 … N−1. With k = N − 1 for N ≤ 16 and k = 14 for N > 16, the member at position i is assigned the apps at positions i+1 … i+k (mod N), so every app gets exactly k (FR-32). Then pure testers, one by one in random order, get 14 apps each (all if fewer), fewest open assignments first, ties random (FR-33). Sets `status = 'active'`, `day0_at = now()`, and `assigned_at = now()` on members and assignments. |
 | `reassign_slot` | `p_assignment_id, p_to_user_id` | `uuid` | Admin (FR-36). Assignment missing → `not-found`; not `open`, already fulfilled, or cohort not `active` → `failed-precondition`. Target not a member of the cohort → `not-found`; the same member, or the app's creator → `invalid-argument`; target not `all_fulfilled` → `failed-precondition`; target already assigned that app → `already-exists`. Inserts the new assignment (`assigned_at = now()`), sets the original to `reassigned` with `reassigned_to`. Returns the new id. |
-| `close_cohort` | `p_cohort_id` | — | Admin (FR-37). Not `active` → `failed-precondition`. Before `day0_at + 21 d` it also needs every member's app at `eligible_count ≥ 12`, else `failed-precondition`. Sets `closed_at = now()`, `status = 'closed'`, and each member's `standing` to `'owing'` if `is_behind` at that moment, else `'good'`. Nothing closes a cohort automatically; past Day 21 the admin panel shows it as overdue (owner decision 2026-11-03). |
+| `close_cohort` | `p_cohort_id` | — | Admin (FR-37). Not `active` → `failed-precondition`. Before `day0_at + 21 d` it also needs every member's app at `eligible_count ≥ 12`, else `failed-precondition`. Sets `closed_at = now()`, `status = 'closed'`, and each member's `standing` to `'owing'` if any open assignment `is_behind` at that moment, else `'good'`. Slots on an app soft-deleted during the cohort are skipped (nobody can join a deleted app), and the Ready-to-apply check skips deleted apps too. Nothing closes a cohort automatically; past Day 21 the admin panel shows it as overdue (owner decision 2026-11-03). |
 | `settle_member` | `p_cohort_id, p_user_id` | — | Admin. Not a member → `not-found`; standing not `owing` → `failed-precondition`. Sets `'settled'` and `settled_at`. |
 | `set_cohort_link` | `p_cohort_id, p_url` | — | Admin, any status (FR-49). Cohort missing → `not-found`. Trimmed URL must start with `https://chat.whatsapp.com/` → else `invalid-argument`; null or empty removes the link. |
 | `get_cohort_link` | `p_cohort_id` | `text` or null | A member of that cohort (any role) or admin, else `permission-denied` (FR-50). Cohort missing → `not-found`. Null when no link is set. |
@@ -178,9 +178,20 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 
 Only the admin may act on a soft-deleted app (edit, manage testers, add builds, restore); for everyone else, its creator included, it is `not-found`.
 
+## Service-role functions (reminders, ADR-006)
+
+Never callable by `anon` or `authenticated`: they return full email addresses (ADR-005). The `send-reminders` Edge Function calls both and sends one digest per member.
+
+| Function | Kinds |
+|---|---|
+| `due_reminders()` | `new_build` (build logged in the last 24 h, to the app's active testers), `unreplied_feedback` (verified, unreplied > 3 days, to the creator), `app_eligible` (12 eligible testers, once per app) |
+| `due_cohort_reminders()` | One row per member, kind and cohort (`ref_id` = cohort id, `extra.apps` = the app names, `extra.day`, `extra.due_at`), counted from each assignment's `assigned_at`: `cohort_opt_in` (Day 1 and 2, not opted in), `cohort_feedback` (Day 5, feedback not sent), `cohort_used_app` (Day 7, used-app check-in or feedback missing), `cohort_still_opted_in` (Day 13). Active cohorts, open assignments, live apps only. |
+
+Both skip members with `email_reminders = false` and anything already in `reminder_log` for that member, kind and ref today (`app_eligible`: ever).
+
 ## Errors
 
-RPCs raise SQLSTATE `P0001` with an Indonesian `message` the UI shows as-is and the contract code in `hint`:
+RPCs raise SQLSTATE `P0001` with an Indonesian `message` the UI shows as-is (addressing the member as "Anda", owner decision 2026-11-03) and the contract code in `hint`:
 
 `unauthenticated` (no session), `invalid-argument` (validation, checklist, `group_confirmed`, wrong check-in build, app not owned by the member being added, bad reassign target), `not-found` (app, cohort, member or assignment missing; app soft-deleted; no own entry), `permission-denied` (creator joins own app, removed tester re-joins, non-creator manages testers/builds, forbidden patch key, non-admin calls an admin cohort RPC, non-member asks for the WhatsApp link, creator tries `leave_cohort`), `already-exists` (double join, duplicate package, double check-in, already a cohort member, app already in an open cohort, duplicate assignment), `failed-precondition` (leave/feedback/check-in when the entry is not active, check-in window not open, cohort in the wrong status, join after Day 7, Owing member, fewer than 13 apps, slot already fulfilled, target not all fulfilled, early close with apps not ready, settle when not Owing), `resource-exhausted` (rate limits).
 

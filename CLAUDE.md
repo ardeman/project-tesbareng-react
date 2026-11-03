@@ -102,7 +102,7 @@ Requires Node 22+. Screenshots need Chrome/Edge/Chromium (Playwright's Chromium 
 - **Badges** (PRD §6.7): based on apps tested to 14+ days active (Active with 14+ days, or Left after 14+ days; never Removed or deleted apps). Bronze ≥ 3, Silver ≥ 7, Gold ≥ 14, Platinum ≥ 25. Computed by a view, never stored. Badge names in Indonesian or English: PRD §17 Q11, open.
 - **Cohorts** (PRD §5.6–5.8, §6.9, ADR-007): members are Creators (bring one app) or Pure testers (no app; join themselves from Forming until Day 7). Testers are assigned by ring. Opt-in deadline 48 h after Day 0, then Behind / "Belum tes". Close when every app is Ready to apply or at Day 21; unmet obligations → Owing, blocked from the next cohort until admin settles.
 - **Milestone check-ins** (PRD §6.10) instead of daily attendance. **Reminders** (PRD §6.11): one email digest per member per day at 19:00 WIB, plus a WhatsApp reminder text the admin copies. WhatsApp sub-group link per cohort, members only (§6.12).
-- A member cannot register twice on one app; re-joining after Left re-activates with a new `opted_in_at`; Removed testers cannot re-join. A creator cannot test their own app.
+- A member cannot register twice on one app; re-joining after Left re-activates with a new `opted_in_at` and clears its check-ins; Removed testers cannot re-join. A creator cannot test their own app.
 - Opt-in URL must match `https://play.google.com/apps/testing/...`.
 - Limits: name 50, description 280, feedback guide 500, feedback summary 500, build version name 40, changelog 140 chars. Rate limits: 5 apps per user per rolling 24 h, 10 builds per app per rolling 24 h.
 - "New build" banner shows for 3 days after a build entry.

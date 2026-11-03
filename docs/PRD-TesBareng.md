@@ -185,7 +185,7 @@ For members without an app, or between their own apps, who want to help and earn
 - **FR-9** Emails are always shown masked to everyone, including the creator (§8).
 - **FR-10** "Days active" = days between `opted_in_at` and today (or `left_at` if Left), computed on the client.
 - **FR-11** A tester with **≥14 days active and status Active** is highlighted as **Eligible**.
-- **FR-12** A member cannot hold two entries on the same app. Re-joining after Left re-activates the entry with a new `opted_in_at`. Removed testers cannot re-join.
+- **FR-12** A member cannot hold two entries on the same app. Re-joining after Left re-activates the entry with a new `opted_in_at` and clears its check-ins, since the 14-day count restarts (owner decision 3 Nov 2026). Removed testers cannot re-join.
 - **FR-13** A creator cannot register as a tester on their own app.
 - **FR-14** The table is sortable by name, opt-in date and days active.
 
@@ -453,7 +453,7 @@ Days active per tester stays a client calculation.
 | `create_app(...)` | Member | FR-4 validation; `group_confirmed` true; unique non-deleted package name; 5 per rolling 24 h |
 | `update_app(app_id, ...)` | Creator, admin | Editable fields only; package uniqueness |
 | `delete_app(app_id)` / `restore_app(app_id)` | Creator, admin / admin, or creator within 10 min | Soft delete; creator undo window 10 min (ADR-009 §7), then admin only |
-| `join_as_tester(app_id, checklist)` | Member | All 3 checklist items; not own app; Active → already exists; Removed → denied; Left → re-activate with new `opted_in_at`, clear `left_at` |
+| `join_as_tester(app_id, checklist)` | Member | All 3 checklist items; not own app; Active → already exists; Removed → denied; Left → re-activate with new `opted_in_at`, clear `left_at` and the entry's check-ins |
 | `leave_testing(app_id)` | Tester | Own Active entry only |
 | `mark_feedback_sent(app_id, sent, summary)` | Tester | Own Active entry; trim; empty → null; `sent = false` clears all three fields |
 | `add_manual_tester(app_id, display_name, email, opted_in_at)` | Creator, admin | Mask and discard the email |

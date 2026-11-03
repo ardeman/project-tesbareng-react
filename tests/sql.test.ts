@@ -1,7 +1,7 @@
 // SQL unit tests: mask_email, check constraints, and the maths of the computed
 // stats views.
 import { beforeAll, describe, expect, it } from "vitest";
-import { ago, anon, DAY_MS, member, must, profileStats, service, stats, uniq, type Member } from "./helpers";
+import { ago, anon, DAY_MS, member, must, profileStats, service, stats, trackCohort, uniq, type Member } from "./helpers";
 
 describe("mask_email", () => {
   it.each([
@@ -118,6 +118,72 @@ describe("check constraints (database rejects bad data even without the RPC laye
     await violates("builds", buildRow({ changelog: "c".repeat(141) }));
     await violates("builds", buildRow({ changelog: " " }));
     await must(service.from("builds").insert(buildRow({ version_name: "v".repeat(40), changelog: "c".repeat(140) })));
+  });
+
+  describe("cohorts and check-ins", () => {
+    const now = () => new Date().toISOString();
+    const cohort = async (over: Record<string, unknown> = {}) =>
+      trackCohort((await must(service.from("cohorts").insert({ name: "Cohort uji", ...over }).select("id").single())).id);
+    const code = async (p: PromiseLike<{ error: { code: string } | null }>) => (await p).error?.code;
+
+    it("cohorts: name 50, status set, Day 0 only once started, closed_at only when closed", async () => {
+      await violates("cohorts", { name: "x".repeat(51) });
+      await violates("cohorts", { name: "  " });
+      await violates("cohorts", { name: "Cohort", status: "paused" });
+      await violates("cohorts", { name: "Cohort", status: "forming", day0_at: now() });
+      await violates("cohorts", { name: "Cohort", status: "active" });
+      await violates("cohorts", { name: "Cohort", status: "active", day0_at: now(), closed_at: now() });
+      await violates("cohorts", { name: "Cohort", status: "closed", day0_at: now() });
+      await cohort({ name: "x".repeat(50) });
+      await cohort({ status: "active", day0_at: now() });
+      await cohort({ status: "closed", day0_at: now(), closed_at: now() });
+    });
+
+    it("cohort_members: one row per member, one member per app, ring position only with an app, settled_at only when Settled", async () => {
+      const id = await cohort();
+      const other = await member("bayu", "Bayu Pratama");
+      await must(service.from("cohort_members").insert({ cohort_id: id, user_id: creator.id, app_id: appId, ring_position: 0 }));
+      expect(await code(service.from("cohort_members").insert({ cohort_id: id, user_id: creator.id }))).toBe("23505");
+      expect(await code(service.from("cohort_members").insert({ cohort_id: id, user_id: other.id, app_id: appId }))).toBe("23505");
+      await violates("cohort_members", { cohort_id: id, user_id: other.id, ring_position: 1 });
+      await violates("cohort_members", { cohort_id: id, user_id: other.id, standing: "excellent" });
+      await violates("cohort_members", { cohort_id: id, user_id: other.id, standing: "settled" });
+      await violates("cohort_members", { cohort_id: id, user_id: other.id, standing: "owing", settled_at: now() });
+      await must(service.from("cohort_members").insert({ cohort_id: id, user_id: other.id, standing: "settled", settled_at: now() }));
+    });
+
+    it("assignments: only for cohort members, once per member and app, reassigned_to only when reassigned", async () => {
+      const id = await cohort({ status: "active", day0_at: now() });
+      const other = await member("sari", "Sari Dewi");
+      expect(await code(service.from("assignments").insert({ cohort_id: id, tester_user_id: other.id, app_id: appId }))).toBe("23503");
+      await must(service.from("cohort_members").insert({ cohort_id: id, user_id: other.id }));
+      const first = (await must(service.from("assignments").insert({ cohort_id: id, tester_user_id: other.id, app_id: appId }).select("id").single())).id;
+      expect(await code(service.from("assignments").insert({ cohort_id: id, tester_user_id: other.id, app_id: appId }))).toBe("23505");
+      await violates("assignments", { cohort_id: id, tester_user_id: other.id, app_id: appId, state: "moved" });
+      expect(await code(service.from("assignments").update({ state: "reassigned" }).eq("id", first))).toBe("23514");
+    });
+
+    it("cohort_links: WhatsApp group URL only", async () => {
+      const id = await cohort();
+      await violates("cohort_links", { cohort_id: id, whatsapp_group_url: "https://wa.me/628123456789" });
+      await violates("cohort_links", { cohort_id: id, whatsapp_group_url: "https://chat.whatsapp.com/" });
+      await violates("cohort_links", { cohort_id: id, whatsapp_group_url: `https://chat.whatsapp.com/${"x".repeat(500)}` });
+      await must(service.from("cohort_links").insert({ cohort_id: id, whatsapp_group_url: "https://chat.whatsapp.com/AbC123" }));
+    });
+
+    it("check_ins: build only for 'updated_build', each kind once per entry and once per build", async () => {
+      const tester = (await must(service.from("testers").insert(testerRow()).select("id").single())).id;
+      const build = (await must(service.from("builds").insert(buildRow()).select("id").single())).id;
+      const build2 = (await must(service.from("builds").insert(buildRow({ version_name: "1.0.1" })).select("id").single())).id;
+      await violates("check_ins", { tester_id: tester, kind: "opened" });
+      await violates("check_ins", { tester_id: tester, kind: "updated_build" });
+      await violates("check_ins", { tester_id: tester, kind: "used_app", build_id: build });
+      await must(service.from("check_ins").insert({ tester_id: tester, kind: "used_app" }));
+      expect(await code(service.from("check_ins").insert({ tester_id: tester, kind: "used_app" }))).toBe("23505");
+      await must(service.from("check_ins").insert({ tester_id: tester, kind: "updated_build", build_id: build }));
+      await must(service.from("check_ins").insert({ tester_id: tester, kind: "updated_build", build_id: build2 }));
+      expect(await code(service.from("check_ins").insert({ tester_id: tester, kind: "updated_build", build_id: build }))).toBe("23505");
+    });
   });
 });
 

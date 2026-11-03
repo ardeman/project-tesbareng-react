@@ -11,9 +11,10 @@ import { AssignedChip } from '../components/cohortBits'
 import { useAuth } from '../lib/auth'
 import { useMyAssignedApps } from '../lib/cohorts'
 import { usePageMeta } from '../lib/pageMeta'
-import { api, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useTesters } from '../lib/data'
+import { api, errorCode, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useTesters } from '../lib/data'
+import { checkIn, milestones, useCheckIns, type CheckIn, type Milestone } from '../lib/checkins'
 import {
-  computeProgress, daysActive, fmtDate, fmtDayHeading, inDays, isNewBuild, isoDate, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
+  computeProgress, daysActive, fmtDate, fmtDateTime, fmtDayHeading, inDays, isNewBuild, isoDate, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
   testerStatusLabel, type Progress,
 } from '../lib/progress'
 import type { AppDoc, BuildDoc, TesterDoc, TesterStatus } from '../lib/types'
@@ -21,7 +22,7 @@ import type { AppDoc, BuildDoc, TesterDoc, TesterStatus } from '../lib/types'
 type DialogKind = null | 'join' | 'feedback' | 'build' | 'manual' | 'leave' | { tester: TesterDoc }
 
 /** One action in the header zone: the primary, a secondary, or an overflow item (ADR-009 §1, §7). */
-interface Action { label: string; icon?: ReactNode; onClick?: () => void; href?: string; to?: string }
+interface Action { label: string; icon?: ReactNode; onClick?: () => void; href?: string; to?: string; busy?: boolean; blocked?: boolean }
 interface Actions { primary?: Action; secondary: Action[]; overflow: MenuItem[]; note?: string }
 
 export function AppDetail() {
@@ -40,6 +41,9 @@ export function AppDetail() {
     () => (app.data ? computeProgress(app.data, testers.data, builds.data) : null),
     [app.data, testers.data, builds.data],
   )
+  // Called before the early returns (hook order); only loads for the member's own Active entry.
+  const ownActive = user ? testers.data.find((t) => t.uid === user.uid && t.status === 'active') : undefined
+  const flow = useCheckInFlow(id, user && app.data && !app.data.deleted && app.data.creatorUid !== user.uid && !isAdmin ? ownActive : undefined, builds.data.map((b) => b.id).join(','))
 
   if (app.error) return <ErrorBox text="Aplikasi gagal dimuat. Periksa koneksi, lalu coba lagi." onRetry={app.retry} />
   if (app.data === null || (app.data && app.data.deleted && !isAdmin)) return <NotFound what="Aplikasi" />
@@ -75,12 +79,19 @@ export function AppDetail() {
     }
     if (mine?.status === 'active') {
       const since = mine.feedbackSentAt ?? mine.optedInAt
-      const buildWaiting = isNewBuild(a) && a.lastBuildAt != null && a.lastBuildAt > since
+      // A new build stops being "waiting" once this tester has checked in on it.
+      const latest = builds.data[0]
+      const buildWaiting = isNewBuild(a) && a.lastBuildAt != null && a.lastBuildAt > since && !(latest && flow.isDone('updated_build', latest.id))
       const leave: MenuItem = { label: 'Berhenti menguji', danger: true, onSelect: () => setDialog('leave') }
       const play: Action = { label: 'Buka di Play', icon: <IconExternal />, href: playUrl }
       const editNote: Action = { label: 'Ubah catatan feedback', onClick: () => setDialog('feedback') }
       if (!mine.feedbackSent) return { primary: { label: 'Tandai sudah kirim', onClick: () => setDialog('feedback') }, secondary: [play], overflow: [leave] }
       if (buildWaiting) return { primary: { label: 'Uji build baru di Play', icon: <IconExternal />, href: playUrl }, secondary: [editNote], overflow: [leave] }
+      const next = flow.next
+      if (next) {
+        const primary: Action = { label: `Check-in: ${next.label}`, onClick: () => flow.run(next), busy: flow.pending === next.key, blocked: !!flow.pending && flow.pending !== next.key }
+        return { primary, secondary: [play, editNote], overflow: [leave] }
+      }
       return { secondary: [play, editNote], overflow: [leave] }
     }
     const play: Action[] = a.storeUrl ? [{ label: 'Halaman Play', icon: <IconExternal />, href: a.storeUrl }] : []
@@ -118,7 +129,7 @@ export function AppDetail() {
         </section>
 
         <aside className="span-4 col-fill">
-          <InfoPanel app={a} p={progress} mine={mine} isCreator={isCreator} />
+          <InfoPanel app={a} p={progress} mine={mine} isCreator={isCreator} flow={flow} />
           <CreatorCard app={a} />
         </aside>
 
@@ -153,7 +164,11 @@ function ActionButton({ a, primary, small }: { a: Action; primary?: boolean; sma
   const cls = `btn ${primary ? 'primary' : ''} ${small ? 'sm' : ''}`
   if (a.href) return <a className={cls} href={a.href} target="_blank" rel="noreferrer">{a.icon}{a.label}</a>
   if (a.to) return <Link className={cls} to={a.to}>{a.icon}{a.label}</Link>
-  return <button type="button" className={cls} onClick={a.onClick}>{a.icon}{a.label}</button>
+  return (
+    <button type="button" className={cls} onClick={a.blocked ? undefined : a.onClick} aria-busy={a.busy || undefined} aria-disabled={a.blocked || undefined}>
+      {a.icon}{a.busy ? 'Menyimpan…' : a.label}
+    </button>
+  )
 }
 
 function RecordHead({ app, p, loading, actions, assigned }: {
@@ -242,7 +257,7 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
 }
 
 /** Context for the role; the actions themselves live in the header zone. */
-function InfoPanel({ app, p, mine, isCreator }: { app: AppDoc; p: Progress; mine?: TesterDoc; isCreator: boolean }) {
+function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress; mine?: TesterDoc; isCreator: boolean; flow: CheckInFlow }) {
   // Stamp the feedback chip only when "sent" flips on while this panel is open, not on every visit.
   const sentBefore = useRef(mine?.feedbackSent)
   const [stamp, setStamp] = useState(false)
@@ -283,6 +298,7 @@ function InfoPanel({ app, p, mine, isCreator }: { app: AppDoc; p: Progress; mine
           <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(d, TARGET_DAYS)} max={TARGET_DAYS} label="Hari aktif Anda" /></div>
           <p className="muted small num" style={{ marginTop: 'var(--s-2)' }}>Sejak {fmtDate(mine.optedInAt)}. Jangan uninstall sebelum 14 hari.</p>
         </div>
+        <CheckIns flow={flow} />
         {mine.feedbackSent ? (
           <div className="stack-8">
             <p className="creator-nums">
@@ -314,6 +330,189 @@ function InfoPanel({ app, p, mine, isCreator }: { app: AppDoc; p: Progress; mine
       {guide}
       <p className="muted small">Butuh 3 langkah: gabung grup, buka link opt-in, pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>
     </section>
+  )
+}
+
+// ---------- milestone check-ins (PRD §6.10, FR-39–41): own Active entry only ----------
+
+/** Done build rows shown before "Lihat semua" (builds still owed are always shown). */
+const FEW_BUILDS = 3
+const TICK_MS = 60_000
+
+/** One fetch shared by the header primary and the panel. `entry` is the member's own Active entry, else undefined. */
+function useCheckInFlow(appId: string | undefined, entry: TesterDoc | undefined, buildsKey: string) {
+  const toast = useToast()
+  const state = useCheckIns(appId, entry?.id, entry?.uid, buildsKey)
+  // A recorded check-in shows as done at once and stays done until the refetch contains it,
+  // so the button never comes back for a moment between the RPC and the refetch.
+  const [optimistic, setOptimistic] = useState<CheckIn[]>([])
+  const [pending, setPending] = useState<string | null>(null)
+  // Stamp (and move focus to) a row only when its check-in was just recorded here, not on every visit.
+  const [justDone, setJustDone] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  const serverIds = new Set(state.data.checkIns.map((c) => c.id))
+  const extra = optimistic.filter((c) => !serverIds.has(c.id))
+  const data = extra.length ? { ...state.data, checkIns: [...state.data.checkIns, ...extra] } : state.data
+  const result = entry ? milestones(data, entry.optedInAt, now) : null
+
+  useEffect(() => {
+    if (optimistic.length && optimistic.every((c) => serverIds.has(c.id))) setOptimistic([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.data])
+
+  // Windows open and due times pass while the tab stays focused: re-render every minute, or at the next boundary.
+  const nextBoundary = result?.items.flatMap((m) => [m.opensAt, m.dueAt ?? Infinity]).filter((t) => t > now).reduce((a, b) => Math.min(a, b), Infinity) ?? Infinity
+  useEffect(() => {
+    if (!entry) return
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.max(1000, Math.min(TICK_MS, nextBoundary - now + 50)))
+    return () => window.clearTimeout(timer)
+  }, [entry, now, nextBoundary])
+
+  const run = async (m: Milestone) => {
+    if (pending || !appId) return
+    setPending(m.key)
+    try {
+      const id = await checkIn(appId, m.kind, m.buildId)
+      setOptimistic((xs) => [...xs, { id, kind: m.kind, buildId: m.buildId ?? null, createdAt: Date.now() }])
+      setJustDone(m.key)
+      setPending(null)
+      toast(`Check-in “${m.label}” tercatat.`)
+      state.retry()
+    } catch (e) {
+      setPending(null)
+      toast(failToast(e))
+      // Already recorded elsewhere, or the window/status changed: show the server's truth.
+      if (errorCode(e) === 'already-exists' || errorCode(e) === 'failed-precondition') state.retry()
+    }
+  }
+
+  // ADR-009 §1: the tester's next step is the next open check-in: overdue first, then the earliest due, else the earliest opened.
+  const next = result?.items
+    .filter((m) => m.open && !m.done)
+    .sort((a, b) => Number(b.overdue) - Number(a.overdue) || (a.dueAt ?? Infinity) - (b.dueAt ?? Infinity) || a.opensAt - b.opensAt)[0]
+
+  const isDone = (kind: CheckIn['kind'], buildId: string | null = null) => data.checkIns.some((c) => c.kind === kind && c.buildId === buildId)
+
+  return { state, result, pending, justDone, run, next, isDone, loading: state.loading, error: state.error }
+}
+type CheckInFlow = ReturnType<typeof useCheckInFlow>
+
+function CheckIns({ flow }: { flow: CheckInFlow }) {
+  const { state, result, pending, justDone } = flow
+  const listRef = useRef<HTMLUListElement>(null)
+  const [allBuilds, setAllBuilds] = useState(false)
+  const items = result?.items ?? []
+  const done = items.filter((m) => m.done).length
+  const justDoneShown = !!justDone && items.some((m) => m.key === justDone && m.done)
+
+  useEffect(() => {
+    // The button the user pressed is gone; put focus on the row's new status so keyboard users stay in place.
+    // (A check-in started from the header keeps focus there: the header's next primary takes its place.)
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-ci="${justDone}"]`)
+    const lost = document.activeElement === document.body || !!listRef.current?.contains(document.activeElement)
+    if (justDoneShown && el && lost) el.focus()
+  }, [justDoneShown, justDone])
+
+  // Builds still owed are always visible; only done ones collapse behind "Lihat semua".
+  const buildRows = items.filter((m) => m.kind === 'updated_build')
+  const hasBuilds = buildRows.length > 0
+  const doneBuilds = buildRows.filter((m) => m.done)
+  const doneShown = Math.max(0, FEW_BUILDS - (buildRows.length - doneBuilds.length))
+  const hiddenBuilds = new Set(allBuilds ? [] : doneBuilds.slice(doneShown).map((m) => m.key))
+
+  return (
+    <section className="stack-8 ci" aria-labelledby="ci-h">
+      <div className="ci-head">
+        <h3 id="ci-h">Check-in</h3>
+        {!state.loading && !state.error && <span className="meta num">{done} / {items.length} tercatat</span>}
+      </div>
+      <p className="muted small">Check-in berdasarkan kejujuran. Bukti terkuat tetap feedback yang diverifikasi kreator di Play Console.</p>
+      {state.error ? <ErrorBox text="Check-in gagal dimuat. Coba lagi sebentar lagi." onRetry={state.retry} /> : state.loading || !result ? (
+        <div aria-busy="true">
+          <span className="sr-only">Memuat check-in…</span>
+          {[0, 1, 2].map((i) => <div className="row-line" key={i}><span className="grow"><Skel w={140} /></span><Skel w={80} h={28} /></div>)}
+        </div>
+      ) : (
+        <ul className="ci-list" id="ci-list" ref={listRef}>
+          {items.filter((m) => !hiddenBuilds.has(m.key)).map((m) => {
+            const row = (
+              <CheckInRow key={m.key} m={m} busy={pending === m.key} blocked={!!pending && pending !== m.key} stamp={justDone === m.key} onCheckIn={() => flow.run(m)} />
+            )
+            // "Sudah update" sits between the two fixed milestones; before the first build it explains itself.
+            if (m.kind === 'still_opted_in' && !hasBuilds) {
+              return (
+                <Fragment key="no-build">
+                  <li className="row-line top">
+                    <span className="grow cell-2">
+                      <b>Sudah update</b>
+                      <span>Terbuka setiap kali kreator mencatat build baru.</span>
+                    </span>
+                    <Chip glyph="—">Belum ada build</Chip>
+                  </li>
+                  {row}
+                </Fragment>
+              )
+            }
+            return row
+          })}
+        </ul>
+      )}
+      {doneBuilds.length > doneShown && (
+        <ShowAll open={allBuilds} total={buildRows.length} onToggle={() => setAllBuilds((x) => !x)} controls="ci-list" />
+      )}
+      {result?.inCohort && !state.loading && !state.error && (
+        <p className="muted small num">Hari dihitung dari penugasan cohort Anda, <span className="nw">{fmtDate(result.base)}</span>.</p>
+      )}
+    </section>
+  )
+}
+
+function CheckInRow({ m, busy, blocked, stamp, onCheckIn }: { m: Milestone; busy: boolean; blocked: boolean; stamp: boolean; onCheckIn: () => void }) {
+  // Cohort due line (PRD §6.10 due times). Overdue reads in text and with the cabai "!" chip, never colour alone.
+  // Day numbers and dates never break mid-token in the narrow aside ("ke-/5", "6/Nov").
+  // Times are plain text with the exact WIB time, so there is nothing small to tap.
+  const nw = (x: ReactNode) => <span className="nw">{x}</span>
+  // "30 Okt 2026, 13.53 WIB": the date and the time each stay whole, but may sit on two lines in the narrow aside.
+  const at = (t: number) => { const [d, ...rest] = fmtDateTime(t).split(', '); return <>{nw(d)}{rest.length > 0 && <>, {nw(rest.join(', '))}</>}</> }
+  const dueText = m.dueAt == null ? null : <>{m.dueDay != null && <>{nw(`hari ke-${m.dueDay}`)}: </>}{at(m.dueAt)}</>
+  const dueLine = dueText && !m.done && (
+    <span className="num">{m.overdue ? <><Chip tone="cabai" glyph="!">Lewat tenggat</Chip> {dueText}</> : <>Tenggat {dueText}</>}</span>
+  )
+  let when: ReactNode
+  let side: ReactNode
+  if (m.done) {
+    when = <>Dicatat {at(m.done.createdAt)}</>
+    side = (
+      <span tabIndex={-1} data-ci={m.key} className="ci-status">
+        <span className="sr-only">{m.label}: </span>
+        <Chip tone="pandan" glyph="✓" className={stamp ? 'stamp' : undefined}>Tercatat</Chip>
+      </span>
+    )
+  } else if (!m.open) {
+    // Not open yet: no button and no chip; the sentence says when it opens (the server would refuse earlier).
+    when = <>Dibuka mulai {nw(`hari ke-${m.opensDay}`)}: {at(m.opensAt)}</>
+    side = null
+  } else {
+    when = m.kind === 'updated_build' ? <>Build dicatat {at(m.opensAt)}</> : <>Terbuka sejak {nw(`hari ke-${m.opensDay}`)}</>
+    side = (
+      <button
+        type="button" className="btn sm" onClick={() => { if (!blocked) onCheckIn() }}
+        aria-busy={busy || undefined} aria-disabled={blocked || undefined} aria-label={busy ? undefined : `Check-in: ${m.label}`}
+      >
+        {busy ? 'Menyimpan…' : 'Check-in'}
+      </button>
+    )
+  }
+  return (
+    <li className="row-line top">
+      <span className="grow cell-2">
+        <b>{m.label}</b>
+        <span className="num">{when}</span>
+        {dueLine}
+      </span>
+      {side}
+    </li>
   )
 }
 
