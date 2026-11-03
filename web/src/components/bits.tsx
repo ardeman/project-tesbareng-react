@@ -1,6 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { appStatusLabel, initial, TARGET_DAYS, TARGET_TESTERS, testerStatusLabel } from '../lib/progress'
+import { appStatusLabel, fmtDateTime, initial, relDay, relTime, TARGET_DAYS, TARGET_TESTERS, testerStatusLabel } from '../lib/progress'
+import { IconClose, IconExternal, IconMore } from './icons'
+import { errorText } from '../lib/data'
 import { BADGE_LABELS, BADGE_MIN, nextTier } from '../lib/badges'
 import type { AppStatus, BadgeTier, TesterDoc } from '../lib/types'
 
@@ -131,6 +133,28 @@ export function Dialog({ open, onClose, children, label }: { open: boolean; onCl
   )
 }
 
+/** Form field (ADR-009 §6): label above, helper text always visible, error text below it (never replacing it).
+ *  The error slot is a live region that exists before the error does, so screen readers announce it. */
+export function Field({ id, label, optional, hint, error, count, children }: {
+  id: string; label: ReactNode; optional?: boolean; hint?: ReactNode; error?: string; count?: ReactNode; children: ReactNode
+}) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}{optional && <span className="opt"> (opsional)</span>}</label>
+      {children}
+      {hint && <span className="hint" id={`${id}-hint`}>{hint}</span>}
+      <span className={error ? 'hint err' : 'sr-only'} id={`${id}-err`} aria-live="polite">{error}</span>
+      {count && <span className="count num" aria-hidden="true">{count}</span>}
+    </div>
+  )
+}
+/** aria wiring for a control inside <Field>. */
+export const fieldAria = (id: string, opts: { hint?: boolean; error?: string }) => ({
+  id,
+  'aria-invalid': opts.error ? true : undefined,
+  'aria-describedby': [opts.hint && `${id}-hint`, opts.error && `${id}-err`].filter(Boolean).join(' ') || undefined,
+})
+
 export function ErrorBox({ text, onRetry }: { text: string; onRetry?: () => void }) {
   return (
     <div className="error-box" role="alert">
@@ -168,21 +192,151 @@ export function NotFound({ what }: { what: string }) {
   )
 }
 
-// ---------- toast ----------
-const ToastCtx = createContext<(msg: string) => void>(() => {})
+// ---------- toast (ADR-009 §8) ----------
+/** A plain string is a success toast that leaves after 4 s. Errors and toasts with an action stay until
+ *  closed, unless `duration` is set (e.g. "Urungkan" for 8 s). Hover or focus pauses the timer (WCAG 2.2.1). */
+export interface ToastInput {
+  text: string
+  tone?: 'ok' | 'error'
+  action?: { label: string; onClick: () => void }
+  duration?: number
+}
+type ToastItem = ToastInput & { id: number }
+type ToastFn = (m: string | ToastInput) => void
+const ToastCtx = createContext<ToastFn>(() => {})
+const SUCCESS_MS = 4000
+const MAX_TOASTS = 3
+
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [msg, setMsg] = useState<{ text: string; key: number } | null>(null)
-  const timer = useRef<number | undefined>(undefined)
-  const show = useCallback((m: string) => {
-    setMsg({ text: m, key: Date.now() })
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => setMsg(null), 4000)
+  const [items, setItems] = useState<ToastItem[]>([])
+  const seq = useRef(0)
+  const dismiss = useCallback((id: number) => setItems((xs) => xs.filter((x) => x.id !== id)), [])
+  const show = useCallback<ToastFn>((m) => {
+    const t: ToastInput = typeof m === 'string' ? { text: m } : m
+    const id = ++seq.current
+    setItems((xs) => [...xs, { ...t, id }].slice(-MAX_TOASTS))
   }, [])
   return (
     <ToastCtx.Provider value={show}>
       {children}
-      <div className="toast-region" aria-live="polite">{msg && <div className="toast" key={msg.key}>{msg.text}</div>}</div>
+      <div className="toast-region" aria-live="polite">
+        {items.map((t) => <Toast key={t.id} t={t} onClose={() => dismiss(t.id)} />)}
+      </div>
     </ToastCtx.Provider>
   )
 }
+
+function Toast({ t, onClose }: { t: ToastItem; onClose: () => void }) {
+  const ms = t.duration ?? (t.tone === 'error' || t.action ? null : SUCCESS_MS)
+  const [paused, setPaused] = useState(false)
+  const left = useRef(ms ?? 0)
+  useEffect(() => {
+    if (ms == null || paused) return
+    const start = Date.now()
+    const timer = window.setTimeout(onClose, left.current)
+    return () => { window.clearTimeout(timer); left.current -= Date.now() - start }
+  }, [ms, paused, onClose])
+  return (
+    <div
+      className={`toast ${t.tone === 'error' ? 'error' : ''}`}
+      onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}
+    >
+      {t.tone === 'error' && <span className="g" aria-hidden="true">!</span>}
+      <span className="toast-text">{t.text}</span>
+      {t.action && (
+        <button type="button" className="text-action" onClick={() => { t.action!.onClick(); onClose() }}>{t.action.label}</button>
+      )}
+      {(ms == null || t.action) && (
+        <button type="button" className="toast-close" aria-label="Tutup pemberitahuan" onClick={onClose}><IconClose /></button>
+      )}
+    </div>
+  )
+}
 export const useToast = () => useContext(ToastCtx)
+/** An error toast: the RPC's Indonesian message (it already says what to do), plus an optional next step. */
+export const failToast = (e: unknown, next?: string): ToastInput => ({ text: next ? `${errorText(e)} ${next}` : errorText(e), tone: 'error' })
+
+// ---------- relative time: "2 jam yang lalu", exact WIB time on hover (title) and on tap ----------
+export function RelTime({ t, day = false }: { t: number; day?: boolean }) {
+  const [exact, setExact] = useState(false)
+  const full = fmtDateTime(t)
+  return (
+    <button type="button" className="reltime num" title={full} onClick={() => setExact((x) => !x)}>
+      <time dateTime={new Date(t).toISOString()}>{exact ? full : day ? relDay(t) : relTime(t)}</time>
+    </button>
+  )
+}
+
+/** "Lihat semua (N)" / "Tampilkan lebih sedikit" for long related lists (ADR-009 §4). */
+export function ShowAll({ open, total, onToggle, controls }: { open: boolean; total: number; onToggle: () => void; controls: string }) {
+  return (
+    <button type="button" className="text-action show-all num" aria-expanded={open} aria-controls={controls} onClick={onToggle}>
+      {open ? 'Tampilkan lebih sedikit' : `Lihat semua (${total})`}
+    </button>
+  )
+}
+
+// ---------- overflow menu ("…"): button + menu, Escape closes, arrow keys move (ADR-009 §7) ----------
+export interface MenuItem { label: string; onSelect?: () => void; href?: string; to?: string; danger?: boolean }
+
+export function OverflowMenu({ items, label = 'Aksi lain' }: { items: MenuItem[]; label?: string }) {
+  const [open, setOpen] = useState(false)
+  const [align, setAlign] = useState<'right' | 'left'>('right')
+  const btn = useRef<HTMLButtonElement>(null)
+  const menu = useRef<HTMLDivElement>(null)
+  const id = useId()
+  const close = useCallback((focusBack = true) => { setOpen(false); if (focusBack) btn.current?.focus() }, [])
+
+  // Keep the menu on screen: open leftwards when the button sits too close to the left edge (375 px phones).
+  useLayoutEffect(() => {
+    if (!open || !btn.current || !menu.current) return
+    const w = menu.current.getBoundingClientRect().width
+    setAlign(btn.current.getBoundingClientRect().right - w < 8 ? 'left' : 'right')
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+    const onDown = (e: PointerEvent) => {
+      if (!menu.current?.contains(e.target as Node) && !btn.current?.contains(e.target as Node)) close(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [open, close])
+
+  const onKey = (e: React.KeyboardEvent) => {
+    const els = [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
+    const i = els.indexOf(document.activeElement as HTMLElement)
+    if (e.key === 'Escape') { e.preventDefault(); close() }
+    else if (e.key === 'Tab') close(false)
+    else if (e.key === 'ArrowDown') { e.preventDefault(); els[(i + 1) % els.length]?.focus() }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); els[(i - 1 + els.length) % els.length]?.focus() }
+    else if (e.key === 'Home') { e.preventDefault(); els[0]?.focus() }
+    else if (e.key === 'End') { e.preventDefault(); els[els.length - 1]?.focus() }
+  }
+
+  if (items.length === 0) return null
+  return (
+    <span className="menu-host">
+      <button
+        ref={btn} type="button" className="btn icon" aria-label={label} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); setOpen(true) } }}
+      >
+        <IconMore />
+      </button>
+      {open && (
+        <div ref={menu} id={id} className="menu" data-align={align} role="menu" aria-label={label} onKeyDown={onKey}>
+          {items.map((it) => {
+            const cls = `menu-item ${it.danger ? 'danger' : ''}`
+            const done = () => close(false)
+            if (it.href) return <a key={it.label} role="menuitem" tabIndex={-1} className={cls} href={it.href} target="_blank" rel="noreferrer" onClick={done}>{it.label}<IconExternal /></a>
+            if (it.to) return <Link key={it.label} role="menuitem" tabIndex={-1} className={cls} to={it.to} onClick={done}>{it.label}</Link>
+            return <button key={it.label} type="button" role="menuitem" tabIndex={-1} className={cls} onClick={() => { close(); it.onSelect?.() }}>{it.label}</button>
+          })}
+        </div>
+      )}
+    </span>
+  )
+}

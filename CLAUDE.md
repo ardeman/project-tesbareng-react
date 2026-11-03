@@ -22,14 +22,14 @@ Precedence and conflicts:
 | --- | --- | --- |
 | 001 | Design system: Neubrutalism ("bumbu" palette), both surfaces | Accepted (r2) |
 | 002 | Backend: Supabase free plan instead of Firebase | Accepted, implemented |
-| 003 | Hosting: one static host (Vercel vs Cloudflare Pages) | **Proposed, owner decides** |
+| 003 | Hosting: Vercel | Accepted (2026-11-02) |
 | 004 | Data access: RLS reads, RPC-only writes, computed counters | Accepted, implemented |
 | 005 | Privacy: masked emails, full email never in a public table | Accepted, implemented |
 | 006 | Reminders: daily digest via Gmail SMTP from one Edge Function | Accepted, not implemented |
 | 007 | Cohorts: ring assignment of testers | Accepted, not implemented |
 | 008 | Routing: story page at `/`, app list at `/apps` (PRD §17 Q9) | Accepted (option A, 2026-11-02) |
-| 009 | Work surface UX: the "B2B" rules | Proposed |
-| 010 | Story surface UX: the "B2C" rules | Proposed |
+| 009 | Work surface UX: the "B2B" rules | Accepted (2026-11-02) |
+| 010 | Story surface UX: the "B2C" rules | Accepted (2026-11-02) |
 
 ## UI work
 
@@ -91,7 +91,7 @@ Requires Node 22+. Screenshots need Chrome/Edge/Chromium (Playwright's Chromium 
 3. **Counters are computed, never stored** (ADR-004). Tester, feedback, build, reciprocity, badge and cohort-obligation numbers come from views with `security_invoker = true` (`app_stats`, `profile_stats`, `cohort_obligations`). Nobody can write them.
 4. **Testers may change only their own feedback fields (`mark_feedback_sent`) and leave (`leave_testing`).** Only creator/admin set `feedback_verified`, `replied`, status, opt-in date, note (`update_tester`). Admin may also moderate feedback fields.
 5. Enforce the permissions matrix (PRD §7) in the database: RLS for reads, `insert/update/delete` revoked from `anon` and `authenticated` on every table, all writes through `security definer` RPCs with `set search_path = ''` (RPC list: PRD §9.3). Test every rule against the local stack (`tests/permissions.test.ts`, `tests/rpc.test.ts`, `tests/sql.test.ts`).
-6. App delete = soft delete (`deleted = true`). One-way for creators; only an admin restores (`restore_app`).
+6. App delete = soft delete (`deleted = true`, `deleted_at`). The creator may undo within 10 minutes (`restore_app`, ADR-009 §7, owner decision 2026-11-02); after that only an admin restores.
 
 ## Domain logic
 

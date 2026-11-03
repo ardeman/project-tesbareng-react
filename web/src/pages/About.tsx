@@ -108,10 +108,10 @@ function RingRule() {
 const STEPS: { t: string; d: ReactNode }[] = [
   { t: 'Gabung Google Group', d: <>Masuk ke <code className="ab-email">{COMMUNITY_GROUP}</code> dengan akun Google di HP-mu. Hanya anggota grup ini yang bisa opt-in.</> },
   { t: 'Opt-in', d: 'Buka link opt-in di halaman app, lalu ketuk Jadi penguji di Google Play.' },
-  { t: 'Install, lalu daftar', d: 'Pasang app-nya dari Play Store dengan akun yang sama, lalu tekan Daftar jadi tester di halaman app di TesBareng.' },
+  { t: 'Install, lalu daftar', d: 'Pasang app-nya dari Play Store dengan akun yang sama, lalu tekan Gabung sebagai tester di halaman app di TesBareng.' },
   { t: 'Pakai', d: 'Baca panduan feedback dari creator, lalu benar-benar pakai app-nya. Biarkan terpasang 14 hari.' },
   { t: 'Kirim feedback di Google Play', d: 'Rating plus komentar yang spesifik, dengan kata-katamu sendiri: apa yang jalan, apa yang rusak, apa yang perlu diperbaiki.' },
-  { t: 'Centang di TesBareng', d: 'Tekan Tandai feedback terkirim di halaman app. Ringkasan singkat boleh ditambahkan, maksimal 500 karakter.' },
+  { t: 'Centang di TesBareng', d: 'Tekan Tandai sudah kirim di halaman app. Ringkasan singkat boleh ditambahkan, maksimal 500 karakter.' },
 ]
 
 const COHORT_FACTS: { t: string; d: ReactNode }[] = [
@@ -130,7 +130,7 @@ const SCHEDULE = [
 ]
 
 const CHECKS = [
-  { m: 'Opt-in', when: 'Hari 0–2', what: 'Daftar jadi tester di setiap app tugasmu' },
+  { m: 'Opt-in', when: 'Hari 0–2', what: 'Gabung sebagai tester di setiap app tugasmu' },
   { m: 'Sudah buka app', when: 'Mulai hari 5, paling lambat hari 7', what: 'Centang, lalu kirim feedback di Google Play' },
   { m: 'Sudah update', when: 'Dalam 3 hari setelah build baru', what: 'Update app-nya, coba lagi, lalu centang' },
   { m: 'Masih opt-in', when: 'Mulai hari 12, paling lambat hari 13', what: 'Centang sekali lagi' },

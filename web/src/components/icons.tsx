@@ -106,6 +106,32 @@ export const IconSort = ({ dir, ...p }: P & { dir: 'asc' | 'desc' }) => (
   </svg>
 )
 
+/** solar:sort-vertical-linear (simplified): shown on sortable headers that are not the active sort */
+export const IconSortNone = (p: P) => (
+  <svg {...base(p)} width={16} height={16}>
+    <path {...J} d="M8 9.5L12 5.5L16 9.5M16 14.5L12 18.5L8 14.5" />
+  </svg>
+)
+
+/** solar:menu-dots-linear */
+export const IconMore = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+  </svg>
+)
+
+/** solar:alt-arrow-right-linear (rotated by CSS when a row is open) */
+export const IconChevron = (p: P) => (
+  <svg {...base(p)}>
+    <path {...J} d="M9 5L15 12L9 19" />
+  </svg>
+)
+
+/** solar:logout-linear */
+export const IconSignOut = (p: P) => (
+  <svg {...base(p)}><path d="M15 12H2m0 0l3-3m-3 3l3 3M9 8V7a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4h-6a4 4 0 0 1-4-4v-1" {...J}/></svg>
+)
+
 /** The TesBareng mark: twelve seats, eight of them taken. Ink only, so the logo spends no status colour. */
 export function Mark({ size = 24 }: { size?: number }) {
   const cells = Array.from({ length: 12 }, (_, i) => i)

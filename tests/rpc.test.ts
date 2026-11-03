@@ -212,13 +212,31 @@ describe("update_app, delete_app, restore_app", () => {
     await must(creator.db.rpc("update_app", edit({ p_package_name: own })));
   });
 
-  it("creator can soft delete but not restore; the app disappears", async () => {
+  it("creator can soft delete; the app disappears", async () => {
     await must(creator.db.rpc("delete_app", { p_app_id: appId }));
     expect(await must(anon().from("apps").select("id").eq("id", appId))).toHaveLength(0);
-    expect((await must(service.from("apps").select("deleted").eq("id", appId).single())).deleted).toBe(true);
-    await expectCode(creator.db.rpc("restore_app", { p_app_id: appId }), "permission-denied");
+    const row = await must(service.from("apps").select("deleted, deleted_at").eq("id", appId).single());
+    expect(row.deleted).toBe(true);
+    expect(row.deleted_at).not.toBeNull();
     await expectCode(creator.db.rpc("update_app", edit()), "not-found");
     await expectCode(creator.db.rpc("delete_app", { p_app_id: appId }), "not-found");
+  });
+
+  it("creator can undo a delete within 10 minutes (ADR-009 §7)", async () => {
+    await must(creator.db.rpc("delete_app", { p_app_id: appId }));
+    await expectCode(other.db.rpc("restore_app", { p_app_id: appId }), "permission-denied");
+    await must(creator.db.rpc("restore_app", { p_app_id: appId }));
+    expect(await must(anon().from("apps").select("id").eq("id", appId))).toHaveLength(1);
+    const row = await must(service.from("apps").select("deleted_at").eq("id", appId).single());
+    expect(row.deleted_at).toBeNull();
+  });
+
+  it("after the undo window only an admin restores", async () => {
+    await must(creator.db.rpc("delete_app", { p_app_id: appId }));
+    const past = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+    await must(service.from("apps").update({ deleted_at: past }).eq("id", appId).select("id"));
+    await expectCode(creator.db.rpc("restore_app", { p_app_id: appId }), "permission-denied");
+    await must(admin.db.rpc("restore_app", { p_app_id: appId }));
   });
 
   it("others cannot delete", async () => {

@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import { TARGET_DAYS, TARGET_TESTERS } from '../lib/progress'
 import type { TesterDoc } from '../lib/types'
 
@@ -29,7 +28,8 @@ export function Board({ seats, loading }: { seats: Seat[]; loading: boolean }) {
             aria-label={`${s.tester.displayName}: ${s.days} hari${s.eligible ? ', lulus 14 hari' : ''}`}>
             <span className="board-name">
               <span className="seat-no num">{i + 1}</span>
-              {s.tester.uid ? <Link to={`/u/${s.tester.uid}`}>{s.tester.displayName}</Link> : <span>{s.tester.displayName}</span>}
+              {/* Plain text: rows are 24 px, too small to tap; the tester table below links each profile. */}
+              <span>{s.tester.displayName}</span>
             </span>
             <span className="board-days" aria-hidden="true">
               {days.map((d) => <i key={d} className={d < s.days ? 'on' : ''} />)}

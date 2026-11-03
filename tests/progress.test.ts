@@ -1,7 +1,7 @@
 // Client-side domain logic (CLAUDE.md "Domain logic"): days active, eligibility,
 // ready / low-engagement flags. Pure functions from web/src/lib/progress.ts.
 import { describe, expect, it } from "vitest";
-import { computeProgress, daysActive, isEligible, isNewBuild, relDays } from "../web/src/lib/progress";
+import { computeProgress, daysActive, isEligible, isNewBuild, relDay } from "../web/src/lib/progress";
 import type { AppDoc, BuildDoc, TesterDoc } from "../web/src/lib/types";
 
 const DAY = 86_400_000;
@@ -107,10 +107,10 @@ describe("new build banner and relative days", () => {
     expect(isNewBuild({ lastBuildAt: null }, NOW)).toBe(false);
   });
 
-  it("relDays", () => {
-    expect(relDays(NOW, NOW)).toBe("hari ini");
-    expect(relDays(daysAgo(1), NOW)).toBe("kemarin");
-    expect(relDays(daysAgo(4), NOW)).toBe("4 hari lalu");
-    expect(relDays(null, NOW)).toBe("—");
+  it("relDay", () => {
+    expect(relDay(NOW, NOW)).toBe("hari ini");
+    expect(relDay(daysAgo(1), NOW)).toBe("kemarin");
+    expect(relDay(daysAgo(4), NOW)).toBe("4 hari yang lalu");
+    expect(relDay(null, NOW)).toBe("—");
   });
 });

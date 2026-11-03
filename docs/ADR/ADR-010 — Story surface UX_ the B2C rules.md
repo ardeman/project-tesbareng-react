@@ -2,7 +2,7 @@
 
 |  |  |
 | --- | --- |
-| **Status** | Proposed |
+| **Status** | Accepted (2 November 2026) |
 | **Decider** | Community Admin |
 | **Date** | 2 November 2026 |
 | **Builds on** | ADR-001 (visual system, story execution sequence), ADR-008 (story page at `/`). ADR-001 wins on visuals and motion tokens; this ADR wins on audience, structure, conversion and content rules. |

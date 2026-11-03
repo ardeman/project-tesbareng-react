@@ -2,7 +2,7 @@
 
 |  |  |
 | --- | --- |
-| **Status** | Proposed |
+| **Status** | Accepted (2 November 2026) |
 | **Decider** | Community Admin |
 | **Date** | 2 November 2026 |
 | **Builds on** | ADR-001 (visual system). This ADR covers **behaviour and structure**; ADR-001 covers **look and motion tokens**. Where they overlap, ADR-001 wins on visuals, this ADR wins on UX patterns. |
@@ -136,5 +136,5 @@ Mechanical checks, same every time: `<button>` for actions and `<a>` for navigat
 
 - Work screens get a checklist reviewers can apply line by line; most items are testable.
 - Creators gain inline editing in the tester table, which needs `update_tester` to support single-field patches with fast responses (it already takes a JSON patch).
-- Delete + undo for apps needs the undo to call `restore_app`, which is **admin-only** today (ADR-004). Either allow the creator to restore within a short window, or keep a confirm dialog for app delete. Decide before building.
+- Delete + undo for apps: decided 2026-11-02. The creator may call `restore_app` on their own app within 10 minutes of deleting it (`apps.deleted_at`, migration `20261102000200_creator_undo_delete.sql`); after that only an admin restores.
 - Role-based landing depends on ADR-008 (routing) being accepted.

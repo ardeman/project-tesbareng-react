@@ -5,7 +5,7 @@ import { IconPlus, IconSearch } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, useApps } from '../lib/data'
-import { appStatusLabel, relDays, TARGET_TESTERS } from '../lib/progress'
+import { appStatusLabel, relDay, TARGET_TESTERS } from '../lib/progress'
 import type { AppDoc, AppStatus } from '../lib/types'
 
 type Tab = 'all' | AppStatus
@@ -61,11 +61,13 @@ export function AppList() {
       <div className="title-row">
         <div>
           <h1>Aplikasi</h1>
-          <p className="sub">
-            {loading ? <Skel w={360} h={16} /> : rows.length === 0 ? 'Belum ada aplikasi yang sedang uji tertutup.' : (
-              <><b>{short} dari {rows.length} aplikasi</b> masih kurang dari 12 tester aktif{ready > 0 && <>; {ready} sudah siap ajukan produksi</>}.</>
-            )}
-          </p>
+          {(loading || rows.length > 0) && (
+            <p className="sub">
+              {loading ? <Skel w={360} h={16} /> : (
+                <><b>{short} dari {rows.length} aplikasi</b> masih kurang dari 12 tester aktif{ready > 0 && <>; {ready} sudah siap ajukan produksi</>}.</>
+              )}
+            </p>
+          )}
         </div>
         <div className="actions">
           <button className="btn primary" onClick={add}><IconPlus />Tambah aplikasi</button>
@@ -175,7 +177,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
     <tr className="clickable" onClick={onOpen}>
       <td className="cell-2">
         <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
-        <span>{app.creatorName} · didaftarkan {relDays(app.createdAt)}</span>
+        <span>{app.creatorName} · didaftarkan {relDay(app.createdAt)}</span>
         <span className="md-show">Kreatornya menguji {c.t} aplikasi <Badge tier={app.creatorBadgeTier} size="sm" /></span>
       </td>
       <td className="cell-2"><SeatCell app={app} eligible={eligible} /><span className="md-show">{eligible} lewat 14 hari</span></td>

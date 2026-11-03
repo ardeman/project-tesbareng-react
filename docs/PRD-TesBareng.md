@@ -448,7 +448,7 @@ Days active per tester stays a client calculation.
 | `ensure_profile()` | Signed-in user | Refresh name/photo from Google identity; mask email server-side |
 | `create_app(...)` | Member | FR-4 validation; `group_confirmed` true; unique non-deleted package name; 5 per rolling 24 h |
 | `update_app(app_id, ...)` | Creator, admin | Editable fields only; package uniqueness |
-| `delete_app(app_id)` / `restore_app(app_id)` | Creator, admin / admin | Soft delete; restore admin only |
+| `delete_app(app_id)` / `restore_app(app_id)` | Creator, admin / admin, or creator within 10 min | Soft delete; creator undo window 10 min (ADR-009 §7), then admin only |
 | `join_as_tester(app_id, checklist)` | Member | All 3 checklist items; not own app; Active → already exists; Removed → denied; Left → re-activate with new `opted_in_at`, clear `left_at` |
 | `leave_testing(app_id)` | Tester | Own Active entry only |
 | `mark_feedback_sent(app_id, sent, summary)` | Tester | Own Active entry; trim; empty → null; `sent = false` clears all three fields |

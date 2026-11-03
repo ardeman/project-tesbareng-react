@@ -138,6 +138,7 @@ describe("app_stats", () => {
           description: "Uji statistik.",
           opt_in_url: `https://play.google.com/apps/testing/id.stat.app${n}`,
           creator_id: creatorId,
+          ...(over.deleted ? { deleted_at: new Date().toISOString() } : {}),
           ...over,
         })
         .select("id")

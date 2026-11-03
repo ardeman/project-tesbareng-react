@@ -1,67 +1,9 @@
 /* Landing (story surface). Tokens come from tokens.css; `.surface-story` sets 3 px borders and 6 px shadows.
-   Everything is scoped under .lp so it cannot leak into the work surface. Light theme only (ADR-001 §2.1). */
-.lp {
-  --wrap: 1240px;
-  --gutter: clamp(16px, 4vw, 40px);
-  --sec: clamp(64px, 8vw, 96px);
-  --rule: var(--bw) solid var(--ink);
-  --rule-in: 2px solid var(--ink);
-  /* Story type scale (DESIGN.md story column) */
-  --t-display: clamp(56px, 10vw, 128px);
-  --t-h1: clamp(32px, 4vw, 48px);
-  --t-h2: clamp(24px, 2.4vw, 32px);
-  --t-figure: clamp(32px, 3.4vw, 48px);
-  --t-body: 19px;
-  --t-small: 16px;
-  --t-caption: 14px;
-  --t-button: 18px;
-  background: var(--kertas);
-  color: var(--ink);
-  font-family: var(--font-text);
-  font-size: var(--t-body);
-  font-weight: 500;
-  line-height: 1.5;
-  overflow-x: clip;
-}
-@media (max-width: 639px) { .lp { --t-body: 18px; } }
-.lp *, .lp *::before, .lp *::after { box-sizing: border-box; }
-.lp a { color: inherit; }
+   Everything is scoped under .lp so it cannot leak into the work surface. Light theme only (ADR-001 §2.1).
+   The base .lp variables, buttons, header and hero live in web/index.html as critical CSS (the static hero uses them). */
 .lp .num, .lp dd, .lp .day-n, .lp .rail-cells { font-variant-numeric: tabular-nums; }
-.lp-wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--gutter); }
-
-.lp h1, .lp h2, .lp h3 { margin: 0; color: var(--ink); }
 .lp h2 { font-family: var(--font-text); font-weight: 800; font-size: var(--t-h1); line-height: 1.12; letter-spacing: -0.01em; text-wrap: balance; }
 .lp h3 { font-weight: 800; font-size: var(--t-h2); line-height: 1.2; }
-.lp p { margin: 0; }
-.lp-lede { font-size: var(--t-body); max-width: 38em; }
-
-.lp-skip { position: absolute; left: 16px; top: -80px; z-index: 20; padding: 12px 16px; background: var(--kunyit); color: var(--ink); font-weight: 700; border: 2px solid var(--ink); text-decoration: none; }
-.lp-skip:focus { top: 16px; }
-
-/* Section label: a numbered ink tag, the page's reading order made explicit */
-.lp-label { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: var(--t-caption); font-weight: 700; line-height: 1.3; letter-spacing: 0.04em; text-transform: uppercase; }
-.lp-label b { padding: 4px 8px; background: var(--ink); color: var(--kertas); font-weight: 800; }
-.lp-label--plain { margin: 0; }
-
-/* Buttons: the only things with hard shadows besides ring nodes */
-.lp-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 52px; padding: 14px 24px;
-  font: 700 var(--t-button)/1 var(--font-text); color: var(--ink); text-decoration: none; white-space: nowrap;
-  background: var(--putih); border: var(--rule); border-radius: var(--r-sm);
-  box-shadow: var(--shadow); cursor: pointer;
-  transition: transform var(--t-hover) var(--ease);
-}
-.lp-btn--primary { background: var(--kunyit); }
-.lp a.lp-btn--ink, .lp .lp-btn--ink { background: var(--ink); color: var(--kertas); }
-.lp-btn--sm { min-height: var(--target); padding: 10px 16px; font-size: var(--t-small); border-width: 2px; box-shadow: 3px 3px 0 0 var(--ink); }
-.lp-btn.is-ok { background: var(--pandan); }
-@media (hover: hover) and (pointer: fine) {
-  .lp-btn:hover { transform: translate(calc(var(--lift) * -1), calc(var(--lift) * -1)); box-shadow: var(--shadow-hover); }
-  .lp-btn--sm:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--ink); }
-}
-.lp-btn:active { transform: translate(var(--sh), var(--sh)); box-shadow: none; transition-duration: var(--t-press); }
-.lp-btn--sm:active { transform: translate(3px, 3px); }
 
 /* Chips: square, ink border, glyph + text */
 .lp .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: var(--t-caption); font-weight: 700; line-height: 1.3; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); border: 2px solid var(--ink); white-space: nowrap; }
@@ -76,26 +18,6 @@
 .lp .seg i.on { background: var(--pandan); }
 .lp .meter { display: grid; gap: 8px; }
 .lp .meter-top { display: flex; justify-content: space-between; gap: 16px; font-size: var(--t-small); font-weight: 700; }
-
-/* ---------- Header ---------- */
-.lp-top { border-bottom: var(--rule); }
-.lp-top-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 16px; }
-.lp-brand { display: inline-flex; align-items: center; gap: 8px; min-height: var(--target); font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: 24px; line-height: 1; letter-spacing: -0.02em; text-decoration: none; }
-.lp-brand-box { width: 24px; height: 24px; flex: none; background: var(--kunyit); border: var(--rule); }
-.lp-nav { display: flex; align-items: center; gap: clamp(8px, 2.4vw, 32px); font-size: var(--t-small); font-weight: 700; }
-.lp-nav > a:not(.lp-btn) { white-space: nowrap; display: inline-flex; align-items: center; min-height: var(--target); text-decoration: none; border-bottom: 2px solid transparent; }
-@media (hover: hover) and (pointer: fine) { .lp-nav > a:not(.lp-btn):hover { border-bottom-color: var(--ink); } }
-@media (max-width: 860px) { .lp-nav > a.hide-s { display: none; } }
-@media (max-width: 380px) { .lp-brand { font-size: 20px; } }
-.lp-alert { padding-block: 0 16px; font-size: var(--t-small); font-weight: 700; }
-
-/* ---------- Hero ---------- */
-.lp .hero { padding-block: clamp(40px, 6vw, 80px) var(--sec); }
-.lp .hero h1 { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-display); line-height: 0.92; letter-spacing: -0.02em; }
-.lp .hero h1 span { display: block; }
-.lp .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 64px); align-items: start; margin-top: clamp(32px, 4vw, 48px); }
-.lp .hero-copy { display: grid; gap: 32px; }
-.lp .cta-row { display: flex; flex-wrap: wrap; gap: 16px 24px; }
 
 .lp .sheet { background: var(--putih); border: var(--rule); }
 .lp .sheet-head { padding: 16px; border-bottom: var(--rule); }
@@ -239,25 +161,39 @@
 .lp .t-platinum { background: var(--tier-platinum); }
 .lp .tier-note { margin-top: 24px; max-width: 46em; font-size: var(--t-small); }
 
-/* Join band: the one large kunyit field, because it carries the primary action */
-.lp .join { background: var(--kunyit); }
-.lp .join .lp-label b { background: var(--ink); color: var(--kunyit); }
-.lp .live { display: grid; gap: 8px; margin-top: 32px; }
-.lp .live-row { display: flex; flex-wrap: wrap; margin: 0; background: var(--kertas); border: var(--rule); }
-.lp .live-row div { display: flex; flex-direction: column-reverse; gap: 4px; padding: 12px 24px; }
+/* Problem: Google Play's requirement, as the sheet a creator has to fill */
+.lp .problem { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px clamp(32px, 5vw, 64px); align-items: start; }
+.lp .problem-copy { display: grid; gap: 24px; }
+
+/* Proof: only real counts from the public views; the whole section is absent when there are none */
+.lp .live-row { display: flex; flex-wrap: wrap; margin: clamp(32px, 4vw, 48px) 0 0; background: var(--putih); border: var(--rule); }
+.lp .live-row div { display: flex; flex-direction: column-reverse; gap: 4px; padding: 16px 24px; }
 .lp .live-row div + div { border-left: var(--rule); }
 .lp .live-row dt { font-size: var(--t-caption); font-weight: 700; }
 .lp .live-row dd { margin: 0; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-figure); line-height: 1; }
-.lp .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: clamp(32px, 4vw, 48px) 0 0; padding: 0; list-style: none; background: var(--kertas); border: var(--rule); }
-.lp .steps li { display: grid; gap: 16px; align-content: start; padding: 24px; }
+.lp .live-note { margin-top: 16px; font-size: var(--t-caption); font-weight: 700; color: var(--muted); }
+
+/* Join: two steps, then the obligations, stated before anyone signs up */
+.lp .steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: clamp(32px, 4vw, 48px) 0 0; padding: 0; list-style: none; background: var(--putih); border: var(--rule); }
+.lp .steps li { display: grid; gap: 16px; align-content: start; justify-items: start; padding: 24px; }
 .lp .steps li + li { border-left: var(--rule); }
 .lp .steps p { font-size: var(--t-small); }
 .lp .steps .n { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: 56px; line-height: 0.85; }
-.lp .email { box-decoration-break: clone; -webkit-box-decoration-break: clone; font: inherit; font-weight: 700; overflow-wrap: anywhere; background: var(--putih); padding: 0 4px; border: 1px solid var(--ink); }
+.lp .email { box-decoration-break: clone; -webkit-box-decoration-break: clone; font: inherit; font-weight: 700; overflow-wrap: anywhere; background: var(--kertas); padding: 0 4px; border: 1px solid var(--ink); }
+.lp .step-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; }
 .lp .copy-row { display: grid; gap: 8px; justify-items: start; }
 .lp .copy-status { font-size: var(--t-caption); font-weight: 700; min-height: 1.3em; }
-.lp .join .cta-row { margin-top: 32px; }
-.lp .join-note { margin-top: 24px; font-size: var(--t-small); font-weight: 700; }
+.lp .duty { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 16px 48px; margin-top: 32px; }
+.lp .duty h3 { font-size: var(--t-h2); }
+.lp .duty ul { display: grid; margin: 0; padding: 0; list-style: none; border-top: var(--rule-in); }
+.lp .duty li { display: grid; gap: 4px; padding: 12px 0; font-size: var(--t-small); border-bottom: 1px solid var(--ink); }
+.lp .duty li b { font-weight: 700; }
+.lp .wa-join { margin-top: 40px; padding: 24px; background: var(--putih); border: var(--rule); display: grid; gap: 16px; }
+.lp .wa-join .lp-btn--wa-block { width: 100%; max-width: 480px; }
+.lp .wa-note { margin: 0; font-size: var(--t-small); color: var(--muted); font-weight: 700; }
+.lp .wa-icon { fill: currentColor; flex: none; }
+.lp .join-notes { display: grid; gap: 8px; margin-top: 32px; font-size: var(--t-small); }
+.lp .join-notes a { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 2px; }
 
 /* FAQ: native details, no height animation */
 .lp .faq { margin-top: clamp(32px, 4vw, 48px); background: var(--putih); border: var(--rule); }
@@ -286,7 +222,7 @@
 
 /* ---------- Tablet and below ---------- */
 @media (max-width: 980px) {
-  .lp .hero-grid, .lp .ring-stage, .lp .matrix-wrap, .lp .sec-head { grid-template-columns: minmax(0, 1fr); }
+  .lp .ring-stage, .lp .matrix-wrap, .lp .sec-head, .lp .problem, .lp .duty { grid-template-columns: minmax(0, 1fr); }
   .lp .days { grid-template-columns: 1fr 1fr; }
   .lp .day:nth-child(3) { border-left: 0; }
   .lp .day:nth-child(n + 3) { border-top: var(--rule); }
@@ -317,6 +253,4 @@
   .lp .faq .ans { padding: 0 16px 16px; }
   .lp .q-n { min-width: auto; }
   .lp .live-row div { padding: 12px 16px; }
-  .lp .cta-row .lp-btn { flex: 1 1 100%; }
-  .lp-nav .lp-btn--sm { padding-inline: 12px; }
 }
