@@ -1,0 +1,149 @@
+/* Admin › Cohort (ADR-009, ADR-001 §2). Loaded with the lazy Admin chunk only.
+   Tokens only. Flat panels, list rows and chips; shadows stay on buttons and dialogs. */
+
+/* ---------- cohort index (left column) ---------- */
+.ch-index > header { margin-bottom: 0; padding-bottom: var(--s-3); }
+.ch-create { display: grid; gap: var(--s-2); padding: var(--s-3) var(--s-4) var(--s-4); border-top: var(--bw) solid var(--ink); border-bottom: var(--bw) solid var(--ink); background: var(--kertas); }
+.ch-create .btn { justify-self: start; margin-top: var(--s-1); }
+.ch-create .error-box { margin: 0; }
+.ch-group + .ch-group { border-top: var(--bw) solid var(--ink); }
+.ch-group-h {
+  padding: var(--s-3) var(--s-4) var(--s-2); font-size: var(--fs-caption); line-height: 1.3; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.ch-group-empty { padding: 0 var(--s-4) var(--s-3); }
+.ch-group-more { padding: 0 var(--s-4) var(--s-2); }
+.ch-row {
+  display: grid; gap: var(--s-1); min-height: 64px; padding: var(--s-2) var(--s-4); border-top: var(--bw-row) solid var(--ink);
+  color: var(--ink);
+}
+.ch-group > div.ch-row:first-of-type, .ch-group li:first-child .ch-row { border-top: var(--bw-row) solid var(--ink); }
+.ch-row-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-width: 0; }
+.ch-row-top b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); color: var(--muted); font-size: var(--fs-small); line-height: 1.4; }
+/* Selected: kunyit left edge plus aria-current (the same "this one" mark as the member's own row). */
+.ch-row[aria-current="true"] { background: var(--surface-soft); box-shadow: inset 6px 0 0 var(--kunyit); padding-left: calc(var(--s-4) + 2px); }
+.ch-row[aria-current="true"] .ch-row-meta { color: var(--ink); }
+.ch-row:focus-visible { outline-offset: -3px; }
+
+/* ---------- selected cohort (right column) ---------- */
+.ch-stack { display: grid; gap: var(--s-4); }
+.ch-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3) var(--s-4); flex-wrap: wrap; }
+.ch-title { min-width: 0; display: grid; gap: var(--s-2); }
+.ch-main h2 { font-size: var(--fs-h1); line-height: 1.2; font-weight: 800; overflow-wrap: anywhere; }
+.ch-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); color: var(--muted); font-size: var(--fs-small); line-height: 1.4; }
+.ch-start { display: grid; gap: var(--s-2); justify-items: end; max-width: 280px; }
+.ch-start .ch-why { text-align: right; }
+.ch-glyph {
+  display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 6px; vertical-align: -4px;
+  border: var(--bw) solid var(--ink); background: var(--putih); color: var(--ink); font-size: var(--fs-caption); line-height: 1; font-weight: 800;
+}
+#ch-start-thin .ch-glyph { background: var(--cabai); }
+.ch-cand-why .ch-glyph { width: 18px; height: 18px; }
+
+.ch-progress { display: grid; gap: var(--s-2); margin-top: var(--s-4); padding-top: var(--s-3); border-top: var(--bw) solid var(--ink); }
+.ch-count { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s-1) var(--s-2); }
+.ch-count b { font-size: var(--fs-display); line-height: 1; font-weight: 800; }
+.ch-count small { font-size: var(--fs-body); color: var(--muted); font-weight: 500; }
+.ch-count-sep { color: var(--muted); }
+.ch-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: var(--bw) solid var(--ink); margin: 0; }
+.ch-facts > div { padding: var(--s-2) var(--s-3); min-width: 0; }
+.ch-facts > div + div { border-left: var(--bw) solid var(--ink); }
+.ch-facts dt { font-size: var(--fs-caption); line-height: 1.3; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.ch-facts dd { margin-top: var(--s-1); font-size: var(--fs-h2); line-height: 1.2; font-weight: 800; }
+.ch-facts dd.ch-fact-text { font-size: var(--fs-small); line-height: 1.4; font-weight: 700; }
+.ch-progress .text-action { justify-self: start; }
+
+.ch-members { display: grid; gap: var(--s-2); margin-top: var(--s-4); padding-top: var(--s-3); border-top: var(--bw) solid var(--ink); }
+.ch-members-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); flex-wrap: wrap; min-height: var(--target); }
+.ch-members-head h3 { font-size: var(--fs-h2); line-height: 1.25; font-weight: 700; }
+.ch-sub { margin-top: var(--s-2); }
+.ch-sub-h { padding-bottom: var(--s-1); border-bottom: var(--bw-row) solid var(--ink); font-size: var(--fs-caption); line-height: 1.3; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.ch-sub > .meta { padding-top: var(--s-2); }
+.ch-member { min-height: 56px; }
+.ch-member .cell-2 b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-app { display: flex !important; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); min-width: 0; }
+.ch-app a { min-width: 0; overflow-wrap: anywhere; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.ch-name { display: block; max-width: 100%; }
+.ch-members .empty { margin-top: var(--s-1); }
+.ch-members > .meta { max-width: 70ch; }
+
+/* ---------- dialogs ---------- */
+.ch-steps { margin: 0; padding-left: var(--s-4); list-style: decimal; display: grid; gap: var(--s-2); }
+.ch-steps li { padding-left: var(--s-1); }
+.ch-warn { align-items: flex-start; }
+.ch-notice { align-items: flex-start; }
+.admin-notice > span:last-child { flex: 1 1 240px; min-width: 0; }
+.ch-search.input { width: 100%; }
+.ch-cands { border: var(--bw) solid var(--ink); max-height: min(44vh, 400px); overflow: auto; overscroll-behavior: contain; }
+.ch-cands li + li { border-top: var(--bw-row) solid var(--ink); }
+.ch-cand {
+  display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 64px; padding: var(--s-2) var(--s-3); margin: 0;
+  border: 0; background: var(--putih); color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.ch-cand:focus-visible { outline-offset: -3px; }
+.ch-cand .cell-2 { min-width: 0; }
+.ch-cand .cell-2 b, .ch-cand .cell-2 > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-cand[aria-disabled="true"] { cursor: not-allowed; background: var(--surface-soft); }
+.ch-cand-why { color: var(--ink) !important; }
+.ch-cand-go { flex: none; font-weight: 700; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.ch-picked { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); border: var(--bw) solid var(--ink); background: var(--kertas); flex-wrap: wrap; }
+.ch-picked .cell-2 { min-width: 0; flex: 1 1 160px; }
+.ch-picked .cell-2 b, .ch-picked .cell-2 span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-opts { gap: 0; }
+.ch-opt-hint { padding-bottom: var(--s-2); }
+.ch-opt {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: center; min-height: 52px; padding: var(--s-2) 0;
+  border-top: var(--bw-row) solid var(--ink); cursor: pointer;
+}
+.ch-opt .cell-2 b { font-size: var(--fs-body); overflow-wrap: anywhere; }
+.ch-opt.off { cursor: not-allowed; }
+.ch-opt.off .cell-2 b { color: var(--muted); }
+.ch-opt.off .cell-2 > span { color: var(--ink); }
+/* Radio: square ink box with a square ink dot (squared like the checkbox, but filled, not ticked). */
+.ch-opt input {
+  appearance: none; width: 24px; height: 24px; margin: 0; display: grid; place-items: center; cursor: inherit;
+  border: var(--bw) solid var(--ink); border-radius: var(--r-none); background: var(--putih);
+}
+.ch-opt input::after { content: ""; width: 10px; height: 10px; background: var(--ink); opacity: 0; }
+.ch-opt input:checked { background: var(--kunyit); }
+.ch-opt input:checked::after { opacity: 1; }
+.ch-opt input:disabled { background: var(--surface-soft); border-color: var(--muted); }
+.ch-opts .hint.err { padding-top: var(--s-2); }
+
+/* ---------- WhatsApp link and pinned message ---------- */
+.ch-link-form { display: grid; gap: var(--s-3); }
+.ch-link-form .field { max-width: 560px; }
+.ch-link-foot { display: flex; align-items: center; gap: var(--s-2) var(--s-4); flex-wrap: wrap; }
+.ch-ext { gap: 6px; }
+.ch-ext svg { width: 16px; height: 16px; }
+.ch-code { font-family: var(--font-mono); font-size: var(--fs-caption); overflow-wrap: anywhere; color: var(--ink); }
+.ch-pin-note { margin-bottom: var(--s-3); }
+.ch-pin.input { min-height: 0; resize: none; background: var(--kertas); white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-small); line-height: 1.5; cursor: text; field-sizing: content; }
+
+@media (hover: hover) and (pointer: fine) {
+  .ch-row:hover { background: var(--surface-soft); }
+  .ch-row:hover b { text-decoration: underline; text-underline-offset: 3px; }
+  .ch-cand:not([aria-disabled="true"]):hover { background: var(--kertas); }
+  .ch-opt:not(.off):hover input { background: var(--kertas); }
+  .ch-opt:not(.off):hover input:checked { background: var(--kunyit); }
+  .ch-name:hover b { text-decoration: underline; text-underline-offset: 3px; }
+}
+
+@media (max-width: 1023px) {
+  .ch-start { justify-items: start; max-width: none; width: 100%; }
+  .ch-start .ch-why { text-align: left; }
+}
+@media (max-width: 640px) {
+  .ch-create { padding: var(--s-3); }
+  .ch-group-h, .ch-group-empty, .ch-group-more { padding-left: var(--s-3); padding-right: var(--s-3); }
+  .ch-row { padding-left: var(--s-3); padding-right: var(--s-3); }
+  .ch-row[aria-current="true"] { padding-left: calc(var(--s-3) + 2px); }
+  .ch-start .btn { width: 100%; }
+  .ch-facts > div { padding: var(--s-2); }
+  .ch-member { flex-wrap: wrap; }
+  .ch-member .grow { flex-basis: calc(100% - 48px); }
+  .ch-member > .chip { margin-left: 44px; }
+  .ch-member > .btn.sm { margin-left: 44px; }
+  .ch-member > .chip + .btn.sm { margin-left: auto; }
+}

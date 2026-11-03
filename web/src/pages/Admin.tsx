@@ -7,6 +7,7 @@ import { usePageMeta } from '../lib/pageMeta'
 import { errorText, restoreApp, updateTesterAsAdmin, useDeletedApps, useTesterSearch, type ModerationPatch } from '../lib/data'
 import { daysActive, fmtDateTime, isoDate, relTime, testerStatusLabel, todayIso } from '../lib/progress'
 import type { AdminTesterRow, AppDoc, TesterStatus } from '../lib/types'
+import { Cohorts } from './AdminCohorts'
 
 /**
  * Admin (PRD §10 `/admin`, ADR-009). One page, split into sections. Later tasks add cohort sections
@@ -16,6 +17,12 @@ import type { AdminTesterRow, AppDoc, TesterStatus } from '../lib/types'
 interface Section { id: string; label: string; summary: string; render: () => ReactNode }
 
 const SECTIONS: Section[] = [
+  {
+    id: 'cohort',
+    label: 'Cohort',
+    summary: 'Bentuk cohort, tambahkan kreator dengan aplikasinya, lalu mulai. Pasang link grup WhatsApp dan tandai lunas anggota yang berutang.',
+    render: () => <Cohorts />,
+  },
   {
     id: 'moderasi',
     label: 'Moderasi',
