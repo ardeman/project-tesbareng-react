@@ -95,12 +95,13 @@ export function AppDetail() {
       }
       return { secondary: [play, editNote], overflow: [leave] }
     }
-    const play: Action[] = a.storeUrl ? [{ label: 'Halaman Play', icon: <IconExternal />, href: a.storeUrl }] : []
-    if (mine?.status === 'removed') return { secondary: play, overflow: [] }
+    const optInAction: Action = { label: 'Buka link opt-in', icon: <IconExternal />, href: a.optInUrl }
+    const storeOverflow: MenuItem[] = a.storeUrl ? [{ label: 'Halaman Play Store', href: a.storeUrl }] : []
+    if (mine?.status === 'removed') return { secondary: [optInAction], overflow: storeOverflow }
     return {
       primary: { label: 'Gabung sebagai tester', onClick: () => needLogin('join') },
-      secondary: play,
-      overflow: [],
+      secondary: [optInAction],
+      overflow: storeOverflow,
       note: user ? undefined : 'Anda diminta masuk dengan Google dulu.',
     }
   })()
