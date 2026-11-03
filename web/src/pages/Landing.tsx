@@ -2,7 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { usePageMeta } from '../lib/pageMeta'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
-import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
+import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL, WHATSAPP_URL } from '../lib/community'
 import { supabase } from '../lib/supabase'
 import './landing.css'
 
@@ -14,13 +14,31 @@ const TITLE = 'TesBareng: 12 tester, 14 hari, dikerjakan bareng'
 const DESCRIPTION =
   'Komunitas creator Android Indonesia yang saling ngetes app: 12 tester opt-in selama 14 hari untuk closed test Google Play, dibagi rata lewat cohort.'
 
-const reduceMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+const RM_QUERY = '(prefers-reduced-motion: reduce)'
+
+/** Live `prefers-reduced-motion`: follows the OS setting if it changes while the page is open. */
+function useReducedMotion() {
+  const [reduced, setReduced] = useState(() => typeof matchMedia === 'function' && matchMedia(RM_QUERY).matches)
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return
+    const mq = matchMedia(RM_QUERY)
+    const on = () => setReduced(mq.matches)
+    on()
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return reduced
+}
 
 /** Fade-and-rise entrances for `.rv` blocks below the fold. The hero is never animated. */
-function useReveal(root: React.RefObject<HTMLElement | null>) {
+function useReveal(root: React.RefObject<HTMLElement | null>, reduced: boolean) {
   useEffect(() => {
     const el = root.current
-    if (!el || reduceMotion() || !('IntersectionObserver' in window)) return
+    if (!el) return
+    if (reduced || !('IntersectionObserver' in window)) {
+      el.classList.remove('fx')
+      return
+    }
     el.classList.add('fx')
     const io = new IntersectionObserver(
       (entries) => {
@@ -30,7 +48,7 @@ function useReveal(root: React.RefObject<HTMLElement | null>) {
     )
     el.querySelectorAll('.rv').forEach((n) => io.observe(n))
     return () => io.disconnect()
-  }, [root])
+  }, [root, reduced])
 }
 
 /* ---------------------------------------------------------------------------
@@ -94,16 +112,15 @@ const RING_DESC =
   `yaitu ${N_APPS - 1} app. Setiap tester murni ngetes ${K} app, dimulai dari app yang testernya paling sedikit. ` +
   `Totalnya ${RING.total} tugas, dan setiap app dites ${RING.min} sampai ${RING.max} orang.`
 
-/** True when the device should get the scroll-scrubbed ring instead of the finished frame. */
-function canScrub() {
-  if (reduceMotion()) return false
+/** True when the device can afford the scroll-scrubbed ring (reduced motion is checked separately, live). */
+function deviceCanScrub() {
   const nav = navigator as Navigator & { connection?: { saveData?: boolean } }
   if (nav.connection?.saveData) return false
   if ((navigator.hardwareConcurrency ?? 4) <= 2) return false
   return true
 }
 
-const Ring = memo(function Ring() {
+const Ring = memo(function Ring({ reduced }: { reduced: boolean }) {
   const secRef = useRef<HTMLElement>(null)
   const figRef = useRef<HTMLElement>(null)
   const copyRef = useRef<HTMLDivElement>(null)
@@ -112,7 +129,8 @@ const Ring = memo(function Ring() {
   const minRef = useRef<HTMLSpanElement>(null)
   const finalRef = useRef<HTMLParagraphElement>(null)
   // Client-only SPA, so the device check can run on first render (no static frame flash).
-  const [scrub] = useState(canScrub)
+  const [deviceOk] = useState(deviceCanScrub)
+  const scrub = deviceOk && !reduced
 
   // Strokes are specified in screen pixels: 1 user unit = 600 / rendered width.
   useEffect(() => {
@@ -193,6 +211,12 @@ const Ring = memo(function Ring() {
       window.removeEventListener('resize', onScroll)
       cancelAnimationFrame(raf)
       sec.classList.remove('is-scrub')
+      // Back to the completed static frame (e.g. reduced motion switched on mid-scroll).
+      for (const list of tieEls) for (const p of list) { p.style.strokeDashoffset = ''; p.style.opacity = ''; p.classList.remove('drawing') }
+      for (const n of nodeEls) { n.classList.remove('act'); n.classList.add('done') }
+      if (drawnEl) drawnEl.textContent = String(RING.total)
+      if (minEl) minEl.textContent = String(RING.min)
+      finalEl?.classList.remove('show')
     }
   }, [scrub])
 
@@ -200,7 +224,7 @@ const Ring = memo(function Ring() {
     <section className="ring-scroll" ref={secRef} id="cohort-ring" aria-labelledby="ring-h">
       <div className="lp-wrap ring-stage">
         <div className="ring-copy" ref={copyRef}>
-          <p className="lp-label"><b>01</b>Cohort</p>
+          <p className="lp-label"><b>02</b>Cohort</p>
           <h2 id="ring-h">Tidak ada yang cuma minta dites.</h2>
           <p className="lp-lede ring-lede">
             Contoh cohort berisi {N_APPS} app. Dengan 13 sampai 16 app, setiap creator ngetes semua app lain. Tester murni tanpa app ikut ngetes {K} app,
@@ -250,6 +274,27 @@ const Ring = memo(function Ring() {
   )
 })
 
+/** The ring's first frame for the hero: every member in place, nothing assigned yet.
+ *  Same markup as the static hero in web/index.html (keep both in step). */
+function HeroRing() {
+  return (
+    <figure className="hero-ring">
+      <svg viewBox="0 0 600 600" width="600" height="600" aria-hidden="true" focusable="false">
+        {NODES.map((p, i) => (
+          <g key={i} transform={`translate(${f(p.x)} ${f(p.y)})`}>
+            {i < N_APPS ? (
+              <><rect className="hs" x={-13} y={-13} width={34} height={34} /><rect className="hb" x={-17} y={-17} width={34} height={34} /></>
+            ) : (
+              <><circle className="hs" cx={4} cy={4} r={18} /><circle className="hb" r={18} /></>
+            )}
+          </g>
+        ))}
+      </svg>
+      <figcaption>Satu cohort: {N_APPS} creator dengan app-nya dan {N_PURE} tester murni. Siapa ngetes siapa ditentukan saat cohort mulai.</figcaption>
+    </figure>
+  )
+}
+
 /* ---------------------------------------------------------------------------
    Small pieces
    --------------------------------------------------------------------------- */
@@ -290,11 +335,21 @@ function CopyEmail() {
 
 type Stats = { apps: number; members: number; ready: number }
 
-/** Live counts from the public views (ADR-004). Hidden when the request fails or everything is zero. */
+/** Live counts from the public views (ADR-004). Hidden when the request fails or everything is zero.
+ *  Requested once the browser is idle after first paint, so it never competes with the hero. */
 function useLiveStats() {
   const [stats, setStats] = useState<Stats | null>(null)
   useEffect(() => {
     let alive = true
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void }
+    const start = () => { if (alive) load() }
+    const idle = w.requestIdleCallback ? w.requestIdleCallback(start, { timeout: 2000 }) : window.setTimeout(start, 1200)
+    return () => {
+      alive = false
+      if (w.requestIdleCallback && w.cancelIdleCallback) w.cancelIdleCallback(idle)
+      else clearTimeout(idle)
+    }
+    function load() {
     const head = { count: 'exact' as const, head: true }
     const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
     Promise.race([
@@ -310,14 +365,15 @@ function useLiveStats() {
         setStats({ apps: a.count ?? 0, members: m.count ?? 0, ready: r.count ?? 0 })
       })
       .catch(() => {})
-    return () => { alive = false }
+    }
   }, [])
   return stats
 }
 
 const nf = new Intl.NumberFormat('id-ID')
 
-function LiveStats() {
+/** Proof (ADR-010 §2.6, §4): real counts only. The whole section is left out when there is nothing real to show. */
+function Proof() {
   const s = useLiveStats()
   if (!s) return null
   const items = [
@@ -327,14 +383,18 @@ function LiveStats() {
   ].filter((x) => x.n > 0)
   if (!items.length) return null
   return (
-    <div className="live">
-      <p className="lp-label lp-label--plain">Di TesBareng sekarang</p>
-      <dl className="live-row">
-        {items.map((x) => (
-          <div key={x.l}><dt>{x.l}</dt><dd>{nf.format(x.n)}</dd></div>
-        ))}
-      </dl>
-    </div>
+    <section className="lp-sec" id="bukti" aria-labelledby="bukti-h">
+      <div className="lp-wrap">
+        <p className="lp-label">Data langsung</p>
+        <h2 id="bukti-h">Yang sudah tercatat di TesBareng.</h2>
+        <dl className="live-row">
+          {items.map((x) => (
+            <div key={x.l}><dt>{x.l}</dt><dd>{nf.format(x.n)}</dd></div>
+          ))}
+        </dl>
+        <p className="live-note">Dihitung langsung dari data TesBareng saat halaman ini dibuka.</p>
+      </div>
+    </section>
   )
 }
 
@@ -439,15 +499,20 @@ const FAQ = [
 export function Landing() {
   usePageMeta(TITLE, DESCRIPTION)
   const root = useRef<HTMLDivElement>(null)
-  useReveal(root)
+  const reduced = useReducedMotion()
+  useReveal(root, reduced)
   const { user, signIn } = useAuth()
   const [signInError, setSignInError] = useState(false)
   const startSignIn = () => { setSignInError(false); signIn().catch(() => setSignInError(true)) }
+
+  // The static hero in index.html covers first paint; this copy is identical, so drop that one now (before paint).
+  useLayoutEffect(() => { document.getElementById('boot')?.remove() }, [])
 
   return (
     <div className="lp surface-story" ref={root}>
       <a className="lp-skip" href="#isi">Langsung ke isi</a>
 
+      {/* Header and hero: keep in step with the static copy in web/index.html (same classes and text). */}
       <header className="lp-top">
         <div className="lp-wrap lp-top-row">
           <Link to="/" className="lp-brand" aria-label="TesBareng, beranda"><span className="lp-brand-box" aria-hidden="true" />TesBareng</Link>
@@ -457,9 +522,9 @@ export function Landing() {
             <Link className="hide-s" to="/about">Aturan main</Link>
             <Link to="/apps">Daftar app</Link>
             {user ? (
-              <Link className="lp-btn lp-btn--sm" to="/me">Tugas saya</Link>
+              <Link className="lp-navbtn" to="/me">Tugas saya</Link>
             ) : (
-              <button type="button" className="lp-btn lp-btn--sm" onClick={startSignIn}>Masuk</button>
+              <button type="button" className="lp-navbtn" onClick={startSignIn}>Masuk</button>
             )}
           </nav>
         </div>
@@ -475,18 +540,34 @@ export function Landing() {
           <div className="hero-grid">
             <div className="hero-copy">
               <p className="lp-lede">
-                Itu syarat closed test Google Play untuk akun developer pribadi baru. Di TesBareng, creator saling ngetes:
+                Itu syarat closed test Google Play untuk akun developer pribadi baru. Di TesBareng, creator Android saling ngetes lewat cohort:
                 kamu tes app mereka, mereka tes app kamu, dan semua orang bisa melihat siapa sudah ngetes siapa.
               </p>
               <div className="cta-row">
-                <a className="lp-btn lp-btn--primary" href="#gabung">Cara gabung</a>
+                <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
+                  <svg className="wa-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.122 1.524 5.855L0 24l6.335-1.505A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.804 9.804 0 01-5.032-1.385l-.36-.214-3.762.894.953-3.667-.235-.376A9.798 9.798 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+                  Grup WhatsApp<span className="sr-only"> (tab baru)</span>
+                </a>
+                <a className="lp-btn lp-btn--primary" href="#gabung">Gabung komunitas</a>
                 <Link className="lp-btn" to="/apps">Lihat daftar app</Link>
               </div>
             </div>
+            <HeroRing />
+          </div>
+        </section>
 
-            <section className="sheet" aria-labelledby="syarat-h">
+        <section className="lp-sec" id="syarat" aria-labelledby="syarat-h">
+          <div className="lp-wrap problem">
+            <div className="problem-copy">
+              <div><p className="lp-label"><b>01</b>Syarat Google Play</p><h2 id="syarat-h">Sebelum rilis, app-mu harus lolos closed test.</h2></div>
+              <p className="lp-lede">
+                Akun developer pribadi yang baru wajib menjalankan closed test dulu sebelum boleh mengajukan akses production.
+                Bagian tersulitnya bukan app-nya, tapi mencari 12 orang yang mau bertahan 14 hari tanpa putus.
+              </p>
+            </div>
+            <div className="sheet rv" role="group" aria-labelledby="sheet-h">
               <div className="sheet-head">
-                <h2 id="syarat-h">Syarat closed test Google Play</h2>
+                <h3 id="sheet-h">Syarat closed test Google Play</h3>
               </div>
               <div className="sheet-body">
                 <div className="meter">
@@ -507,16 +588,16 @@ export function Landing() {
                 <span className="chip c-pandan">✓ Siap ajukan production</span>
                 <p>Tester yang keluar sebelum 14 hari mulai lagi dari nol.</p>
               </div>
-            </section>
+            </div>
           </div>
         </section>
 
-        <Ring />
+        <Ring reduced={reduced} />
 
         <section className="lp-sec" id="cara-kerja" aria-labelledby="cara-h">
           <div className="lp-wrap">
             <div className="sec-head">
-              <div><p className="lp-label"><b>02</b>Cara kerja</p><h2 id="cara-h">Satu cohort, empat titik cek.</h2></div>
+              <div><p className="lp-label"><b>03</b>Cara kerja</p><h2 id="cara-h">Satu cohort, empat titik cek.</h2></div>
               <p className="lp-lede">Tidak ada absen harian. Cukup centang di empat titik ini. Kalau ada yang terlewat, satu email ringkasan datang jam 19.00 WIB.</p>
             </div>
             <div className="rail rv" aria-hidden="true">
@@ -545,7 +626,7 @@ export function Landing() {
         <section className="lp-sec" id="transparansi" aria-labelledby="lembar-h">
           <div className="lp-wrap">
             <div className="sec-head">
-              <div><p className="lp-label"><b>03</b>Transparansi</p><h2 id="lembar-h">Semua lihat lembar yang sama.</h2></div>
+              <div><p className="lp-label"><b>04</b>Transparansi</p><h2 id="lembar-h">Semua lihat lembar yang sama.</h2></div>
               <p className="lp-lede">Siapa sudah ngetes siapa terlihat di matriks cohort. Tidak perlu menagih satu per satu di grup.</p>
             </div>
             <MatrixDemo />
@@ -555,7 +636,7 @@ export function Landing() {
         <section className="lp-sec" id="badge" aria-labelledby="badge-h">
           <div className="lp-wrap">
             <div className="sec-head">
-              <div><p className="lp-label"><b>04</b>Tester murni</p><h2 id="badge-h">Belum punya app? Ikut ngetes saja.</h2></div>
+              <div><p className="lp-label"><b>05</b>Tester murni</p><h2 id="badge-h">Belum punya app? Ikut ngetes saja.</h2></div>
               <p className="lp-lede">Gabung cohort sampai hari ke-7. Setiap app yang kamu temani sampai 14 hari dihitung untuk badge di profilmu.</p>
             </div>
             <ul className="tiers rv">
@@ -571,46 +652,64 @@ export function Landing() {
           </div>
         </section>
 
-        <section className="lp-sec join" id="gabung" aria-labelledby="gabung-h">
+        <Proof />
+
+        <section className="lp-sec" id="gabung" aria-labelledby="gabung-h">
           <div className="lp-wrap">
-            <p className="lp-label"><b>05</b>Gabung</p>
-            <h2 id="gabung-h">Mulai dari tiga langkah.</h2>
-            <LiveStats />
+            <div className="sec-head">
+              <div><p className="lp-label"><b>06</b>Gabung</p><h2 id="gabung-h">Dua langkah untuk mulai.</h2></div>
+              <p className="lp-lede">Melihat-lihat tidak perlu daftar. Ikut cohort perlu dua hal: Google Group untuk Play Console, dan akun Google untuk TesBareng.</p>
+            </div>
             <ol className="steps rv">
               <li>
                 <span className="n" aria-hidden="true">1</span>
                 <h3>Gabung Google Group</h3>
-                <p>Masuk ke <code className="email">{COMMUNITY_GROUP}</code> dengan akun Google di HP-mu. Creator memasang grup ini sebagai daftar tester di Play Console.</p>
-                <CopyEmail />
+                <p>Masuk ke <code className="email">{COMMUNITY_GROUP}</code> dengan akun Google yang ada di HP-mu. Creator memasang grup ini sebagai daftar tester di Play Console, jadi cukup sekali untuk semua app.</p>
+                <div className="step-actions">
+                  <a className="lp-btn lp-btn--primary" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">
+                    Gabung komunitas<span className="sr-only"> (Google Group, tab baru)</span><span aria-hidden="true"> ↗</span>
+                  </a>
+                  <CopyEmail />
+                </div>
               </li>
               <li>
                 <span className="n" aria-hidden="true">2</span>
                 <h3>Masuk dengan Google</h3>
-                <p>Daftarkan app-mu, atau langsung pilih app yang ingin kamu bantu tes. Melihat-lihat tidak perlu masuk.</p>
-              </li>
-              <li>
-                <span className="n" aria-hidden="true">3</span>
-                <h3>Ikut cohort berikutnya</h3>
-                <p>Sebagai creator dengan satu app, atau sebagai tester murni. Kewajibannya: opt-in dalam 48 jam, centang di setiap titik cek, kirim feedback di Play.</p>
+                <p>Daftarkan app-mu atau pilih app yang mau kamu bantu tes, lalu ikut cohort berikutnya sebagai creator atau tester murni.</p>
+                {user ? (
+                  <Link className="lp-btn" to="/me">Buka Tugas saya</Link>
+                ) : (
+                  <button type="button" className="lp-btn" onClick={startSignIn}>Masuk dengan Google</button>
+                )}
               </li>
             </ol>
-            <div className="cta-row">
-              <a className="lp-btn lp-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">
-                Gabung komunitas<span className="sr-only"> (Google Group, tab baru)</span><span aria-hidden="true"> ↗</span>
-              </a>
-              {user ? (
-                <Link className="lp-btn" to="/apps">Lihat daftar app</Link>
-              ) : (
-                <button type="button" className="lp-btn" onClick={startSignIn}>Masuk dengan Google</button>
-              )}
+            <div className="duty rv">
+              <h3>Yang kamu janjikan saat ikut cohort</h3>
+              <ul>
+                <li><b>Opt-in dalam 48 jam</b><span>Ke semua app yang ditugaskan padamu, dihitung dari Hari 0.</span></li>
+                <li><b>Centang di titik cek</b><span>Sudah buka app di hari 7, Masih opt-in di hari 13, dan Sudah update setiap ada build baru.</span></li>
+                <li><b>Kirim feedback di Google Play</b><span>Dengan kata-katamu sendiri, lalu tekan Tandai sudah kirim di TesBareng.</span></li>
+                <li><b>Tetap opt-in 14 hari</b><span>Keluar lebih awal berarti hitungan app itu mulai lagi dari nol.</span></li>
+              </ul>
             </div>
-            <p className="join-note">Email selalu tampil disamarkan. Nomor HP tidak pernah diminta.</p>
+            <div className="wa-join rv">
+              <a className="lp-btn lp-btn--wa lp-btn--wa-block" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
+                <svg className="wa-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.122 1.524 5.855L0 24l6.335-1.505A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.804 9.804 0 01-5.032-1.385l-.36-.214-3.762.894.953-3.667-.235-.376A9.798 9.798 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+                Gabung Grup WhatsApp Komunitas<span className="sr-only"> (tab baru)</span><span aria-hidden="true"> ↗</span>
+              </a>
+              <p className="wa-note">Tempat diskusi utama komunitas. Opsional, dan nomor HP hanya terlihat sesama anggota grup.</p>
+            </div>
+            <div className="join-notes">
+              <p>Email selalu tampil disamarkan, misalnya bu*****@gmail.com. Nomor HP tidak pernah diminta di TesBareng.</p>
+              <p>Grup WhatsApp per cohort opsional, dan hanya untuk koordinasi.</p>
+              <p>Cuma mau lihat-lihat dulu? <Link to="/apps">Lihat daftar app</Link></p>
+            </div>
           </div>
         </section>
 
         <section className="lp-sec" id="faq" aria-labelledby="faq-h">
           <div className="lp-wrap">
-            <p className="lp-label"><b>06</b>FAQ</p>
+            <p className="lp-label"><b>07</b>FAQ</p>
             <h2 id="faq-h">Pertanyaan yang sering muncul.</h2>
             <div className="faq rv">
               {FAQ.map((x, i) => (
@@ -633,6 +732,7 @@ export function Landing() {
             <Link to="/about">Aturan main</Link>
             <Link to="/apps">Daftar app</Link>
             <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Google Group<span className="sr-only"> (tab baru)</span></a>
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">WhatsApp<span className="sr-only"> (tab baru)</span></a>
           </nav>
         </div>
       </footer>

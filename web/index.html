@@ -4,13 +4,154 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="TesBareng: lihat aplikasi komunitas yang sedang uji tertutup Google Play, daftar jadi tester, dan pantau 12 tester × 14 hari bersama." />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,900&family=Plus+Jakarta+Sans:wght@500..800&display=swap" rel="stylesheet" />
-    <title>TesBareng</title>
+    <title>TesBareng: 12 tester, 14 hari, dikerjakan bareng</title>
+    <meta name="description" content="Komunitas creator Android Indonesia yang saling ngetes app: 12 tester opt-in selama 14 hari untuk closed test Google Play, dibagi rata lewat cohort." />
+
+    <!-- Open Graph (ADR-010 §8). The SPA serves this one file for every route, so link previews always show the landing card.
+         og:image and og:url must become absolute (https://<domain>/og/landing.png) once the hosting domain is decided (ADR-003). -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TesBareng" />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:title" content="TesBareng: 12 tester, 14 hari, dikerjakan bareng" />
+    <meta property="og:description" content="Komunitas creator Android Indonesia yang saling ngetes app untuk closed test Google Play. Tugas dibagi rata lewat cohort, semua bisa melihat siapa sudah ngetes siapa." />
+    <meta property="og:image" content="/og/landing.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="TesBareng. 12 tester, 14 hari, bareng. Komunitas creator Android Indonesia untuk closed test Google Play." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TesBareng: 12 tester, 14 hari, dikerjakan bareng" />
+    <meta name="twitter:description" content="Komunitas creator Android Indonesia yang saling ngetes app untuk closed test Google Play." />
+    <meta name="twitter:image" content="/og/landing.png" />
+
+    <!-- Fonts: self-hosted latin subsets, 2 files (ADR-001 performance budget). The display face is the hero's LCP text. -->
+    <link rel="preload" href="/fonts/archivo-expanded-black-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/plus-jakarta-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face { font-family: "Archivo"; font-style: normal; font-weight: 900; font-stretch: 125%; font-display: swap; src: url(/fonts/archivo-expanded-black-latin.woff2) format("woff2"); }
+      @font-face { font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 500 800; font-display: swap; src: url(/fonts/plus-jakarta-sans-latin.woff2) format("woff2"); }
+      /* Metric-matched fallbacks (measured against the real faces), so the swap barely moves text. */
+      @font-face { font-family: "Archivo Fallback"; font-weight: 900; src: local("Arial Black"), local("Arial-Black"); size-adjust: 116.1%; ascent-override: 75.8%; descent-override: 18.1%; line-gap-override: 0%; }
+      @font-face { font-family: "Plus Jakarta Sans Fallback"; font-weight: 500; src: local("Arial"), local("ArialMT"), local("Roboto"); size-adjust: 105%; ascent-override: 99%; descent-override: 21%; line-gap-override: 0%; }
+      @font-face { font-family: "Plus Jakarta Sans Fallback"; font-weight: 700 800; src: local("Arial Bold"), local("Arial-BoldMT"), local("Roboto Bold"), local("Roboto-Bold"); size-adjust: 99.8%; ascent-override: 104.2%; descent-override: 22%; line-gap-override: 0%; }
+
+      /* Story surface critical CSS: header and hero of the landing. It lives here, not in landing.css, so the static
+         hero below paints before (and without) JS, and React's hero uses the very same rules: no shift on swap (ADR-010 §6).
+         Everything else for the landing is in src/pages/landing.css. Tokens come from tokens.css (main stylesheet). */
+      .lp, .ab {
+        /* Fallback names added for the story surface only; tokens.css keeps the approved stacks. */
+        --font-text: "Plus Jakarta Sans", "Plus Jakarta Sans Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        --font-display: "Archivo", "Archivo Fallback", "Arial Black", "Helvetica Neue", Arial, sans-serif;
+      }
+      .lp {
+        --wrap: 1240px; --gutter: clamp(16px, 4vw, 40px); --sec: clamp(64px, 8vw, 96px);
+        --rule: var(--bw) solid var(--ink); --rule-in: 2px solid var(--ink);
+        --t-display: clamp(56px, 10vw, 128px); --t-h1: clamp(32px, 4vw, 48px); --t-h2: clamp(24px, 2.4vw, 32px);
+        --t-figure: clamp(32px, 3.4vw, 48px); --t-body: 19px; --t-small: 16px; --t-caption: 14px; --t-button: 18px;
+        background: var(--kertas); color: var(--ink); font-family: var(--font-text); font-size: var(--t-body);
+        font-weight: 500; line-height: 1.5; overflow-x: clip;
+      }
+      @media (max-width: 639px) { .lp { --t-body: 18px; } }
+      .lp *, .lp *::before, .lp *::after { box-sizing: border-box; }
+      .lp a { color: inherit; }
+      .lp-wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--gutter); }
+      .lp h1, .lp h2, .lp h3 { margin: 0; color: var(--ink); }
+      .lp p { margin: 0; }
+      .lp-lede { font-size: var(--t-body); max-width: 38em; }
+      .lp-skip { position: absolute; left: 16px; top: -80px; z-index: 20; padding: 12px 16px; background: var(--kunyit); color: var(--ink); font-weight: 700; border: 2px solid var(--ink); text-decoration: none; }
+      .lp-skip:focus { top: 16px; }
+      .lp-label { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; font-size: var(--t-caption); font-weight: 700; line-height: 1.3; letter-spacing: 0.04em; text-transform: uppercase; }
+      .lp-label b { padding: 4px 8px; background: var(--ink); color: var(--kertas); font-weight: 800; }
+      .lp-label--plain { margin: 0; }
+      .lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 14px 24px; font: 700 var(--t-button)/1 var(--font-text); color: var(--ink); text-decoration: none; white-space: nowrap; background: var(--putih); border: var(--rule); border-radius: var(--r-sm); box-shadow: var(--shadow); cursor: pointer; transition: transform var(--t-hover) var(--ease); }
+      .lp-btn--primary { background: var(--kunyit); }
+      .lp-btn--wa { background: #25D366; }
+      .lp-btn--sm { min-height: var(--target); padding: 10px 16px; font-size: var(--t-small); border-width: 2px; box-shadow: 3px 3px 0 0 var(--ink); }
+      .lp-btn.is-ok { background: var(--pandan); }
+      @media (hover: hover) and (pointer: fine) {
+        .lp-btn:hover { transform: translate(calc(var(--lift) * -1), calc(var(--lift) * -1)); box-shadow: var(--shadow-hover); }
+        .lp-btn--sm:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--ink); }
+      }
+      .lp-btn:active { transform: translate(var(--sh), var(--sh)); box-shadow: none; transition-duration: var(--t-press); }
+      .lp-btn--sm:active { transform: translate(3px, 3px); }
+      .lp-top { border-bottom: var(--rule); }
+      .lp-top-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 16px; }
+      .lp-brand { display: inline-flex; align-items: center; gap: 8px; min-height: var(--target); font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: 24px; line-height: 1; letter-spacing: -0.02em; text-decoration: none; }
+      .lp-brand-box { width: 24px; height: 24px; flex: none; background: var(--kunyit); border: var(--rule); }
+      .lp-nav { display: flex; align-items: center; gap: clamp(8px, 2.4vw, 32px); font-size: var(--t-small); font-weight: 700; }
+      .lp-nav > a, .lp-nav > .lp-navbtn { white-space: nowrap; display: inline-flex; align-items: center; min-height: var(--target); padding: 0; font: inherit; color: var(--ink); text-decoration: none; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }
+      /* Sign-in stays a quiet outlined nav item: no fill, no shadow, so it never competes with "Gabung komunitas". */
+      .lp-nav > .lp-navbtn { padding: 0 12px; border: 2px solid var(--ink); border-radius: var(--r-sm); }
+      @media (hover: hover) and (pointer: fine) { .lp-nav > a:not(.lp-navbtn):hover { border-bottom-color: var(--ink); } .lp-nav > .lp-navbtn:hover { background: var(--putih); } }
+      @media (max-width: 860px) { .lp-nav > a.hide-s { display: none; } }
+      @media (max-width: 380px) { .lp-brand { font-size: 20px; } }
+      .lp-alert { padding-block: 0 16px; font-size: var(--t-small); font-weight: 700; }
+      .lp .hero { padding-block: clamp(40px, 6vw, 80px) var(--sec); }
+      .lp .hero h1 { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-display); line-height: 0.92; letter-spacing: -0.02em; }
+      .lp .hero h1 span { display: block; }
+      .lp .hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 64px); align-items: start; margin-top: clamp(32px, 4vw, 48px); }
+      .lp .hero-copy { display: grid; gap: 32px; }
+      .lp .cta-row { display: flex; flex-wrap: wrap; gap: 16px 24px; }
+      /* The ring's first frame: every member in place, nothing assigned yet. The scrubbed ring further down draws the rest. */
+      .lp .hero-ring { margin: 0; justify-self: end; width: 100%; max-width: 420px; }
+      .lp .hero-ring svg { display: block; width: 100%; height: auto; aspect-ratio: 1; overflow: visible; }
+      .lp .hero-ring .hb { fill: var(--putih); stroke: var(--ink); stroke-width: 3px; vector-effect: non-scaling-stroke; }
+      .lp .hero-ring .hs { fill: var(--ink); }
+      .lp .hero-ring figcaption { margin-top: 16px; font-size: var(--t-caption); font-weight: 700; line-height: 1.4; }
+      @media (max-width: 980px) {
+        .lp .hero-grid { grid-template-columns: minmax(0, 1fr); }
+        .lp .hero-ring { justify-self: start; max-width: 360px; }
+      }
+      @media (max-width: 639px) {
+        .lp .cta-row .lp-btn { flex: 1 1 100%; }
+        .lp .hero-ring { max-width: 280px; }
+      }
+    </style>
   </head>
   <body>
+    <!-- Static hero for first paint and for visitors without JS (ADR-010 pre-ship check). Keep its markup in step with
+         the header and Hero in src/pages/Landing.tsx: same classes, so swapping in React's copy moves nothing.
+         Landing removes it on mount; the script below removes it at once on every other route. -->
+    <div id="boot" class="lp surface-story">
+      <header class="lp-top">
+        <div class="lp-wrap lp-top-row">
+          <a href="/" class="lp-brand" aria-label="TesBareng, beranda"><span class="lp-brand-box" aria-hidden="true"></span>TesBareng</a>
+          <nav class="lp-nav" aria-label="Utama">
+            <a class="hide-s" href="#cara-kerja">Cara kerja</a>
+            <a class="hide-s" href="#badge">Badge</a>
+            <a class="hide-s" href="/about">Aturan main</a>
+            <a href="/apps">Daftar app</a>
+            <a class="lp-navbtn" href="/apps">Masuk</a>
+          </nav>
+        </div>
+      </header>
+      <main>
+        <section class="lp-wrap hero" aria-labelledby="boot-hero-h">
+          <p class="lp-label"><b>00</b>Komunitas creator Android Indonesia</p>
+          <h1 id="boot-hero-h"><span>12 tester.</span><span>14 hari.</span><span>Bareng.</span></h1>
+          <div class="hero-grid">
+            <div class="hero-copy">
+              <p class="lp-lede">Itu syarat closed test Google Play untuk akun developer pribadi baru. Di TesBareng, creator Android saling ngetes lewat cohort: kamu tes app mereka, mereka tes app kamu, dan semua orang bisa melihat siapa sudah ngetes siapa.</p>
+              <div class="cta-row">
+                <a class="lp-btn lp-btn--wa" href="https://chat.whatsapp.com/DGV6U43cbG10QWGJVO3bcY?mode=gi_t" target="_blank" rel="noopener noreferrer">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" style="fill:currentColor;flex:none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.122 1.524 5.855L0 24l6.335-1.505A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.804 9.804 0 01-5.032-1.385l-.36-.214-3.762.894.953-3.667-.235-.376A9.798 9.798 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+                  Grup WhatsApp
+                </a>
+                <a class="lp-btn lp-btn--primary" href="https://groups.google.com/g/google-tester-indonesia">Gabung komunitas</a>
+                <a class="lp-btn" href="/apps">Lihat daftar app</a>
+              </div>
+            </div>
+            <figure class="hero-ring">
+              <svg viewBox="0 0 600 600" width="600" height="600" aria-hidden="true" focusable="false"><g transform="translate(300.0 48.0)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(402.5 69.8)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(487.3 131.4)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(539.7 222.1)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(550.6 326.3)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(518.2 426.0)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(448.1 503.9)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(352.4 546.5)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(247.6 546.5)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(151.9 503.9)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(81.8 426.0)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(49.4 326.3)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(60.3 222.1)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(112.7 131.4)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(197.5 69.8)"><rect class="hs" x="-13" y="-13" width="34" height="34"/><rect class="hb" x="-17" y="-17" width="34" height="34"/></g><g transform="translate(300.0 230.0)"><circle class="hs" cx="4" cy="4" r="18"/><circle class="hb" r="18"/></g><g transform="translate(360.6 335.0)"><circle class="hs" cx="4" cy="4" r="18"/><circle class="hb" r="18"/></g><g transform="translate(239.4 335.0)"><circle class="hs" cx="4" cy="4" r="18"/><circle class="hb" r="18"/></g></svg>
+              <figcaption>Satu cohort: 15 creator dengan app-nya dan 3 tester murni. Siapa ngetes siapa ditentukan saat cohort mulai.</figcaption>
+            </figure>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script>
+      if (location.pathname !== '/') document.getElementById('boot').remove()
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
