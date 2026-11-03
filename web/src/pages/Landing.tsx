@@ -1000,7 +1000,7 @@ export function Landing() {
           <div className="lp-wrap">
             <div className="sec-head">
               <div><p className="lp-hud"><b aria-hidden="true">04</b>Badge</p><h2 id="badge-h">Belum punya app? Ikut sebagai tester murni.</h2></div>
-              <p className="lp-lede dim">Gabung cohort sampai hari ke-7. Setiap app yang kamu temani sampai 14 hari menambah badge di profilmu.</p>
+              <p className="lp-lede dim">Gabung cohort sampai akhir hari ke-6. Setiap app yang kamu temani sampai 14 hari menambah badge di profilmu.</p>
             </div>
             <div className="badge-grid">
               <div className="badge-side">
