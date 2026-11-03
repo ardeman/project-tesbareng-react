@@ -1,0 +1,453 @@
+// Cohort flow (plan tasks A4–A6): start_cohort with the ring assignment, joining as a
+// pure tester, the obligation views and milestone check-ins.
+// Contract: docs/contract.md ("Cohort milestones", the two cohort views, the RPCs).
+import { randomUUID } from "node:crypto";
+import { beforeAll, describe, expect, it } from "vitest";
+import {
+  ago,
+  anon,
+  createApp,
+  createCohort,
+  DAY_MS,
+  expectCode,
+  forceActive,
+  forceClosed,
+  member,
+  must,
+  service,
+  uniq,
+  type Member,
+} from "./helpers";
+
+const HOUR_MS = 60 * 60 * 1000;
+let admin: Member;
+
+beforeAll(async () => {
+  admin = await member("yusuf", "Yusuf Hidayat", "admin");
+});
+
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+/** A Forming cohort with `nApps` creators (one app each) and `nPure` pure testers. */
+async function formingCohort(nApps: number, nPure = 0) {
+  const id = await createCohort(admin);
+  const creators = await Promise.all(range(nApps).map((i) => member(`kreator${i}`, `Kreator ${i}`)));
+  const apps = await Promise.all(creators.map((c) => createApp(c)));
+  const pures = await Promise.all(range(nPure).map((i) => member(`murni${i}`, `Tester Murni ${i}`)));
+  await Promise.all(
+    creators.map((c, i) => must(admin.db.rpc("add_cohort_member", { p_cohort_id: id, p_user_id: c.id, p_app_id: apps[i] }))),
+  );
+  await Promise.all(pures.map((p) => must(admin.db.rpc("add_cohort_member", { p_cohort_id: id, p_user_id: p.id, p_app_id: null }))));
+  return { id, creators, apps, pures };
+}
+
+type Assignment = { tester_user_id: string; app_id: string; assigned_at: string; state: string };
+const assignmentsOf = async (cohortId: string) =>
+  (await must(anon().from("assignments").select("tester_user_id, app_id, assigned_at, state").eq("cohort_id", cohortId))) as Assignment[];
+const countBy = (xs: string[]) => xs.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>());
+
+describe("start_cohort (FR-31–33)", () => {
+  it.each([13, 16])("N = %i apps: full mesh, every creator tests every other app", async (n) => {
+    const { id, creators, apps } = await formingCohort(n);
+    await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
+    const rows = await assignmentsOf(id);
+    expect(rows).toHaveLength(n * (n - 1));
+    for (const [i, c] of creators.entries()) {
+      const mine = rows.filter((r) => r.tester_user_id === c.id).map((r) => r.app_id);
+      expect(new Set(mine)).toEqual(new Set(apps.filter((_, j) => j !== i)));
+    }
+    for (const count of countBy(rows.map((r) => r.app_id)).values()) expect(count).toBe(n - 1);
+  });
+
+  it.each([17, 20])("N = %i apps: ring of 14, every member tests exactly 14 and every app gets exactly 14", async (n) => {
+    const { id, apps } = await formingCohort(n);
+    await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
+    const rows = await assignmentsOf(id);
+    expect(rows).toHaveLength(n * 14);
+    for (const count of countBy(rows.map((r) => r.tester_user_id)).values()) expect(count).toBe(14);
+    for (const count of countBy(rows.map((r) => r.app_id)).values()) expect(count).toBe(14);
+    expect(new Set(rows.map((r) => r.app_id))).toEqual(new Set(apps));
+
+    // Member at ring position i tests the apps at positions i+1 … i+14 (mod N), never their own.
+    const members = await must(anon().from("cohort_members").select("user_id, app_id, ring_position").eq("cohort_id", id));
+    const appAt = new Map(members.map((m) => [m.ring_position as number, m.app_id as string]));
+    expect(new Set(appAt.keys())).toEqual(new Set(range(n)));
+    for (const m of members) {
+      const expected = range(14).map((s) => appAt.get(((m.ring_position as number) + 1 + s) % n));
+      const mine = rows.filter((r) => r.tester_user_id === m.user_id).map((r) => r.app_id);
+      expect(new Set(mine)).toEqual(new Set(expected));
+      expect(mine).not.toContain(m.app_id);
+    }
+  });
+
+  it("sets Day 0, Active status and the same assigned time on every member and assignment", async () => {
+    const { id } = await formingCohort(13, 1);
+    await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
+    const c = await must(anon().from("cohorts").select("status, day0_at").eq("id", id).single());
+    expect(c.status).toBe("active");
+    const day0 = Date.parse(c.day0_at as string);
+    expect(Math.abs(Date.now() - day0)).toBeLessThan(60_000);
+    const members = await must(anon().from("cohort_members").select("assigned_at").eq("cohort_id", id));
+    for (const m of members) expect(Date.parse(m.assigned_at as string)).toBe(day0);
+    for (const a of await assignmentsOf(id)) {
+      expect(Date.parse(a.assigned_at)).toBe(day0);
+      expect(a.state).toBe("open");
+    }
+  });
+
+  it("gives pure testers 14 apps each, evening out coverage (FR-33)", async () => {
+    const { id, pures } = await formingCohort(17, 3);
+    await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
+    const rows = await assignmentsOf(id);
+    for (const p of pures) expect(rows.filter((r) => r.tester_user_id === p.id)).toHaveLength(14);
+    // 17 × 14 creator slots + 3 × 14 pure slots over 17 apps: every app gets 16 or 17.
+    const perApp = [...countBy(rows.map((r) => r.app_id)).values()];
+    expect(Math.max(...perApp) - Math.min(...perApp)).toBeLessThanOrEqual(1);
+    expect(perApp.reduce((s, x) => s + x, 0)).toBe(17 * 14 + 3 * 14);
+  });
+
+  it("gives a pure tester every app when there are fewer than 14", async () => {
+    const { id, pures } = await formingCohort(13, 1);
+    await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
+    expect((await assignmentsOf(id)).filter((r) => r.tester_user_id === pures[0].id)).toHaveLength(13);
+  });
+
+  it("needs at least 13 apps", async () => {
+    const { id } = await formingCohort(12, 2);
+    await expectCode(admin.db.rpc("start_cohort", { p_cohort_id: id }), "failed-precondition", /minimal 13/);
+    expect(await assignmentsOf(id)).toHaveLength(0);
+  });
+
+  it("refuses a cohort with a deleted app, a started cohort, non-admins and a missing cohort", async () => {
+    const { id, creators, apps } = await formingCohort(13);
+    await expectCode(creators[0].db.rpc("start_cohort", { p_cohort_id: id }), "permission-denied");
+    await expectCode(admin.db.rpc("start_cohort", { p_cohort_id: randomUUID() }), "not-found");
+    await must(creators[0].db.rpc("delete_app", { p_app_id: apps[0] }));
+    await expectCode(admin.db.rpc("start_cohort", { p_cohort_id: id }), "failed-precondition", /dihapus/);
+    await must(admin.db.rpc("restore_app", { p_app_id: apps[0] }));
+    await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
+    await expectCode(admin.db.rpc("start_cohort", { p_cohort_id: id }), "failed-precondition");
+  });
+});
+
+describe("join_cohort_as_tester (FR-33a/b)", () => {
+  it("joins a Forming cohort without assignments; they come at start", async () => {
+    const { id } = await formingCohort(13);
+    const p = await member("hana", "Hana Safitri");
+    await must(p.db.rpc("join_cohort_as_tester", { p_cohort_id: id }));
+    const row = await must(anon().from("cohort_members").select("app_id, assigned_at").eq("cohort_id", id).eq("user_id", p.id).single());
+    expect(row).toEqual({ app_id: null, assigned_at: null });
+    expect((await assignmentsOf(id)).filter((r) => r.tester_user_id === p.id)).toHaveLength(0);
+    await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
+    expect((await assignmentsOf(id)).filter((r) => r.tester_user_id === p.id)).toHaveLength(13);
+  });
+
+  it("joining an Active cohort assigns the least-covered apps now, with the member's own clock", async () => {
+    const { id } = await formingCohort(17);
+    await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
+    await must(service.from("cohorts").update({ day0_at: ago(3 * DAY_MS) }).eq("id", id));
+    const first = await member("made", "Made Suardana");
+    const second = await member("tri", "Tri Wahyuni");
+    await must(first.db.rpc("join_cohort_as_tester", { p_cohort_id: id }));
+    await must(second.db.rpc("join_cohort_as_tester", { p_cohort_id: id }));
+    const rows = await assignmentsOf(id);
+    const a = rows.filter((r) => r.tester_user_id === first.id);
+    const b = rows.filter((r) => r.tester_user_id === second.id);
+    expect(a).toHaveLength(14);
+    expect(b).toHaveLength(14);
+    // The second joiner fills the 3 apps the first one skipped before doubling up.
+    const skipped = new Set(rows.map((r) => r.app_id).filter((x) => !a.some((r) => r.app_id === x)));
+    expect(skipped.size).toBe(3);
+    for (const x of skipped) expect(b.map((r) => r.app_id)).toContain(x);
+    for (const r of a) expect(Date.now() - Date.parse(r.assigned_at)).toBeLessThan(60_000);
+    const m = await must(anon().from("cohort_members").select("assigned_at").eq("cohort_id", id).eq("user_id", first.id).single());
+    expect(Date.now() - Date.parse(m.assigned_at as string)).toBeLessThan(60_000);
+  });
+
+  it("closes after Day 7 and once the cohort is closed", async () => {
+    const id = await createCohort(admin);
+    await forceActive(id, 6.9);
+    const p = await member("fitri", "Fitri Handayani");
+    await must(p.db.rpc("join_cohort_as_tester", { p_cohort_id: id }));
+    const late = await createCohort(admin);
+    await forceActive(late, 7.05);
+    await expectCode(p.db.rpc("join_cohort_as_tester", { p_cohort_id: late }), "failed-precondition", /hari ke-7/);
+    const closed = await createCohort(admin);
+    await forceClosed(closed);
+    await expectCode(p.db.rpc("join_cohort_as_tester", { p_cohort_id: closed }), "failed-precondition");
+  });
+
+  it("refuses members already in, Owing members, visitors and missing cohorts", async () => {
+    const { id, creators } = await formingCohort(13);
+    await expectCode(creators[0].db.rpc("join_cohort_as_tester", { p_cohort_id: id }), "already-exists");
+    const p = await member("novita", "Novita Sembiring");
+    const old = await createCohort(admin);
+    await must(p.db.rpc("join_cohort_as_tester", { p_cohort_id: old }));
+    await forceClosed(old);
+    await must(service.from("cohort_members").update({ standing: "owing" }).eq("cohort_id", old).eq("user_id", p.id));
+    await expectCode(p.db.rpc("join_cohort_as_tester", { p_cohort_id: id }), "failed-precondition", /Owing/);
+    await expectCode(anon().rpc("join_cohort_as_tester", { p_cohort_id: id }), "unauthenticated");
+    await expectCode(p.db.rpc("join_cohort_as_tester", { p_cohort_id: randomUUID() }), "not-found");
+  });
+});
+
+// ---------------------------------------------------------------- the views
+
+describe("cohort_assignment_status and cohort_obligations", () => {
+  let creator: Member;
+  let tester: Member;
+  let appId: string;
+
+  beforeAll(async () => {
+    [creator, tester] = await Promise.all([member("rizky", "Rizky Ramadhan"), member("ayu", "Ayu Lestari")]);
+    appId = await createApp(creator);
+  });
+
+  /**
+   * An Active cohort holding one assignment of `tester` on a fresh app of `creator`,
+   * assigned `days` ago. Assignments are inserted directly so the clock can be set.
+   */
+  async function slot(days: number, opts: { app?: string } = {}) {
+    const app = opts.app ?? (await createApp(creator));
+    const id = await createCohort(admin);
+    await must(service.from("cohort_members").insert([
+      { cohort_id: id, user_id: creator.id, app_id: app },
+      { cohort_id: id, user_id: tester.id },
+    ]));
+    await forceActive(id, days);
+    const assignedAt = ago(days * DAY_MS);
+    const assignment = (
+      await must(
+        service.from("assignments").insert({ cohort_id: id, tester_user_id: tester.id, app_id: app, assigned_at: assignedAt }).select("id").single(),
+      )
+    ).id as string;
+    return { id, app, assignment };
+  }
+
+  async function entry(app: string, over: Record<string, unknown> = {}) {
+    const row = {
+      app_id: app,
+      user_id: tester.id,
+      display_name: tester.name,
+      masked_email: "ay*****@gmail.com",
+      opted_in_at: ago(1 * DAY_MS),
+      added_by: "self",
+      ...over,
+    };
+    return (await must(service.from("testers").insert(row).select("id").single())).id as string;
+  }
+
+  const status = async (assignment: string) =>
+    must(anon().from("cohort_assignment_status").select("*").eq("assignment_id", assignment).single()) as Promise<Record<string, unknown>>;
+  const obligations = async (cohortId: string, userId = tester.id) =>
+    must(anon().from("cohort_obligations").select("*").eq("cohort_id", cohortId).eq("user_id", userId).single()) as Promise<
+      Record<string, unknown>
+    >;
+
+  it("not joined inside the 48 h window: nothing owed yet", async () => {
+    const { id, assignment } = await slot(1);
+    expect(await status(assignment)).toMatchObject({ cell: "not_joined", fulfilled: false, behind_on: [], is_behind: false, tester_id: null });
+    expect(await obligations(id)).toMatchObject({ assigned_count: 1, opted_in_count: 0, is_behind: false, owes_opt_in: false, all_fulfilled: false });
+  });
+
+  it("not joined after 48 h: Behind on opt-in, which drives the Belum tes label", async () => {
+    const { id, assignment } = await slot(2.1);
+    expect(await status(assignment)).toMatchObject({ cell: "not_joined", behind_on: ["opt_in"], is_behind: true });
+    expect(await obligations(id)).toMatchObject({ is_behind: true, owes_opt_in: true });
+  });
+
+  it("opted in on Day 3: fulfilled, nothing else due yet", async () => {
+    const { id, app, assignment } = await slot(3);
+    await entry(app);
+    expect(await status(assignment)).toMatchObject({ cell: "opted_in", fulfilled: true, tester_status: "active", behind_on: [] });
+    expect(await obligations(id)).toMatchObject({ opted_in_count: 1, all_fulfilled: true, is_behind: false });
+  });
+
+  it("an entry from before the cohort counts as fulfilled", async () => {
+    const { assignment, app } = await slot(3);
+    await entry(app, { opted_in_at: ago(30 * DAY_MS) });
+    expect(await status(assignment)).toMatchObject({ fulfilled: true, behind_on: [] });
+  });
+
+  it("Day 7 without the used-app check-in or feedback: Behind on both", async () => {
+    const { assignment, app } = await slot(7.1);
+    await entry(app, { opted_in_at: ago(6 * DAY_MS) });
+    expect(await status(assignment)).toMatchObject({ cell: "opted_in", behind_on: ["used_app", "feedback"], is_behind: true });
+  });
+
+  it("checked in and sent feedback: the cell moves forward and nothing is owed", async () => {
+    const { id, assignment, app } = await slot(8);
+    const t = await entry(app, { opted_in_at: ago(7 * DAY_MS), feedback_sent: true, feedback_sent_at: ago(1 * DAY_MS) });
+    await must(service.from("check_ins").insert({ tester_id: t, kind: "used_app", created_at: ago(2 * DAY_MS) }));
+    expect(await status(assignment)).toMatchObject({ cell: "feedback_sent", behind_on: [] });
+    await must(service.from("testers").update({ feedback_verified: true }).eq("id", t));
+    expect(await status(assignment)).toMatchObject({ cell: "feedback_verified", feedback_verified: true });
+    expect(await obligations(id)).toMatchObject({ used_app_count: 1, feedback_sent_count: 1, feedback_verified_count: 1 });
+  });
+
+  it("used the app but no feedback: 'used' cell, Behind on feedback only", async () => {
+    const { assignment, app } = await slot(8);
+    const t = await entry(app, { opted_in_at: ago(7 * DAY_MS) });
+    await must(service.from("check_ins").insert({ tester_id: t, kind: "used_app" }));
+    expect(await status(assignment)).toMatchObject({ cell: "used", behind_on: ["feedback"] });
+  });
+
+  it("Day 13 without 'Masih opt-in': Behind on it", async () => {
+    const { assignment, app } = await slot(13.1);
+    const t = await entry(app, { opted_in_at: ago(12 * DAY_MS), feedback_sent: true, feedback_sent_at: ago(5 * DAY_MS) });
+    await must(service.from("check_ins").insert({ tester_id: t, kind: "used_app" }));
+    expect(await status(assignment)).toMatchObject({ behind_on: ["still_opted_in"] });
+    await must(service.from("check_ins").insert({ tester_id: t, kind: "still_opted_in" }));
+    expect(await status(assignment)).toMatchObject({ behind_on: [], still_opted_in_at: expect.any(String) });
+  });
+
+  it("a build logged after Day 0 is due 72 h later; 'Sudah update' clears it; newer builds are not due yet", async () => {
+    const { id, assignment, app } = await slot(5);
+    const t = await entry(app, { opted_in_at: ago(5 * DAY_MS) });
+    const build = { app_id: app, version_name: "1.1.0", uploaded_at: ago(4 * DAY_MS), changelog: "Perbaiki sinkronisasi" };
+    const old = (await must(service.from("builds").insert({ ...build, created_at: ago(4 * DAY_MS) }).select("id").single())).id;
+    await must(service.from("builds").insert({ ...build, version_name: "1.1.1", created_at: ago(1 * DAY_MS) }));
+    // A build from before Day 0 is never due.
+    await must(service.from("builds").insert({ ...build, version_name: "1.0.0", created_at: ago(9 * DAY_MS) }));
+    expect(await status(assignment)).toMatchObject({ builds_due_count: 1, builds_updated_count: 0, behind_on: ["updated_build"] });
+    await must(service.from("check_ins").insert({ tester_id: t, kind: "updated_build", build_id: old }));
+    expect(await status(assignment)).toMatchObject({ builds_due_count: 1, builds_updated_count: 1, behind_on: [] });
+    expect(await obligations(id)).toMatchObject({ builds_due_count: 1, builds_updated_count: 1 });
+  });
+
+  it("Left before 14 days or Removed: 'left' cell and not fulfilled; Left after 14 days stays fulfilled", async () => {
+    const early = await slot(3);
+    await entry(early.app, { opted_in_at: ago(3 * DAY_MS), status: "left", left_at: ago(1 * DAY_MS) });
+    expect(await status(early.assignment)).toMatchObject({ cell: "left", fulfilled: false, behind_on: ["opt_in"] });
+
+    const removed = await slot(3);
+    await entry(removed.app, { opted_in_at: ago(3 * DAY_MS), status: "removed" });
+    expect(await status(removed.assignment)).toMatchObject({ cell: "left", fulfilled: false });
+
+    const done = await slot(3);
+    await entry(done.app, { opted_in_at: ago(20 * DAY_MS), status: "left", left_at: ago(2 * DAY_MS) });
+    expect(await status(done.assignment)).toMatchObject({ fulfilled: true, tester_status: "left" });
+  });
+
+  it("a reassigned slot owes nothing and drops out of the member's totals", async () => {
+    const { id, assignment, app } = await slot(4);
+    const other = await member("bagus", "Bagus Wicaksono");
+    await must(service.from("cohort_members").insert({ cohort_id: id, user_id: other.id }));
+    const moved = (await must(
+      service.from("assignments").insert({ cohort_id: id, tester_user_id: other.id, app_id: app, assigned_at: ago(1 * DAY_MS) }).select("id").single(),
+    )).id;
+    await must(service.from("assignments").update({ state: "reassigned", reassigned_to: moved }).eq("id", assignment));
+    expect(await status(assignment)).toMatchObject({ cell: "reassigned", behind_on: [], is_behind: false });
+    expect(await obligations(id)).toMatchObject({ assigned_count: 0, is_behind: false, owes_opt_in: false, all_fulfilled: true });
+    // The new holder has their own 48 h window.
+    expect(await status(moved)).toMatchObject({ cell: "not_joined", behind_on: [] });
+  });
+
+  it("a closed cohort is judged at its close: later milestones and later check-ins never count", async () => {
+    const { id, assignment, app } = await slot(10);
+    const t = await entry(app, { opted_in_at: ago(9 * DAY_MS) });
+    // Closed on Day 6, before the Day 7 milestones fell due.
+    await must(service.from("cohorts").update({ status: "closed", closed_at: ago(4 * DAY_MS) }).eq("id", id));
+    expect(await status(assignment)).toMatchObject({ behind_on: [] });
+    // A check-in after the close is ignored.
+    await must(service.from("check_ins").insert({ tester_id: t, kind: "used_app", created_at: ago(1 * DAY_MS) }));
+    expect(await status(assignment)).toMatchObject({ used_app_at: null, cell: "opted_in" });
+  });
+
+  it("a member with no assignments yet owes nothing", async () => {
+    const id = await createCohort(admin);
+    await must(service.from("cohort_members").insert({ cohort_id: id, user_id: tester.id }));
+    expect(await obligations(id)).toMatchObject({ assigned_count: 0, all_fulfilled: true, is_behind: false, owes_opt_in: false, app_id: null });
+  });
+
+  it("everyone can read both views; nobody can write them", async () => {
+    const { id, assignment } = await slot(1, { app: appId });
+    for (const db of [anon(), tester.db, creator.db, admin.db]) {
+      expect(await must(db.from("cohort_assignment_status").select("assignment_id").eq("assignment_id", assignment))).toHaveLength(1);
+      expect(await must(db.from("cohort_obligations").select("user_id").eq("cohort_id", id))).toHaveLength(2);
+      expect((await db.from("cohort_obligations").update({ is_behind: false }).eq("cohort_id", id)).error).not.toBeNull();
+      expect((await db.from("cohort_assignment_status").update({ cell: "feedback_verified" }).eq("assignment_id", assignment)).error).not.toBeNull();
+    }
+  });
+});
+
+// ---------------------------------------------------------------- check_in
+
+describe("check_in (FR-39–41)", () => {
+  let creator: Member;
+
+  beforeAll(async () => {
+    creator = await member("dewi", "Dewi Anggraini");
+  });
+
+  /** A member who joined a fresh app `days` ago through the normal flow. */
+  async function tester(days: number) {
+    const m = await member(`tester${uniq()}`, "Sari Dewi");
+    const app = await createApp(creator);
+    await must(m.db.rpc("join_as_tester", { p_app_id: app, p_checklist: { joinedGroup: true, optedIn: true, installed: true } }));
+    await must(service.from("testers").update({ opted_in_at: ago(days * DAY_MS) }).eq("app_id", app).eq("user_id", m.id));
+    return { m, app };
+  }
+  const checkIn = (m: Member, app: string, kind: string, build: string | null = null) =>
+    m.db.rpc("check_in", { p_app_id: app, p_kind: kind, p_build_id: build });
+  const addBuild = async (app: string, version = "1.0.1") =>
+    (await must(creator.db.rpc("add_build", { p_app_id: app, p_version_name: version, p_uploaded_at: ago(HOUR_MS), p_changelog: "Perbaikan" }))) as string;
+
+  it("outside a cohort, windows count from the tester's own opt-in (FR-40)", async () => {
+    const young = await tester(4.9);
+    await expectCode(checkIn(young.m, young.app, "used_app"), "failed-precondition", /hari ke-5/);
+    const { m, app } = await tester(5.1);
+    const id = await must(checkIn(m, app, "used_app"));
+    expect(id).toEqual(expect.any(String));
+    await expectCode(checkIn(m, app, "still_opted_in"), "failed-precondition", /hari ke-12/);
+    await expectCode(checkIn(m, app, "used_app"), "already-exists");
+    const old = await tester(12.1);
+    await must(checkIn(old.m, old.app, "still_opted_in"));
+    const rows = await must(anon().from("check_ins").select("kind, build_id"));
+    expect(rows).toEqual(expect.arrayContaining([{ kind: "used_app", build_id: null }]));
+  });
+
+  it("'Sudah update' needs a build of this app, once per build", async () => {
+    const { m, app } = await tester(1);
+    const b1 = await addBuild(app);
+    await expectCode(checkIn(m, app, "updated_build"), "invalid-argument");
+    const elsewhere = await addBuild(await createApp(creator));
+    await expectCode(checkIn(m, app, "updated_build", elsewhere), "invalid-argument");
+    await must(checkIn(m, app, "updated_build", b1));
+    await expectCode(checkIn(m, app, "updated_build", b1), "already-exists");
+    await must(checkIn(m, app, "updated_build", await addBuild(app, "1.0.2")));
+    await expectCode(checkIn(m, app, "used_app", b1), "invalid-argument");
+  });
+
+  it("inside a cohort, windows count from the assignment, even for a long-time tester", async () => {
+    const { m, app } = await tester(20);
+    const id = await createCohort(admin);
+    await must(service.from("cohort_members").insert([
+      { cohort_id: id, user_id: creator.id, app_id: app },
+      { cohort_id: id, user_id: m.id },
+    ]));
+    await forceActive(id, 2);
+    const a = (await must(
+      service.from("assignments").insert({ cohort_id: id, tester_user_id: m.id, app_id: app, assigned_at: ago(2 * DAY_MS) }).select("id").single(),
+    )).id;
+    await expectCode(checkIn(m, app, "used_app"), "failed-precondition");
+    await must(service.from("assignments").update({ assigned_at: ago(5.2 * DAY_MS) }).eq("id", a));
+    await must(checkIn(m, app, "used_app"));
+    // Once the cohort is closed, the tester's own opt-in applies again.
+    await forceClosed(id);
+    await must(checkIn(m, app, "still_opted_in"));
+  });
+
+  it("refuses unknown kinds, non-testers, inactive entries, deleted apps and visitors", async () => {
+    const { m, app } = await tester(6);
+    await expectCode(checkIn(m, app, "opened"), "invalid-argument");
+    const stranger = await member("ilham", "Ilham Maulana");
+    await expectCode(checkIn(stranger, app, "used_app"), "not-found");
+    await expectCode(anon().rpc("check_in", { p_app_id: app, p_kind: "used_app", p_build_id: null }), "unauthenticated");
+    await must(m.db.rpc("leave_testing", { p_app_id: app }));
+    await expectCode(checkIn(m, app, "used_app"), "failed-precondition");
+    const other = await tester(6);
+    await must(creator.db.rpc("delete_app", { p_app_id: other.app }));
+    await expectCode(checkIn(other.m, other.app, "used_app"), "not-found");
+  });
+});
