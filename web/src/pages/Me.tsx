@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import { Badge, Bar, Empty, ErrorBox, FeedbackChip, Seats, Skel, StatusPill, TierProgress, useToast } from '../components/bits'
 import { IconPlus } from '../components/icons'
 import { useAuth } from '../lib/auth'
+import { COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, setEmailReminders, useApps, useAppsBy, useEntriesOf, usePublicProfile } from '../lib/data'
-import { daysActive, isNewBuild, relDays, TARGET_DAYS, TARGET_TESTERS } from '../lib/progress'
+import { daysActive, isNewBuild, relDay, TARGET_DAYS, TARGET_TESTERS } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 
 interface Todo { entry: TesterDoc; app: AppDoc; kind: 'build' | 'feedback' }
@@ -107,17 +108,24 @@ function MeSignedIn({ uid }: { uid: string }) {
             {loading ? <RowsSkeleton /> : todos.length === 0 ? (
               // ADR-001 §2.6: spot illustration for the empty Tugas saya state goes in Empty's `art` slot.
               testing.length === 0
-                ? <Empty title="Belum ada tugas."><p>Daftar jadi tester di satu aplikasi; tugasnya muncul di sini.</p></Empty>
+                ? (
+                  <Empty title="Mulai dari dua langkah.">
+                    <ol className="first-run">
+                      <li><a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Gabung Google Group komunitas<span className="sr-only"> (tab baru)</span></a>. Tanpa ini opt-in Anda tidak terhitung di Play Console.</li>
+                      <li>Pilih aplikasi di <Link to="/apps">daftar aplikasi</Link>, lalu tekan Gabung sebagai tester. Tugasnya muncul di sini.</li>
+                    </ol>
+                  </Empty>
+                )
                 : <Empty title="Beres, tidak ada tugas tertunda."><p>Cek lagi besok, atau bantu aplikasi lain yang masih butuh tester.</p></Empty>
             ) : (
               <ul>
-                {todos.slice(0, 4).map(({ entry, app, kind }) => (
+                {todos.slice(0, 4).map(({ entry, app, kind }, i) => (
                   <li className="row-line" key={entry.appId}>
                     <span className="grow cell-2">
                       <Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
-                      <span>{kind === 'build' ? `Build baru dirilis ${relDays(app.lastBuildAt)}. Perbarui dari Play Store lalu uji lagi.` : `Hari ke-${daysActive(entry)}. Feedback di Play belum Anda tandai terkirim.`}</span>
+                      <span>{kind === 'build' ? `Build baru dirilis ${relDay(app.lastBuildAt)}. Perbarui dari Play Store lalu uji lagi.` : `Hari ke-${daysActive(entry)}. Feedback di Play belum Anda tandai terkirim.`}</span>
                     </span>
-                    <Link className="btn sm" to={`/apps/${app.id}`}>{kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}</Link>
+                    <Link className={`btn sm${i === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>{kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}</Link>
                   </li>
                 ))}
               </ul>

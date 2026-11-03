@@ -20,7 +20,7 @@ export function Profile() {
 
   usePageMeta(profile.data?.displayName ?? 'Profil anggota', profile.data ? `Profil ${profile.data.displayName} di TesBareng: aplikasi yang diuji dan dibuat.` : undefined)
 
-  if (profile.error) return <ErrorBox text="Profil gagal dimuat." onRetry={profile.retry} />
+  if (profile.error) return <ErrorBox text="Profil gagal dimuat. Periksa koneksi Anda, lalu coba lagi." onRetry={profile.retry} />
   if (profile.data === null) return <NotFound what="Anggota" />
   const p = profile.data
   const loadingLists = entries.loading || apps.loading
@@ -55,7 +55,7 @@ export function Profile() {
         <div className="split">
         <div>
           <header><h2 id="t-h">Yang sedang dan pernah diuji</h2><span className="meta num">{testing.length} aplikasi</span></header>
-          {loadingLists ? <Skel w={200} /> : testing.length === 0 ? <Empty title="Belum menguji aplikasi anggota lain." /> : (
+          {loadingLists ? <Skel w={200} /> : testing.length === 0 ? <Empty title="Belum menguji aplikasi anggota lain."><Link className="text-action" to="/apps">Lihat daftar aplikasi</Link></Empty> : (
             <ul>
               {testing.map(({ e, app, d }) => (
                 <li className="row-line" key={e.appId}>
@@ -68,7 +68,7 @@ export function Profile() {
         </div>
         <div>
           <header><h2 id="c-h">Aplikasi buatannya</h2><span className="meta num">{created.data.length} aplikasi</span></header>
-          {created.loading ? <Skel w={200} /> : created.data.length === 0 ? <Empty title="Belum mendaftarkan aplikasi." /> : (
+          {created.loading ? <Skel w={200} /> : created.data.length === 0 ? <Empty title="Belum mendaftarkan aplikasi."><Link className="text-action" to="/apps">Lihat aplikasi anggota lain</Link></Empty> : (
             <ul>
               {created.data.map((a) => (
                 <li className="row-line" key={a.id}>

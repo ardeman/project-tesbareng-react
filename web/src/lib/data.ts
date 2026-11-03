@@ -10,8 +10,8 @@ export interface Live<T> { data: T; loading: boolean; error: string | null; retr
 type Row = Record<string, any>
 
 const ms = (v: string | null | undefined) => (v ? Date.parse(v) : null)
-/** A date column (YYYY-MM-DD) as local midnight, matching how the forms enter it. */
-const dayMs = (v: string | null | undefined) => (v ? new Date(`${v}T00:00:00`).getTime() : null)
+/** A date column (YYYY-MM-DD) as 00:00 WIB, matching how the forms enter it. */
+const dayMs = (v: string | null | undefined) => (v ? new Date(`${v}T00:00:00+07:00`).getTime() : null)
 
 const APP_COLUMNS = '*, creator:profiles!apps_creator_id_fkey(display_name, photo_url)'
 
@@ -315,8 +315,14 @@ const appArgs = (input: AppInput) => ({
   p_feedback_guide: input.feedbackGuide || null,
 })
 
-/** A date picked in the form (YYYY-MM-DD) as the start of that day in the member's timezone. */
-const localDay = (iso: string) => new Date(`${iso}T00:00:00`).toISOString()
+/** A date picked in the form (YYYY-MM-DD) as the start of that day in WIB, whatever the device time zone. */
+const localDay = (iso: string) => new Date(`${iso}T00:00:00+07:00`).toISOString()
+/** Today's date means "now" (so the log can say "2 jam lalu"); an earlier date means 00:00 WIB that day. */
+const instantFor = (iso: string) => {
+  const now = new Date()
+  const today = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Jakarta' }).format(now)
+  return iso === today ? now.toISOString() : localDay(iso)
+}
 
 export const api = {
   createApp: async (input: AppInput & { groupConfirmed: true }) =>
@@ -347,7 +353,7 @@ export const api = {
       buildId: await rpc<string>('add_build', {
         p_app_id: input.appId,
         p_version_name: input.versionName,
-        p_uploaded_at: input.uploadedAt,
+        p_uploaded_at: instantFor(input.uploadedAt),
         p_changelog: input.changelog,
       }),
     }),
@@ -379,4 +385,23 @@ export function updateTesterAsCreator(_appId: string, t: TesterDoc, p: TesterPat
   if (p.feedbackVerified !== undefined) patch.feedback_verified = p.feedbackVerified
   if (p.replied !== undefined) patch.replied = p.replied
   return rpc('update_tester', { p_tester_id: t.id, p_patch: patch })
+}
+
+/** ADR-009 §2: does this member have an open to-do (the same rules as Tugas saya)? Used once, right after sign-in. */
+export async function hasOpenTodos(uid: string, now = Date.now()): Promise<boolean> {
+  const entries = (await rows<Row[]>(supabase.from('testers').select('*').eq('user_id', uid).eq('status', 'active'))).map(toTester)
+  if (entries.length === 0) return false
+  const ids = entries.map((e) => e.appId)
+  const [apps, stats] = await Promise.all([
+    rows<Row[]>(supabase.from('apps').select('id').in('id', ids).eq('deleted', false)),
+    rows<Row[]>(supabase.from('app_stats').select('app_id, last_build_at').in('app_id', ids)),
+  ])
+  const live = new Set(apps.map((a) => a.id as string))
+  const lastBuild = new Map(stats.map((s) => [s.app_id as string, ms(s.last_build_at)]))
+  return entries.some((e) => {
+    if (!live.has(e.appId)) return false
+    if (!e.feedbackSent) return true
+    const b = lastBuild.get(e.appId)
+    return b != null && now - b < 3 * 86_400_000 && b > (e.feedbackSentAt ?? e.optedInAt)
+  })
 }

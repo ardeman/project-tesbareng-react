@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth'
 import { useAppsBy, useEntriesOf, errorText } from '../lib/data'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { Avatar, useToast } from './bits'
-import { IconApps, IconBook, IconClose, IconMenu, IconTodo, IconUser, Mark } from './icons'
+import { IconApps, IconBook, IconClose, IconMenu, IconSignOut, IconTodo, IconUser, Mark } from './icons'
 
 export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -77,13 +77,15 @@ export function Shell({ children }: { children: ReactNode }) {
 
         <div className="bottom">
           {!ready ? null : user ? (
-            <>
-              <Link to={`/u/${user.uid}`} className="user-row">
+            <div className="user-row">
+              <Link to={`/u/${user.uid}`} className="user-info">
                 <Avatar name={user.displayName ?? '?'} photo={user.photoURL} />
                 <span className="who"><b>{user.displayName ?? 'Anggota'}</b><span>Lihat profil</span></span>
               </Link>
-              <button className="btn ghost" onClick={() => signOut()}>Keluar</button>
-            </>
+              <button className="btn-icon" onClick={() => signOut()} aria-label="Keluar" title="Keluar">
+                <IconSignOut />
+              </button>
+            </div>
           ) : (
             <button className="btn block" onClick={login}>Masuk dengan Google</button>
           )}

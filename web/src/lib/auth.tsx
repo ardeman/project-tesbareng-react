@@ -1,5 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { hasOpenTodos } from './data'
 import { isLocalSupabase, supabase } from './supabase'
 import type { AppUser, UserDoc } from './types'
 
@@ -14,6 +16,11 @@ interface AuthState {
 }
 
 const AuthContext = createContext<AuthState | null>(null)
+
+/** Set just before the Google redirect when sign-in started from a generic page (landing, app list);
+ *  read once after the callback to pick the member's first screen (ADR-009 §2). */
+const ROLE_LANDING_KEY = 'tb:role-landing'
+const GENERIC_START = new Set(['/', '/apps'])
 
 /** Password of the seeded local members (scripts/local.ts). Useless elsewhere: production has no email sign-in. */
 const DEV_PASSWORD = 'tesbareng-local-only'
@@ -47,6 +54,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const uid = session?.user.id ?? null
   const email = session?.user.email ?? null
+  const navigate = useNavigate()
+
+  // ADR-009 §2: right after the sign-in callback only, a member with open to-dos lands on Tugas saya;
+  // everyone else stays on the app list. Later visits to / or /apps are never redirected.
+  useEffect(() => {
+    if (!uid) return
+    let pending = false
+    try { pending = sessionStorage.getItem(ROLE_LANDING_KEY) === '1'; sessionStorage.removeItem(ROLE_LANDING_KEY) } catch { /* storage blocked: no redirect */ }
+    if (!pending) return
+    hasOpenTodos(uid)
+      .then((yes) => { if (yes && location.pathname === '/apps') navigate('/me', { replace: true }) })
+      .catch(() => {})
+  }, [uid, navigate])
 
   useEffect(() => {
     let alive = true
@@ -76,12 +96,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [uid, email])
 
   const signIn = useCallback(async (returnTo?: string): Promise<never> => {
+    if (!returnTo && GENERIC_START.has(location.pathname)) {
+      try { sessionStorage.setItem(ROLE_LANDING_KEY, '1') } catch { /* storage blocked: plain return */ }
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       // ADR-008: back to where the member came from; from the landing page, to the app list.
       options: { redirectTo: new URL(returnTo ?? (location.pathname === '/' ? '/apps' : location.href), location.origin).href },
     })
-    if (error) throw error
+    if (error) {
+      try { sessionStorage.removeItem(ROLE_LANDING_KEY) } catch { /* ignore */ }
+      throw error
+    }
     // The browser is leaving for Google; nothing after this should run.
     return new Promise<never>(() => {})
   }, [])

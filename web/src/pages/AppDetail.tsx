@@ -1,19 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Avatar, Badge, Bar, Chip, Dialog, Empty, ErrorBox, FeedbackChip, NotFound, Skel, StatusPill, TesterChip, useToast } from '../components/bits'
-import { IconBack, IconExternal, IconPlus, IconSort } from '../components/icons'
+import {
+  Avatar, Badge, Bar, Chip, Dialog, Empty, ErrorBox, failToast, FeedbackChip, NotFound, OverflowMenu, RelTime, Seats, ShowAll, Skel,
+  StatusPill, TesterChip, useToast, type MenuItem,
+} from '../components/bits'
+import { IconBack, IconChevron, IconExternal, IconPlus, IconSort, IconSortNone } from '../components/icons'
 import { Board, BoardLegend } from '../components/Board'
 import { BuildDialog, FeedbackDialog, JoinDialog, ManualTesterDialog, TesterDialog } from '../components/dialogs'
 import { useAuth } from '../lib/auth'
 import { usePageMeta } from '../lib/pageMeta'
-import { api, errorText, useApp, useBadgesOf, useBuilds, useTesters } from '../lib/data'
+import { api, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useTesters } from '../lib/data'
 import {
-  computeProgress, daysActive, fmtDate, fmtShort, isNewBuild, relDays, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
-  type Progress,
+  computeProgress, daysActive, fmtDate, fmtDayHeading, inDays, isNewBuild, isoDate, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
+  testerStatusLabel, type Progress,
 } from '../lib/progress'
-import type { AppDoc, BuildDoc, TesterDoc } from '../lib/types'
+import type { AppDoc, BuildDoc, TesterDoc, TesterStatus } from '../lib/types'
 
-type DialogKind = null | 'join' | 'feedback' | 'build' | 'manual' | { tester: TesterDoc }
+type DialogKind = null | 'join' | 'feedback' | 'build' | 'manual' | 'leave' | { tester: TesterDoc }
+
+/** One action in the header zone: the primary, a secondary, or an overflow item (ADR-009 §1, §7). */
+interface Action { label: string; icon?: ReactNode; onClick?: () => void; href?: string; to?: string }
+interface Actions { primary?: Action; secondary: Action[]; overflow: MenuItem[]; note?: string }
 
 export function AppDetail() {
   const { id } = useParams()
@@ -30,7 +37,7 @@ export function AppDetail() {
     [app.data, testers.data, builds.data],
   )
 
-  if (app.error) return <ErrorBox text="Aplikasi gagal dimuat." onRetry={app.retry} />
+  if (app.error) return <ErrorBox text="Aplikasi gagal dimuat. Periksa koneksi, lalu coba lagi." onRetry={app.retry} />
   if (app.data === null || (app.data && app.data.deleted && !isAdmin)) return <NotFound what="Aplikasi" />
   if (!app.data || !progress) return <DetailSkeleton />
 
@@ -38,75 +45,89 @@ export function AppDetail() {
   const isCreator = !!user && (user.uid === a.creatorUid || isAdmin)
   const mine = user ? testers.data.find((t) => t.uid === user.uid) : undefined
   const loading = testers.loading || builds.loading
+  const playUrl = a.storeUrl ?? a.optInUrl
 
   const needLogin = async (then: DialogKind) => {
     try {
       if (!user) await signIn()
       setDialog(then)
-    } catch (e) { toast(errorText(e)) }
+    } catch (e) { toast(failToast(e)) }
   }
+
+  // ADR-009 §1: one primary per role, up to two secondary, the rest behind "…".
+  const actions: Actions = (() => {
+    if (isCreator) {
+      const overflow: MenuItem[] = []
+      if (a.storeUrl) overflow.push({ label: 'Buka halaman Play', href: a.storeUrl })
+      overflow.push({ label: 'Buka link opt-in', href: a.optInUrl })
+      return {
+        primary: { label: 'Catat build', icon: <IconPlus />, onClick: () => setDialog('build') },
+        secondary: [
+          { label: 'Tambah tester manual', onClick: () => setDialog('manual') },
+          { label: 'Edit aplikasi', to: `/apps/${a.id}/edit` },
+        ],
+        overflow,
+      }
+    }
+    if (mine?.status === 'active') {
+      const since = mine.feedbackSentAt ?? mine.optedInAt
+      const buildWaiting = isNewBuild(a) && a.lastBuildAt != null && a.lastBuildAt > since
+      const leave: MenuItem = { label: 'Berhenti menguji', danger: true, onSelect: () => setDialog('leave') }
+      const play: Action = { label: 'Buka di Play', icon: <IconExternal />, href: playUrl }
+      const editNote: Action = { label: 'Ubah catatan feedback', onClick: () => setDialog('feedback') }
+      if (!mine.feedbackSent) return { primary: { label: 'Tandai sudah kirim', onClick: () => setDialog('feedback') }, secondary: [play], overflow: [leave] }
+      if (buildWaiting) return { primary: { label: 'Uji build baru di Play', icon: <IconExternal />, href: playUrl }, secondary: [editNote], overflow: [leave] }
+      return { secondary: [play, editNote], overflow: [leave] }
+    }
+    const play: Action[] = a.storeUrl ? [{ label: 'Halaman Play', icon: <IconExternal />, href: a.storeUrl }] : []
+    if (mine?.status === 'removed') return { secondary: play, overflow: [] }
+    return {
+      primary: { label: 'Gabung sebagai tester', onClick: () => needLogin('join') },
+      secondary: play,
+      overflow: [],
+      note: user ? undefined : 'Anda diminta masuk dengan Google dulu.',
+    }
+  })()
 
   return (
     <>
       <Link to="/apps" className="crumb"><IconBack />Aplikasi</Link>
-      <div className="title-row">
-        <div style={{ minWidth: 0 }}>
-          <h1>{a.name}</h1>
-          <div className="sub meta-line">
-            <StatusPill status={a.status} />
-            <Link to={`/u/${a.creatorUid}`} className="creator-link">
-              <Avatar name={a.creatorName} photo={a.creatorPhotoURL} /><span>{a.creatorName}</span>
-            </Link>
-            {a.packageName && <span className="pkg">{a.packageName}</span>}
-          </div>
-        </div>
-        <div className="actions">
-          {a.storeUrl && <a className="btn" href={a.storeUrl} target="_blank" rel="noreferrer"><IconExternal />Halaman Play</a>}
-          {isCreator && <Link className="btn" to={`/apps/${a.id}/edit`}>Edit aplikasi</Link>}
-        </div>
-      </div>
+      <RecordHead app={a} p={progress} loading={testers.loading} actions={actions} />
 
       <Finding app={a} p={progress} loading={loading} description={a.description} />
 
       {isNewBuild(a) && builds.data[0] && (
         <div className="notice info" role="status">
-          <span><b>Build baru {builds.data[0].versionName}</b> · {relDays(builds.data[0].uploadedAt)}. Perbarui aplikasi dari Play Store, lalu uji lagi.</span>
+          <span><b>Build baru {builds.data[0].versionName}</b> · {relTime(builds.data[0].uploadedAt)}. Perbarui aplikasi dari Play Store, lalu uji lagi.</span>
           <span className="spacer" />
-          <a className="link" href={a.storeUrl ?? a.optInUrl} target="_blank" rel="noreferrer">Buka di Play</a>
+          <a className="link" href={playUrl} target="_blank" rel="noreferrer">Buka di Play</a>
         </div>
       )}
 
       <div className="grid">
         <section className="panel span-8" aria-labelledby="board-h">
           <header>
-            <div>
-              <h2 id="board-h">Menuju 12 tester × 14 hari</h2>
-              <p className="lead-num num" style={{ marginTop: 'var(--s-2)' }}>{loading ? <Skel w={90} h={32} /> : <>{progress.eligible}<small> / {TARGET_TESTERS} tester lulus 14 hari</small></>}</p>
-            </div>
+            <h2 id="board-h">Menuju 12 tester × 14 hari</h2>
             <BoardLegend />
           </header>
-          {testers.error ? <ErrorBox text="Daftar tester gagal dimuat." onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} />}
+          {testers.error ? <ErrorBox text="Daftar tester gagal dimuat. Coba lagi sebentar lagi." onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} />}
         </section>
 
         <aside className="span-4 col-fill">
-          <ActionPanel
-            app={a} p={progress} mine={mine} isCreator={isCreator} signedIn={!!user}
-            onJoin={() => needLogin('join')} onFeedback={() => setDialog('feedback')}
-            onBuild={() => setDialog('build')} onManual={() => setDialog('manual')}
-          />
+          <InfoPanel app={a} p={progress} mine={mine} isCreator={isCreator} />
           <CreatorCard app={a} />
         </aside>
 
         <Kpis p={progress} app={a} loading={loading} />
 
         <TesterTable
-          testers={testers.data} loading={testers.loading} isCreator={isCreator} myUid={user?.uid}
-          onManage={(t) => setDialog({ tester: t })} onManual={() => setDialog('manual')}
+          app={a} testers={testers.data} loading={testers.loading} isCreator={isCreator} myUid={user?.uid}
+          onEdit={(t) => setDialog({ tester: t })}
         />
 
         <section className="panel split-host span-12" aria-label="Build dan catatan feedback">
           <div className="split">
-            <BuildLog builds={builds.data} loading={builds.loading} error={builds.error} retry={builds.retry} p={progress} app={a} isCreator={isCreator} onAdd={() => setDialog('build')} />
+            <BuildLog builds={builds.data} loading={builds.loading} error={builds.error} retry={builds.retry} p={progress} app={a} isCreator={isCreator} />
             <FeedbackList testers={testers.data} loading={testers.loading} />
           </div>
         </section>
@@ -117,6 +138,67 @@ export function AppDetail() {
       <BuildDialog open={dialog === 'build'} onClose={() => setDialog(null)} app={a} />
       <ManualTesterDialog open={dialog === 'manual'} onClose={() => setDialog(null)} app={a} />
       <TesterDialog open={typeof dialog === 'object' && dialog !== null} onClose={() => setDialog(null)} app={a} tester={typeof dialog === 'object' && dialog ? dialog.tester : undefined} />
+      {mine?.status === 'active' && <LeaveDialog open={dialog === 'leave'} onClose={() => setDialog(null)} app={a} days={daysActive(mine)} />}
+    </>
+  )
+}
+
+// ---------- header zone: name, status, 12-seat progress, the role's actions (ADR-009 §4) ----------
+
+function ActionButton({ a, primary, small }: { a: Action; primary?: boolean; small?: boolean }) {
+  const cls = `btn ${primary ? 'primary' : ''} ${small ? 'sm' : ''}`
+  if (a.href) return <a className={cls} href={a.href} target="_blank" rel="noreferrer">{a.icon}{a.label}</a>
+  if (a.to) return <Link className={cls} to={a.to}>{a.icon}{a.label}</Link>
+  return <button type="button" className={cls} onClick={a.onClick}>{a.icon}{a.label}</button>
+}
+
+function RecordHead({ app, p, loading, actions }: { app: AppDoc; p: Progress; loading: boolean; actions: Actions }) {
+  const head = useRef<HTMLElement>(null)
+  const [stuck, setStuck] = useState(false)
+  // Once the header scrolls away, a slim bar keeps name, progress and the primary action in view.
+  useEffect(() => {
+    const el = head.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting && e.boundingClientRect.top < 0), { threshold: 0 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  const count = loading ? <Skel w={56} h={24} /> : <><b>{p.eligible}</b><small> / {TARGET_TESTERS}</small></>
+  const seatsLabel = `${p.eligible} dari ${TARGET_TESTERS} tester sudah 14 hari, ${p.active} aktif`
+  return (
+    <>
+      <header ref={head} className="record-head">
+        <div className="rh-main">
+          <h1>{app.name}</h1>
+          <div className="meta-line">
+            <StatusPill status={app.status} />
+            <Link to={`/u/${app.creatorUid}`} className="creator-link">
+              <Avatar name={app.creatorName} photo={app.creatorPhotoURL} /><span>{app.creatorName}</span>
+            </Link>
+            {app.packageName && <span className="pkg">{app.packageName}</span>}
+          </div>
+        </div>
+        <div className="rh-progress">
+          <p className="rh-count num">{count}<span className="rh-label">tester lulus 14 hari</span></p>
+          <Seats active={p.active} eligible={p.eligible} className="wide" label={seatsLabel} />
+          <p className="rh-sub num">{p.active} aktif dari {TARGET_TESTERS} kursi</p>
+        </div>
+        <div className="rh-actions">
+          {actions.primary && <ActionButton a={actions.primary} primary />}
+          {(actions.secondary.length > 0 || actions.overflow.length > 0) && (
+            <div className="rh-more">
+              {actions.secondary.slice(0, 2).map((a) => <ActionButton key={a.label} a={a} />)}
+              <OverflowMenu items={actions.overflow} label="Aksi lain" />
+            </div>
+          )}
+          {actions.note && <p className="muted small">{actions.note}</p>}
+        </div>
+      </header>
+      <div className={`record-bar ${stuck ? 'show' : ''}`} inert={!stuck} aria-hidden={!stuck}>
+        <span className="rb-name">{app.name}</span>
+        <span className="rb-count num"><b>{p.eligible}</b> / {TARGET_TESTERS}<span className="sr-only"> tester lulus 14 hari</span></span>
+        {actions.primary && <ActionButton a={actions.primary} primary small />}
+      </div>
     </>
   )
 }
@@ -129,9 +211,9 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
   else if (p.ready) text = `Siap ajukan akses produksi: ${p.eligible} tester sudah 14 hari berturut-turut.`
   else if (p.active < TARGET_TESTERS) {
     const need = TARGET_TESTERS - p.active
-    text = `Butuh ${need} tester aktif lagi.` + (soonest != null ? ` Tester terlama lulus 14 hari ${soonest === 1 ? 'besok' : `${soonest} hari lagi`}.` : ' Belum ada yang mendaftar.')
+    text = `Butuh ${need} tester aktif lagi.` + (soonest != null ? ` Tester terlama lulus 14 hari ${inDays(soonest)}.` : ' Belum ada yang mendaftar.')
   } else {
-    text = `Kursi sudah terisi; tinggal ${TARGET_TESTERS - p.eligible} tester lagi lulus 14 hari` + (soonest != null ? `, paling cepat ${soonest === 1 ? 'besok' : `${soonest} hari lagi`}.` : '.')
+    text = `Kursi sudah terisi; tinggal ${TARGET_TESTERS - p.eligible} tester lagi lulus 14 hari` + (soonest != null ? `, paling cepat ${inDays(soonest)}.` : '.')
   }
   return (
     <div className="finding">
@@ -147,14 +229,8 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
   )
 }
 
-function ActionPanel(props: {
-  app: AppDoc; p: Progress; mine?: TesterDoc; isCreator: boolean; signedIn: boolean
-  onJoin: () => void; onFeedback: () => void; onBuild: () => void; onManual: () => void
-}) {
-  const { app, mine, isCreator } = props
-  const toast = useToast()
-  const [busy, setBusy] = useState(false)
-  const [confirmLeave, setConfirmLeave] = useState(false)
+/** Context for the role; the actions themselves live in the header zone. */
+function InfoPanel({ app, p, mine, isCreator }: { app: AppDoc; p: Progress; mine?: TesterDoc; isCreator: boolean }) {
   // Stamp the feedback chip only when "sent" flips on while this panel is open, not on every visit.
   const sentBefore = useRef(mine?.feedbackSent)
   const [stamp, setStamp] = useState(false)
@@ -172,20 +248,14 @@ function ActionPanel(props: {
   )
 
   if (isCreator) {
-    const unverified = props.p.feedbackSent - props.p.feedbackVerified
-    const unreplied = props.p.feedbackSent - props.p.replied
     return (
-      <section className="panel stack-16" aria-label="Kelola aplikasi">
+      <section className="panel stack-16" aria-label="Aplikasi Anda">
         <h2>Aplikasi Anda</h2>
         <dl className="kv">
-          <dt>Feedback belum diverifikasi</dt><dd>{unverified}</dd>
-          <dt>Feedback belum dibalas</dt><dd>{unreplied}</dd>
+          <dt>Feedback belum diverifikasi</dt><dd className="num">{p.feedbackSent - p.feedbackVerified}</dd>
+          <dt>Feedback belum dibalas</dt><dd className="num">{p.feedbackSent - p.replied}</dd>
         </dl>
-        <p className="muted small">Cek di Play Console → Testing feedback, lalu tandai lewat tombol Kelola di tabel tester.</p>
-        <div className="btn-row">
-          <button className="btn primary" onClick={props.onBuild}><IconPlus />Catat build</button>
-          <button className="btn" onClick={props.onManual}>Tambah tester manual</button>
-        </div>
+        <p className="muted small">Cek di Play Console → Testing feedback, lalu centang kolom Feedback di tabel tester.</p>
         {guide}
       </section>
     )
@@ -193,11 +263,6 @@ function ActionPanel(props: {
 
   if (mine?.status === 'active') {
     const d = daysActive(mine)
-    const leave = async () => {
-      setConfirmLeave(false)
-      setBusy(true)
-      try { await api.leaveTesting({ appId: app.id }); toast('Anda berhenti menguji aplikasi ini.') } catch (e) { toast(errorText(e)) } finally { setBusy(false) }
-    }
     return (
       <section className="panel stack-16" aria-label="Status Anda sebagai tester">
         <div>
@@ -211,28 +276,12 @@ function ActionPanel(props: {
             <p className="creator-nums">
               <span className="strong">Feedback</span>
               <FeedbackChip t={mine} className={stamp ? 'stamp' : undefined} />
-              <span className="muted small num">{fmtShort(mine.feedbackSentAt)}{mine.replied ? ' · sudah dibalas' : ''}</span>
+              {mine.feedbackSentAt && <RelTime t={mine.feedbackSentAt} />}
+              {mine.replied && <span className="muted small">sudah dibalas</span>}
             </p>
             {mine.feedbackSummary && <p className="guide-quote">{mine.feedbackSummary}</p>}
-            <button className="text-action" style={{ justifySelf: 'start' }} onClick={props.onFeedback}>Ubah catatan feedback</button>
           </div>
-        ) : (
-          <>
-            {guide}
-            <button className="btn primary block" onClick={props.onFeedback}>Saya sudah kirim feedback di Play</button>
-          </>
-        )}
-        <button className="text-action quiet" style={{ justifySelf: 'start' }} disabled={busy} onClick={() => setConfirmLeave(true)}>{busy ? 'Menyimpan…' : 'Berhenti menguji'}</button>
-        <Dialog open={confirmLeave} onClose={() => setConfirmLeave(false)} label={`Berhenti menguji ${app.name}?`}>
-          <div className="sheet-body">
-            <h2>Berhenti menguji {app.name}?</h2>
-            <p className="lede">Hari aktif Anda ({d} hari) berhenti dihitung.</p>
-          </div>
-          <div className="sheet-foot">
-            <button type="button" className="btn" onClick={() => setConfirmLeave(false)}>Batal</button>
-            <button type="button" className="btn danger" onClick={leave}>Berhenti menguji</button>
-          </div>
-        </Dialog>
+        ) : guide}
       </section>
     )
   }
@@ -249,18 +298,37 @@ function ActionPanel(props: {
   return (
     <section className="panel stack-16" aria-label="Ikut menguji">
       <h2>{mine?.status === 'left' ? 'Uji lagi aplikasi ini' : 'Ikut menguji'}</h2>
-      {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Mendaftar lagi memulai hitungan 14 hari dari awal.</p>}
+      {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi memulai hitungan 14 hari dari awal.</p>}
       {guide}
-      <div className="stack-8">
-        <button className="btn primary block" onClick={props.onJoin}>{props.signedIn ? 'Daftar jadi tester' : 'Masuk dan daftar jadi tester'}</button>
-        <p className="muted small">Butuh 3 langkah: gabung grup, buka link opt-in, pasang aplikasinya.</p>
-      </div>
+      <p className="muted small">Butuh 3 langkah: gabung grup, buka link opt-in, pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>
     </section>
   )
 }
 
+function LeaveDialog({ open, onClose, app, days }: { open: boolean; onClose: () => void; app: AppDoc; days: number }) {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const leave = async () => {
+    if (busy) return
+    setBusy(true)
+    try { await api.leaveTesting({ appId: app.id }); toast('Anda berhenti menguji aplikasi ini.'); onClose() } catch (e) { toast(failToast(e)) } finally { setBusy(false) }
+  }
+  return (
+    <Dialog open={open} onClose={onClose} label={`Berhenti menguji ${app.name}?`}>
+      <div className="sheet-body">
+        <h2>Berhenti menguji {app.name}?</h2>
+        <p className="lede">Hari aktif Anda ({days} hari) berhenti dihitung. Jika gabung lagi, hitungan 14 hari mulai dari awal.</p>
+      </div>
+      <div className="sheet-foot">
+        <button type="button" className="btn" onClick={onClose}>Tetap menguji</button>
+        <button type="button" className="btn danger" onClick={leave} aria-busy={busy || undefined}>{busy ? 'Menyimpan…' : 'Berhenti menguji'}</button>
+      </div>
+    </Dialog>
+  )
+}
+
 function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean }) {
-  const v = (x: React.ReactNode) => (loading ? <Skel w={64} h={24} /> : x)
+  const v = (x: ReactNode) => (loading ? <Skel w={64} h={24} /> : x)
   return (
     <section className="kpis span-12" aria-label="Ringkasan keterlibatan">
       <div className="kpi">
@@ -276,7 +344,7 @@ function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean 
       <div className="kpi">
         <div className="kpi-label">Feedback di Play</div>
         <div className="kpi-value num">{v(<>{p.feedbackSent}<small> terkirim</small></>)}</div>
-        <p className="note">{p.feedbackVerified} terverifikasi kreator</p>
+        <p className="note num">{p.feedbackVerified} terverifikasi kreator</p>
       </div>
       <div className="kpi">
         <div className="kpi-label">Dibalas kreator</div>
@@ -286,109 +354,214 @@ function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean 
       <div className="kpi">
         <div className="kpi-label">Build selama uji</div>
         <div className="kpi-value num">{v(<>{p.builds}<small> / {TARGET_BUILDS}</small></>)}</div>
-        <p className="note">{app.lastBuildAt ? `Terakhir ${relDays(app.lastBuildAt)}` : 'Target komunitas, bukan aturan Google'}</p>
+        <p className="note">{app.lastBuildAt ? `Terakhir ${relTime(app.lastBuildAt)}` : 'Target komunitas, bukan aturan Google'}</p>
       </div>
     </section>
   )
 }
 
-type SortKey = 'name' | 'since' | 'days'
+// ---------- tester table: 4 fields per row, details behind a tap, inline edits (ADR-009 §3) ----------
 
-function TesterTable({ testers, loading, isCreator, myUid, onManage, onManual }: {
-  testers: TesterDoc[]; loading: boolean; isCreator: boolean; myUid?: string
-  onManage: (t: TesterDoc) => void; onManual: () => void
+type SortKey = 'name' | 'days'
+type Quick = Partial<Pick<TesterDoc, 'feedbackVerified' | 'replied' | 'status'>>
+
+function TesterTable({ app, testers, loading, isCreator, myUid, onEdit }: {
+  app: AppDoc; testers: TesterDoc[]; loading: boolean; isCreator: boolean; myUid?: string; onEdit: (t: TesterDoc) => void
 }) {
+  const toast = useToast()
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'days', dir: 'desc' })
-  const now = Date.now()
-  const rank = { active: 0, left: 1, removed: 2 }
-  const rows = useMemo(() => {
-    const m = sort.dir === 'asc' ? 1 : -1
-    return [...testers].sort((a, b) => {
-      if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
-      if (sort.key === 'name') return m * a.displayName.localeCompare(b.displayName)
-      if (sort.key === 'since') return m * (a.optedInAt - b.optedInAt)
-      return m * (daysActive(a, now) - daysActive(b, now))
+  const [openRows, setOpenRows] = useState<Set<string>>(() => new Set())
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // Optimistic inline edits: shown at once, dropped when the server row agrees (or rolled back on error).
+  const [over, setOver] = useState<Record<string, Quick>>({})
+  useEffect(() => {
+    setOver((o) => {
+      let changed = false
+      const n = { ...o }
+      for (const id of Object.keys(n)) {
+        const t = testers.find((x) => x.id === id)
+        if (!t || Object.entries(n[id]).every(([k, v]) => t[k as keyof Quick] === v)) { delete n[id]; changed = true }
+      }
+      return changed ? n : o
     })
+  }, [testers])
+
+  const now = Date.now()
+  const rows = useMemo(() => testers.map((t) => (over[t.id] ? { ...t, ...over[t.id] } : t)), [testers, over])
+  const active = useMemo(() => {
+    const m = sort.dir === 'asc' ? 1 : -1
+    return rows.filter((t) => t.status === 'active').sort((a, b) => sort.key === 'name'
+      ? m * a.displayName.localeCompare(b.displayName, 'id')
+      : m * (daysActive(a, now) - daysActive(b, now)) || a.displayName.localeCompare(b.displayName, 'id'))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testers, sort])
+  }, [rows, sort])
+  const history = useMemo(() => rows.filter((t) => t.status !== 'active').sort((a, b) => (b.leftAt ?? 0) - (a.leftAt ?? 0)), [rows])
+  // FR-27j: badge beside each member's name; manual entries (no uid) have none
+  const badges = useBadgesOf(testers.filter((t) => t.uid).map((t) => t.uid!)).data
+
+  const save = async (server: TesterDoc, change: Quick, msg: string, undo?: Quick) => {
+    setOver((o) => ({ ...o, [server.id]: { ...o[server.id], ...change } }))
+    try {
+      await updateTesterAsCreator(app.id, server, change)
+      if (undo) {
+        const after = { ...server, ...change }
+        toast({ text: msg, duration: 8000, action: { label: 'Urungkan', onClick: () => { void save(after, undo, `Status ${server.displayName} dikembalikan.`) } } })
+      } else toast(msg)
+    } catch (e) {
+      setOver((o) => {
+        const n = { ...o }
+        const rest = { ...n[server.id] }
+        for (const k of Object.keys(change)) delete rest[k as keyof Quick]
+        if (Object.keys(rest).length) n[server.id] = rest
+        else delete n[server.id]
+        return n
+      })
+      toast(failToast(e))
+    }
+  }
+  const serverOf = (id: string) => testers.find((t) => t.id === id)!
+  const setVerified = (t: TesterDoc, v: boolean) =>
+    save(serverOf(t.id), { feedbackVerified: v }, v ? `Feedback ${t.displayName} ditandai terverifikasi.` : `Tanda terverifikasi ${t.displayName} dicabut.`)
+  const setReplied = (t: TesterDoc, v: boolean) =>
+    save(serverOf(t.id), { replied: v }, v ? `${t.displayName} ditandai sudah dibalas.` : `Tanda dibalas ${t.displayName} dicabut.`)
+  const setStatus = (t: TesterDoc, s: TesterStatus) => {
+    const server = serverOf(t.id)
+    return save(server, { status: s }, `${t.displayName} sekarang ${testerStatusLabel[s].toLowerCase()}.`, { status: server.status })
+  }
+
+  const toggle = (id: string) => setOpenRows((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
 
   const th = (key: SortKey, label: string, num = false, extra = '') => {
     const on = sort.key === key
     return (
       <th className={`${num ? 'num' : ''} ${extra}`} aria-sort={on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-        <button type="button" className="sort" onClick={() => setSort({ key, dir: on && sort.dir === 'desc' ? 'asc' : 'desc' })}>
-          {label}{on && <IconSort dir={sort.dir} />}
+        <button type="button" className={`sort ${on ? 'on' : ''}`} onClick={() => setSort({ key, dir: on && sort.dir === 'desc' ? 'asc' : 'desc' })}>
+          {label}{on ? <IconSort dir={sort.dir} /> : <IconSortNone className="idle" />}
         </button>
       </th>
     )
   }
-  const active = testers.filter((t) => t.status === 'active').length
-  // FR-27j: badge beside each member's name; manual entries (no uid) have none
-  const badges = useBadgesOf(testers.filter((t) => t.uid).map((t) => t.uid!)).data
+  const COLS = 4
+
+  const row = (t: TesterDoc) => {
+    const d = daysActive(t, now)
+    const me = !!t.uid && t.uid === myUid
+    const isOpen = openRows.has(t.id)
+    const detailId = `tester-${t.id}`
+    return (
+      <Fragment key={t.id}>
+        <tr className={`${t.status !== 'active' ? 'muted' : ''} ${me ? 'mine' : ''} ${isOpen ? 'open' : ''}`}>
+          <td className="sticky">
+            <span className="who">
+              <button type="button" className="disclose" aria-expanded={isOpen} aria-controls={isOpen ? detailId : undefined} onClick={() => toggle(t.id)}>
+                <IconChevron /><span className="sr-only">Detail {t.displayName}</span>
+              </button>
+              <Avatar name={t.displayName} photo={t.photoURL} />
+              <span className="name-with-badge">
+                {t.uid ? <Link className="name-link" to={`/u/${t.uid}`}><b>{t.displayName}</b></Link> : <b>{t.displayName}</b>}
+                <Badge tier={t.uid ? badges.get(t.uid) : undefined} size="sm" />
+                {me && <span className="you">Anda</span>}
+              </span>
+            </span>
+          </td>
+          <td className="num"><b>{d}</b><span className="of"> / {TARGET_DAYS}</span></td>
+          <td><TesterChip t={t} days={d} /></td>
+          <td>
+            <span className="fb-cell">
+              <FeedbackChip t={t} />
+              {isCreator && (
+                <label className="tick" title="Saya melihat feedback-nya di Play Console">
+                  <input type="checkbox" checked={t.feedbackVerified} onChange={(e) => setVerified(t, e.target.checked)}
+                    aria-label={`Feedback ${t.displayName} terverifikasi di Play Console`} />
+                </label>
+              )}
+            </span>
+          </td>
+        </tr>
+        {isOpen && (
+          <tr className="detail" id={detailId}>
+            <td colSpan={COLS}>
+              <div className="detail-body">
+                <dl className="facts">
+                  <div><dt>Opt-in sejak</dt><dd className="num">{fmtDate(t.optedInAt)}</dd></div>
+                  {t.status !== 'active' && t.leftAt && <div><dt>{t.status === 'removed' ? 'Dikeluarkan' : 'Berhenti'}</dt><dd className="num">{fmtDate(t.leftAt)}</dd></div>}
+                  <div><dt>Email</dt><dd>{t.maskedEmail}</dd></div>
+                  {!isCreator && <div><dt>Dibalas kreator</dt><dd>{t.replied ? 'Sudah' : 'Belum'}</dd></div>}
+                  <div><dt>Catatan</dt><dd>{t.note || (t.addedBy === 'creator' ? 'Ditambahkan kreator' : '—')}</dd></div>
+                </dl>
+                {t.feedbackSummary && t.status !== 'removed' && <p className="guide-quote">{t.feedbackSummary}</p>}
+                {isCreator && (
+                  <div className="detail-edit">
+                    <label className="check">
+                      <input type="checkbox" checked={t.replied} onChange={(e) => setReplied(t, e.target.checked)} />
+                      <span><span className="t">Sudah saya balas</span><span className="d">Balasan dikirim dari Play Console.</span></span>
+                    </label>
+                    <div className="field">
+                      <label htmlFor={`st-${t.id}`}>Status</label>
+                      <select id={`st-${t.id}`} className="input" value={t.status} onChange={(e) => setStatus(t, e.target.value as TesterStatus)} aria-describedby={`st-${t.id}-hint`}>
+                        {(['active', 'left', 'removed'] as TesterStatus[]).map((s) => <option key={s} value={s}>{testerStatusLabel[s]}</option>)}
+                      </select>
+                      <span className="hint" id={`st-${t.id}-hint`}>Tester yang dikeluarkan tidak bisa gabung lagi ke aplikasi ini.</span>
+                    </div>
+                    <button type="button" className="btn sm" onClick={() => onEdit(serverOf(t.id))}>Ubah catatan atau tanggal opt-in</button>
+                  </div>
+                )}
+              </div>
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    )
+  }
 
   return (
     <section className="panel flush span-12" aria-labelledby="testers-h">
       <header>
         <h2 id="testers-h">Daftar tester</h2>
-        <span className="btn-row" style={{ alignItems: 'center' }}>
-          <span className="meta num">{active} aktif · {testers.length - active} riwayat</span>
-          {isCreator && <button className="btn sm" onClick={onManual}><IconPlus />Tambah manual</button>}
-        </span>
+        <span className="meta num">{active.length} aktif{history.length > 0 ? ` · ${history.length} riwayat` : ''}</span>
       </header>
-      {/* One sheet on every width (CLAUDE.md, DR-14): narrow screens scroll sideways, the name column stays. */}
-      <div className="table-wrap" style={{ marginTop: 'var(--s-3)' }} tabIndex={0} role="region" aria-labelledby="testers-h">
+      {/* One sheet on every width (CLAUDE.md, DR-14): it scrolls inside its own box, so the header row
+          and the name column both stay put. */}
+      <div className="table-wrap sheet-scroll" style={{ marginTop: 'var(--s-3)' }} tabIndex={0} role="region" aria-labelledby="testers-h">
         <table className="data sheet-table">
           <thead>
             <tr>
               {th('name', 'Nama', false, 'sticky')}
               {th('days', 'Hari aktif', true)}
               <th>Status</th>
-              <th>Feedback di Play</th>
-              <th>Dibalas</th>
-              {th('since', 'Opt-in sejak')}
-              <th>Email</th>
-              {isCreator && <th><span className="sr-only">Kelola</span></th>}
+              <th>{isCreator ? 'Feedback · verifikasi' : 'Feedback di Play'}</th>
             </tr>
           </thead>
           <tbody>
             {loading && Array.from({ length: 4 }, (_, i) => (
-              <tr key={i}><td className="sticky"><Skel w={140} /></td><td className="num"><Skel w={24} /></td><td><Skel w={80} h={24} /></td><td><Skel w={90} h={24} /></td><td><Skel w={40} /></td><td><Skel w={80} /></td><td><Skel w={120} /></td>{isCreator && <td />}</tr>
+              <tr key={i}><td className="sticky"><Skel w={140} /></td><td className="num"><Skel w={40} /></td><td><Skel w={90} h={24} /></td><td><Skel w={110} h={24} /></td></tr>
             ))}
-            {!loading && rows.map((t) => {
-              const d = daysActive(t, now)
-              const me = !!t.uid && t.uid === myUid
-              return (
-                <tr key={t.id} className={`${t.status !== 'active' ? 'muted' : ''} ${me ? 'mine' : ''}`}>
-                  <td className="sticky">
-                    <span className="who">
-                      <Avatar name={t.displayName} photo={t.photoURL} />
-                      <span className="cell-2">
-                        {t.uid
-                          ? <span className="name-with-badge"><Link to={`/u/${t.uid}`}><b>{t.displayName}</b></Link><Badge tier={badges.get(t.uid)} size="sm" /></span>
-                          : <b>{t.displayName}</b>}
-                        {me && <span className="you">Anda</span>}
-                        {(t.note || t.addedBy === 'creator') && <span>{t.note ?? 'Ditambahkan kreator'}</span>}
-                      </span>
-                    </span>
-                  </td>
-                  <td className="num"><b>{d}</b></td>
-                  <td><TesterChip t={t} days={d} /></td>
-                  <td><FeedbackChip t={t} /></td>
-                  <td>{t.replied ? <span className="strong">Sudah</span> : <span className="dash">—</span>}</td>
-                  <td className="num" style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>{fmtDate(t.optedInAt)}</td>
-                  <td className="muted" style={{ whiteSpace: 'nowrap' }}>{t.maskedEmail}</td>
-                  {isCreator && <td style={{ textAlign: 'right' }}><button className="btn sm" onClick={() => onManage(t)}>Kelola<span className="sr-only"> {t.displayName}</span></button></td>}
-                </tr>
-              )
-            })}
+            {!loading && active.map(row)}
+            {!loading && active.length === 0 && history.length > 0 && (
+              <tr><td colSpan={COLS} className="muted">Belum ada tester aktif. Bagikan halaman ini di grup WhatsApp cohort.</td></tr>
+            )}
           </tbody>
+          {!loading && history.length > 0 && (
+            <tbody className="history">
+              <tr className="group-row">
+                <th colSpan={COLS} scope="rowgroup">
+                  <button type="button" className="group-toggle" aria-expanded={historyOpen} onClick={() => setHistoryOpen((o) => !o)}>
+                    <IconChevron />Riwayat <span className="num">({history.length})</span>
+                    <span className="muted small">berhenti atau dikeluarkan</span>
+                  </button>
+                </th>
+              </tr>
+              {historyOpen && history.map(row)}
+            </tbody>
+          )}
         </table>
       </div>
+      {!loading && testers.length > 0 && <p className="meta small scroll-hint" style={{ padding: '0 var(--s-3) var(--s-3)' }}>Geser tabel ke samping untuk melihat status dan feedback.</p>}
       {!loading && testers.length === 0 && (
         <div className="empty-pad">
           {/* ADR-001 §2.6: spot illustration for the empty tester list goes in Empty's `art` slot. */}
           <Empty title="Belum ada tester. Kursi pertama masih kosong.">
-            <p>{isCreator ? 'Bagikan halaman ini ke grup komunitas, atau tambahkan tester yang sudah opt-in secara manual.' : 'Jadilah tester pertama lewat tombol Daftar jadi tester.'}</p>
+            <p>{isCreator ? 'Bagikan halaman ini di grup WhatsApp cohort, atau tambahkan tester yang sudah opt-in lewat Tambah tester manual.' : 'Jadilah tester pertama lewat tombol Gabung sebagai tester.'}</p>
           </Empty>
         </div>
       )}
@@ -396,42 +569,67 @@ function TesterTable({ testers, loading, isCreator, myUid, onManage, onManual }:
   )
 }
 
-function BuildLog({ builds, loading, error, retry, p, app, isCreator, onAdd }: {
-  builds: BuildDoc[]; loading: boolean; error: string | null; retry: () => void; p: Progress; app: AppDoc; isCreator: boolean; onAdd: () => void
+// ---------- build log: an activity timeline, newest first, grouped by WIB day (ADR-009 §4) ----------
+
+const FEW = 4
+
+function groupByDay<T>(items: T[], at: (x: T) => number) {
+  const out: { key: string; t: number; items: T[] }[] = []
+  for (const x of items) {
+    const key = isoDate(at(x))
+    const last = out[out.length - 1]
+    if (last && last.key === key) last.items.push(x)
+    else out.push({ key, t: at(x), items: [x] })
+  }
+  return out
+}
+
+function BuildLog({ builds, loading, error, retry, p, app, isCreator }: {
+  builds: BuildDoc[]; loading: boolean; error: string | null; retry: () => void; p: Progress; app: AppDoc; isCreator: boolean
 }) {
-  const shown = builds.slice(0, 5)
+  const [all, setAll] = useState(false)
+  const sorted = useMemo(() => [...builds].sort((a, b) => b.uploadedAt - a.uploadedAt), [builds])
+  const groups = groupByDay(all ? sorted : sorted.slice(0, FEW), (b) => b.uploadedAt)
   return (
     <section aria-labelledby="builds-h">
       <header>
         <h2 id="builds-h">Log build</h2>
-        {isCreator ? <button className="btn sm" onClick={onAdd}><IconPlus />Catat build</button> : <span className="meta num">{p.builds} selama uji{app.testStartDate ? ` sejak ${fmtShort(app.testStartDate)}` : ''}</span>}
+        <span className="meta num">{p.builds} selama uji{app.testStartDate ? ` sejak ${fmtDate(app.testStartDate)}` : ''}</span>
       </header>
-      {error ? <ErrorBox text="Log build gagal dimuat." onRetry={retry} /> : loading ? (
+      {error ? <ErrorBox text="Log build gagal dimuat. Coba lagi sebentar lagi." onRetry={retry} /> : loading ? (
         <div>{[0, 1, 2].map((i) => <div className="row-line" key={i}><span className="grow"><Skel w={120} /></span><Skel w={60} /></div>)}</div>
-      ) : shown.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <Empty title="Belum ada build yang dicatat.">
-          <p>Tester menunggu pembaruan untuk diuji ulang. Target komunitas: 2–3 build selama uji.</p>
+          <p>{isCreator ? 'Catat setiap unggahan ke jalur uji tertutup lewat tombol Catat build di atas. Target komunitas: 2–3 build selama uji.' : 'Tester menunggu pembaruan untuk diuji ulang. Target komunitas: 2–3 build selama uji.'}</p>
         </Empty>
       ) : (
-        <ol>
-          {shown.map((b) => (
-            <li className="row-line" key={b.id}>
-              <span className="grow cell-2"><b>{b.versionName}</b><span>{b.changelog}</span></span>
-              <span className="num muted small" style={{ whiteSpace: 'nowrap' }}>{fmtDate(b.uploadedAt)}</span>
-            </li>
+        <div className="timeline" id="build-list">
+          {groups.map((g) => (
+            <div className="tl-day" key={g.key}>
+              <h3 className="tl-date num">{fmtDayHeading(g.t)}</h3>
+              <ol>
+                {g.items.map((b) => (
+                  <li className="row-line" key={b.id}>
+                    <span className="grow cell-2"><b>{b.versionName}</b><span>{b.changelog}</span></span>
+                    <RelTime t={b.uploadedAt} />
+                  </li>
+                ))}
+              </ol>
+            </div>
           ))}
-        </ol>
+        </div>
       )}
-      {builds.length > 5 && <p className="muted small num" style={{ marginTop: 8 }}>{builds.length - 5} build lebih lama tidak ditampilkan.</p>}
+      {sorted.length > FEW && <ShowAll open={all} total={sorted.length} onToggle={() => setAll((x) => !x)} controls="build-list" />}
     </section>
   )
 }
 
 function FeedbackList({ testers, loading }: { testers: TesterDoc[]; loading: boolean }) {
+  const [all, setAll] = useState(false)
   const withSummary = testers
     .filter((t) => t.feedbackSent && t.feedbackSummary && t.status !== 'removed')
     .sort((a, b) => (b.feedbackSentAt ?? 0) - (a.feedbackSentAt ?? 0))
-  const shown = withSummary.slice(0, 5)
+  const shown = all ? withSummary : withSummary.slice(0, FEW)
   return (
     <section aria-labelledby="fb-h">
       <header>
@@ -442,25 +640,25 @@ function FeedbackList({ testers, loading }: { testers: TesterDoc[]; loading: boo
         <div>{[0, 1, 2].map((i) => <div className="row-line" key={i}><span className="grow"><Skel w={200} /></span></div>)}</div>
       ) : shown.length === 0 ? (
         <Empty title="Belum ada catatan feedback.">
-          <p>Tester bisa menulis ringkasan saat menandai feedback terkirim.</p>
+          <p>Tester bisa menulis ringkasan saat menekan Tandai sudah kirim.</p>
         </Empty>
       ) : (
-        <ul>
+        <ul id="fb-list">
           {shown.map((t) => (
             <li className="row-line top" key={t.id}>
               <Avatar name={t.displayName} photo={t.photoURL} />
               <span className="grow">
-                <span style={{ display: 'flex', gap: 'var(--s-2)', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span className="fb-head">
                   <b>{t.displayName}</b>
-                  <span className="creator-nums"><span className="muted small num">{fmtShort(t.feedbackSentAt)}</span>{t.feedbackVerified && <FeedbackChip t={t} />}</span>
+                  <span className="creator-nums">{t.feedbackSentAt && <RelTime t={t.feedbackSentAt} />}{t.feedbackVerified && <FeedbackChip t={t} />}</span>
                 </span>
-                <span style={{ display: 'block', marginTop: 'var(--s-1)', overflowWrap: 'anywhere' }}>{t.feedbackSummary}</span>
+                <span className="fb-text">{t.feedbackSummary}</span>
               </span>
             </li>
           ))}
         </ul>
       )}
-      {withSummary.length > 5 && <p className="muted small num" style={{ marginTop: 8 }}>{withSummary.length - 5} catatan lain tidak ditampilkan.</p>}
+      {withSummary.length > FEW && <ShowAll open={all} total={withSummary.length} onToggle={() => setAll((x) => !x)} controls="fb-list" />}
     </section>
   )
 }
@@ -485,7 +683,11 @@ function DetailSkeleton() {
   return (
     <div aria-busy="true" aria-label="Memuat aplikasi">
       <Skel w={80} />
-      <div style={{ margin: '16px 0 32px' }}><Skel w={280} h={32} /></div>
+      <div className="record-head skel-head">
+        <div className="rh-main"><Skel w={260} h={32} /><Skel w={180} h={24} /></div>
+        <div className="rh-progress"><Skel w={120} h={24} /><Skel w="100%" h={16} /></div>
+        <div className="rh-actions"><Skel w={200} h={44} /></div>
+      </div>
       <div className="grid">
         <div className="panel span-8" style={{ height: 380 }} />
         <div className="panel span-4" style={{ height: 380 }} />

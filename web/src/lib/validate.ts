@@ -20,3 +20,31 @@ export function validateApp(v: AppInput, opts: { creating: boolean; groupConfirm
   if (opts.creating && !opts.groupConfirmed) e.groupConfirmed = 'Centang dulu setelah grup ditambahkan di Play Console.'
   return e
 }
+
+// ---------- dialogs (Catat build, Tambah tester manual): the server stays the authority (ADR-004) ----------
+export const BUILD_LIMITS = { versionName: 40, changelog: 140 }
+export const MANUAL_LIMITS = { displayName: 60 }
+
+export interface BuildInput { versionName: string; uploadedAt: string; changelog: string }
+export function validateBuild(v: BuildInput, today: string): Partial<Record<keyof BuildInput, string>> {
+  const e: Partial<Record<keyof BuildInput, string>> = {}
+  if (!v.versionName.trim()) e.versionName = 'Nama versi wajib diisi, misalnya 1.2.0 (14).'
+  else if (v.versionName.trim().length > BUILD_LIMITS.versionName) e.versionName = `Maksimal ${BUILD_LIMITS.versionName} karakter.`
+  if (!v.uploadedAt) e.uploadedAt = 'Pilih tanggal build diunggah ke Play Console.'
+  else if (v.uploadedAt > today) e.uploadedAt = 'Tanggal unggah tidak boleh di masa depan.'
+  if (!v.changelog.trim()) e.changelog = 'Tulis satu kalimat tentang apa yang berubah.'
+  else if (v.changelog.trim().length > BUILD_LIMITS.changelog) e.changelog = `Maksimal ${BUILD_LIMITS.changelog} karakter.`
+  return e
+}
+
+export interface ManualInput { displayName: string; email: string; optedInAt: string }
+export function validateManual(v: ManualInput, today: string): Partial<Record<keyof ManualInput, string>> {
+  const e: Partial<Record<keyof ManualInput, string>> = {}
+  if (!v.displayName.trim()) e.displayName = 'Nama tester wajib diisi.'
+  else if (v.displayName.trim().length > MANUAL_LIMITS.displayName) e.displayName = `Maksimal ${MANUAL_LIMITS.displayName} karakter.`
+  if (!v.email.trim()) e.email = 'Email Google tester wajib diisi.'
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) e.email = 'Format email belum benar, contoh: nama@gmail.com.'
+  if (!v.optedInAt) e.optedInAt = 'Pilih tanggal tester opt-in.'
+  else if (v.optedInAt > today) e.optedInAt = 'Tanggal opt-in tidak boleh di masa depan.'
+  return e
+}
