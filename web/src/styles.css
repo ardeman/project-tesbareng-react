@@ -689,3 +689,12 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
   .sheet-scroll { max-height: 70vh; }
   .detail-body { padding-left: var(--s-3); }
 }
+
+/* ---------- milestone check-ins in the tester panel (PRD §6.10) ---------- */
+.ci { min-width: 0; } /* a grid item: never let a long row widen the panel */
+.ci-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
+.ci-list { border-top: var(--bw-row) solid var(--ink); border-bottom: var(--bw-row) solid var(--ink); }
+.ci-list > .row-line { align-items: center; }
+.ci-list > .row-line > :last-child:not(.grow) { flex: none; }
+.ci-status { display: inline-flex; }
+.ci-list .nw, .ci-head ~ p .nw { white-space: nowrap; }

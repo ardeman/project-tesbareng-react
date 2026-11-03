@@ -2,7 +2,7 @@
 // denied, full emails unreadable.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeAll, describe, expect, it } from "vitest";
-import { anon, checklist, codeOf, createApp, member, must, service, type Member } from "./helpers";
+import { anon, checklist, codeOf, createApp, createCohort, forceActive, member, must, service, type Member } from "./helpers";
 
 let creator: Member;
 let tester: Member;
@@ -12,6 +12,9 @@ let appId: string;
 let entryId: string;
 let manualId: string;
 let deletedAppId: string;
+let cohortId: string;
+let assignmentId: string;
+let checkInId: string;
 
 beforeAll(async () => {
   [creator, tester, other, admin] = await Promise.all([
@@ -29,6 +32,16 @@ beforeAll(async () => {
   await must(creator.db.rpc("add_build", { p_app_id: appId, p_version_name: "1.0.1", p_uploaded_at: "2026-10-30", p_changelog: "Perbaiki crash" }));
   deletedAppId = await createApp(creator);
   await must(creator.db.rpc("delete_app", { p_app_id: deletedAppId }));
+
+  // A cohort with the creator's app and the tester as a pure tester, started by hand
+  // (start_cohort comes later), one assignment and one check-in.
+  cohortId = await createCohort(admin);
+  await must(admin.db.rpc("add_cohort_member", { p_cohort_id: cohortId, p_user_id: creator.id, p_app_id: appId }));
+  await must(admin.db.rpc("add_cohort_member", { p_cohort_id: cohortId, p_user_id: tester.id, p_app_id: null }));
+  await must(admin.db.rpc("set_cohort_link", { p_cohort_id: cohortId, p_url: "https://chat.whatsapp.com/IzinRahasia" }));
+  await forceActive(cohortId, 3);
+  assignmentId = (await must(service.from("assignments").insert({ cohort_id: cohortId, tester_user_id: tester.id, app_id: appId }).select("id").single())).id;
+  checkInId = (await must(service.from("check_ins").insert({ tester_id: entryId, kind: "used_app" }).select("id").single())).id;
 });
 
 const roles = () => ({ visitor: anon(), member: other.db, tester: tester.db, creator: creator.db, admin: admin.db });
@@ -42,6 +55,23 @@ describe("public reads", () => {
     expect(await must(db.from("profiles").select("id").eq("id", tester.id))).toHaveLength(1);
     expect(await must(db.from("app_stats").select("app_id").eq("app_id", appId))).toHaveLength(1);
     expect(await must(db.from("profile_stats").select("profile_id").eq("profile_id", tester.id))).toHaveLength(1);
+  });
+
+  it.each(["visitor", "member", "tester", "creator", "admin"] as const)("%s can read cohorts, members, assignments and check-ins", async (role) => {
+    const db = roles()[role];
+    expect(await must(db.from("cohorts").select("id").eq("id", cohortId))).toHaveLength(1);
+    expect(await must(db.from("cohort_members").select("user_id").eq("cohort_id", cohortId))).toHaveLength(2);
+    expect(await must(db.from("assignments").select("id").eq("cohort_id", cohortId))).toHaveLength(1);
+    expect(await must(db.from("check_ins").select("id").eq("tester_id", entryId))).toHaveLength(1);
+  });
+
+  it("the cohort WhatsApp link is readable only by that cohort's members and the admin (FR-50)", async () => {
+    for (const db of [tester.db, creator.db, admin.db]) {
+      expect(await must(db.from("cohort_links").select("whatsapp_group_url").eq("cohort_id", cohortId))).toHaveLength(1);
+    }
+    for (const db of [anon(), other.db]) {
+      expect(await must(db.from("cohort_links").select("whatsapp_group_url").eq("cohort_id", cohortId))).toHaveLength(0);
+    }
   });
 
   it("anyone can list a member's entries across apps (replaces the collection-group query)", async () => {
@@ -69,7 +99,7 @@ describe("full email never readable", () => {
   it.each(["visitor", "member", "creator"] as const)("%s finds no full address in any public table or view", async (role) => {
     const db = roles()[role];
     const known = [creator.email, tester.email, other.email, admin.email, "wulan.sari@gmail.com"];
-    for (const table of ["profiles", "apps", "testers", "builds", "app_stats", "profile_stats"]) {
+    for (const table of ["profiles", "apps", "testers", "builds", "app_stats", "profile_stats", "cohorts", "cohort_members", "assignments", "check_ins", "cohort_links"]) {
       const text = JSON.stringify(await must(db.from(table).select("*")));
       for (const email of known) expect(text, `${table} leaks ${email}`).not.toContain(email);
       for (const addr of text.match(/[^\s"@]+@[^\s"@]+/g) ?? []) expect(addr, `${table}: ${addr}`).toContain("*****@");
@@ -128,6 +158,25 @@ describe("direct table writes are denied for every client role", () => {
     await denied(db.from("profiles").delete().eq("id", other.id));
   });
 
+  it.each(roleNames)("%s cannot write cohorts, members, assignments, check-ins or links", async (role) => {
+    const db = roles()[role];
+    await denied(db.from("cohorts").insert({ name: "Cohort liar" }));
+    await denied(db.from("cohorts").update({ status: "closed" }).eq("id", cohortId));
+    await denied(db.from("cohorts").delete().eq("id", cohortId));
+    await denied(db.from("cohort_members").insert({ cohort_id: cohortId, user_id: other.id }));
+    await denied(db.from("cohort_members").update({ standing: "good" }).eq("cohort_id", cohortId));
+    await denied(db.from("cohort_members").delete().eq("cohort_id", cohortId));
+    await denied(db.from("assignments").insert({ cohort_id: cohortId, tester_user_id: creator.id, app_id: appId }));
+    await denied(db.from("assignments").update({ state: "reassigned" }).eq("id", assignmentId));
+    await denied(db.from("assignments").delete().eq("id", assignmentId));
+    await denied(db.from("check_ins").insert({ tester_id: entryId, kind: "still_opted_in" }));
+    await denied(db.from("check_ins").update({ kind: "still_opted_in" }).eq("id", checkInId));
+    await denied(db.from("check_ins").delete().eq("id", checkInId));
+    await denied(db.from("cohort_links").insert({ cohort_id: cohortId, whatsapp_group_url: "https://chat.whatsapp.com/Palsu" }));
+    await denied(db.from("cohort_links").update({ whatsapp_group_url: "https://chat.whatsapp.com/Palsu" }).eq("cohort_id", cohortId));
+    await denied(db.from("cohort_links").delete().eq("cohort_id", cohortId));
+  });
+
   it.each(roleNames)("%s cannot write the stats views", async (role) => {
     const db = roles()[role];
     expect(await codeOf(db.from("app_stats").update({ active_tester_count: 12 }).eq("app_id", appId))).not.toBeNull();
@@ -140,6 +189,14 @@ describe("direct table writes are denied for every client role", () => {
     const p = await must(service.from("profiles").select("role").eq("id", tester.id).single());
     expect(p.role).toBe("member");
     expect(await must(service.from("builds").select("id").eq("app_id", appId))).toHaveLength(1);
+    const c = await must(service.from("cohorts").select("status").eq("id", cohortId).single());
+    expect(c.status).toBe("active");
+    expect(await must(service.from("cohort_members").select("user_id, standing").eq("cohort_id", cohortId))).toHaveLength(2);
+    const a = await must(service.from("assignments").select("state").eq("id", assignmentId).single());
+    expect(a.state).toBe("open");
+    expect(await must(service.from("check_ins").select("kind").eq("id", checkInId).single())).toEqual({ kind: "used_app" });
+    const link = await must(service.from("cohort_links").select("whatsapp_group_url").eq("cohort_id", cohortId).single());
+    expect(link.whatsapp_group_url).toBe("https://chat.whatsapp.com/IzinRahasia");
   });
 });
 

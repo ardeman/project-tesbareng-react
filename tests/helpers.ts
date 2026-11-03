@@ -23,6 +23,7 @@ export interface Member {
 }
 
 const created: string[] = [];
+const cohorts: string[] = [];
 
 /** A signed-in member. The profile comes from the auth trigger, like a real Google sign-in. */
 export async function member(local: string, name: string, role: "member" | "admin" = "member"): Promise<Member> {
@@ -42,17 +43,29 @@ export async function member(local: string, name: string, role: "member" | "admi
   return { id: data.user.id, email, name, db };
 }
 
+/** Runs `fn` on slices of `ids`, so long id lists stay under the URL length limit. */
+async function inChunks(ids: string[], fn: (slice: string[]) => PromiseLike<unknown>) {
+  for (let i = 0; i < ids.length; i += 50) await fn(ids.slice(i, i + 50));
+}
+
 /** Removes everything the test file's members created (apps, entries, builds, accounts). */
 afterAll(async () => {
+  // Deleting a cohort cascades to its members, assignments and link.
+  await inChunks(cohorts, (ids) => must(service.from("cohorts").delete().in("id", ids)));
   if (created.length === 0) return;
-  const apps = await must(service.from("apps").select("id").in("creator_id", created));
-  const appIds = apps.map((a: { id: string }) => a.id);
-  if (appIds.length) {
-    await must(service.from("builds").delete().in("app_id", appIds));
-    await must(service.from("testers").delete().in("app_id", appIds));
-  }
-  await must(service.from("testers").delete().in("user_id", created));
-  if (appIds.length) await must(service.from("apps").delete().in("id", appIds));
+  const appIds: string[] = [];
+  await inChunks(created, async (ids) => {
+    const apps = await must(service.from("apps").select("id").in("creator_id", ids));
+    appIds.push(...apps.map((a: { id: string }) => a.id));
+  });
+  await inChunks(appIds, async (ids) => {
+    await must(service.from("assignments").delete().in("app_id", ids));
+    await must(service.from("cohort_members").delete().in("app_id", ids));
+    await must(service.from("builds").delete().in("app_id", ids));
+    await must(service.from("testers").delete().in("app_id", ids));
+  });
+  await inChunks(created, (ids) => must(service.from("testers").delete().in("user_id", ids)));
+  await inChunks(appIds, (ids) => must(service.from("apps").delete().in("id", ids)));
   for (const id of created) await service.auth.admin.deleteUser(id);
 });
 
@@ -117,3 +130,26 @@ export async function entryOf(appId: string, userId: string) {
 }
 
 export const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+
+/** Registers a cohort for cleanup (for cohorts inserted with the service role). */
+export function trackCohort(id: string): string {
+  cohorts.push(id);
+  return id;
+}
+
+/** A Forming cohort created through the RPC by an admin, removed after the file. */
+export async function createCohort(admin: Member, name = `Cohort uji ${uniq()}`): Promise<string> {
+  return trackCohort((await must(admin.db.rpc("create_cohort", { p_name: name }))) as string);
+}
+
+/** Moves a cohort to Active (Day 0 `daysAgo` days back) without generating assignments. */
+export async function forceActive(cohortId: string, daysAgo = 0) {
+  await must(service.from("cohorts").update({ status: "active", day0_at: ago(daysAgo * DAY_MS) }).eq("id", cohortId));
+}
+
+/** Moves a cohort to Closed. */
+export async function forceClosed(cohortId: string) {
+  await must(
+    service.from("cohorts").update({ status: "closed", day0_at: ago(21 * DAY_MS), closed_at: new Date().toISOString() }).eq("id", cohortId),
+  );
+}
