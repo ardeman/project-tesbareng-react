@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Badge, Bar, Empty, ErrorBox, FeedbackChip, Seats, Skel, StatusPill, TierProgress, useToast } from '../components/bits'
+import { Badge, Bar, Chip, Empty, ErrorBox, FeedbackChip, Seats, Skel, StatusPill, TierProgress, useToast } from '../components/bits'
 import { IconPlus } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, setEmailReminders, useApps, useAppsBy, useEntriesOf, usePublicProfile } from '../lib/data'
+import { useMyAssignedApps, useMyObligations } from '../lib/cohorts'
 import { daysActive, isNewBuild, relDay, TARGET_DAYS, TARGET_TESTERS } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 
-interface Todo { entry: TesterDoc; app: AppDoc; kind: 'build' | 'feedback' }
+interface Todo { entry?: TesterDoc; app: AppDoc; kind: 'join' | 'build' | 'feedback' }
 
 export function Me() {
   const { user, ready, signIn } = useAuth()
@@ -33,6 +34,8 @@ function MeSignedIn({ uid }: { uid: string }) {
   const apps = useApps()
   const myApps = useAppsBy(uid)
   const profile = usePublicProfile(uid)
+  const assignedApps = useMyAssignedApps(uid)
+  const obligations = useMyObligations(uid)
   const byId = useMemo(() => new Map(apps.data.map((a) => [a.id, a])), [apps.data])
   const loading = entries.loading || apps.loading
 
@@ -46,13 +49,26 @@ function MeSignedIn({ uid }: { uid: string }) {
 
   const todos = useMemo<Todo[]>(() => {
     const out: Todo[] = []
+    const testingIds = new Set(entries.data.filter((e) => e.status === 'active').map((e) => e.appId))
+    for (const [appId] of assignedApps.data) {
+      if (!testingIds.has(appId)) {
+        const app = byId.get(appId)
+        if (app) out.push({ app, kind: 'join' })
+      }
+    }
     for (const { entry, app } of testing) {
       const since = entry.feedbackSentAt ?? entry.optedInAt
       if (isNewBuild(app) && app.lastBuildAt && app.lastBuildAt > since) out.push({ entry, app, kind: 'build' })
       else if (!entry.feedbackSent) out.push({ entry, app, kind: 'feedback' })
     }
-    return out.sort((a, b) => (a.kind === b.kind ? daysActive(b.entry) - daysActive(a.entry) : a.kind === 'build' ? -1 : 1))
-  }, [testing])
+    const PRIORITY = { join: 0, build: 1, feedback: 2 } as const
+    return out.sort((a, b) => {
+      const pd = PRIORITY[a.kind] - PRIORITY[b.kind]
+      if (pd !== 0) return pd
+      if (a.entry && b.entry) return daysActive(b.entry) - daysActive(a.entry)
+      return 0
+    })
+  }, [testing, assignedApps.data, byId, entries.data])
 
   const suggestions = useMemo(() => {
     const mineIds = new Set(entries.data.map((e) => e.appId))
@@ -79,8 +95,9 @@ function MeSignedIn({ uid }: { uid: string }) {
   
     </>
   )
+  const unjoined = todos.filter((t) => t.kind === 'join').length
   const owe = todos.filter((t) => t.kind === 'feedback').length
-  const builds = todos.length - owe
+  const builds = todos.filter((t) => t.kind === 'build').length
   const p = profile.data
   const listed = myApps.data.length
   const nudge = p && listed > 0 && p.testingCount < listed
@@ -93,13 +110,33 @@ function MeSignedIn({ uid }: { uid: string }) {
           <p className="sub">
             {loading ? <Skel w={340} h={16} /> : todos.length === 0
               ? testing.length === 0 ? 'Anda belum menguji aplikasi apa pun.' : 'Tidak ada tugas tertunda. Semua aplikasi yang Anda uji sudah dapat feedback.'
-              : <><b>{[owe > 0 && `${owe} feedback belum dikirim`, builds > 0 && `${builds} build baru menunggu diuji ulang`].filter(Boolean).join(', ')}</b>.</>}
+              : <><b>{[unjoined > 0 && `${unjoined} belum opt-in`, owe > 0 && `${owe} feedback belum dikirim`, builds > 0 && `${builds} build baru menunggu diuji ulang`].filter(Boolean).join(', ')}</b>.</>}
           </p>
         </div>
         <div className="actions"><Link className="btn" to="/apps">Cari aplikasi yang butuh tester</Link></div>
       </div>
 
       {(entries.error || apps.error) && <ErrorBox text="Data Anda gagal dimuat." onRetry={() => { entries.retry(); apps.retry() }} />}
+
+      {!obligations.error && obligations.data.filter((o) => o.isBehind).length > 0 && (
+        <section className="panel" aria-labelledby="cohort-oblig-h" style={{ marginBottom: 'var(--s-4)' }}>
+          <header>
+            <h2 id="cohort-oblig-h">Kewajiban cohort tertinggal</h2>
+            <Chip tone="cabai" glyph="!">{obligations.data.filter((o) => o.isBehind).length}</Chip>
+          </header>
+          <ul>
+            {obligations.data.filter((o) => o.isBehind).map((o) => (
+              <li className="row-line" key={`${o.cohortId}:${o.userId}`}>
+                <span className="grow cell-2">
+                  <Link to={`/cohorts/${o.cohortId}`}><b>{o.cohortName}</b></Link>
+                  <span className="num">{o.behindCount} slot belum opt-in dalam batas waktu</span>
+                </span>
+                <Chip tone="cabai" glyph="!">Tertinggal</Chip>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="grid">
         <div className="span-7 col-fill stretch">
@@ -120,12 +157,20 @@ function MeSignedIn({ uid }: { uid: string }) {
             ) : (
               <ul>
                 {todos.slice(0, 4).map(({ entry, app, kind }, i) => (
-                  <li className="row-line" key={entry.appId}>
+                  <li className="row-line" key={app.id}>
                     <span className="grow cell-2">
                       <Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
-                      <span>{kind === 'build' ? `Build baru dirilis ${relDay(app.lastBuildAt)}. Perbarui dari Play Store lalu uji lagi.` : `Hari ke-${daysActive(entry)}. Feedback di Play belum Anda tandai terkirim.`}</span>
+                      <span>
+                        {kind === 'join'
+                          ? 'Ditugaskan melalui cohort. Opt-in dalam batas 48 jam.'
+                          : kind === 'build'
+                            ? `Build baru dirilis ${relDay(app.lastBuildAt)}. Perbarui dari Play Store lalu uji lagi.`
+                            : `Hari ke-${daysActive(entry!)}. Feedback di Play belum Anda tandai terkirim.`}
+                      </span>
                     </span>
-                    <Link className={`btn sm${i === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>{kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}</Link>
+                    <Link className={`btn sm${i === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
+                      {kind === 'join' ? 'Daftar sebagai tester' : kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}
+                    </Link>
                   </li>
                 ))}
               </ul>

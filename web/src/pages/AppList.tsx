@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Badge, Empty, ErrorBox, Seats, Skel, StatusPill, useToast } from '../components/bits'
+import { Badge, Chip, Empty, ErrorBox, Seats, Skel, StatusPill, useToast } from '../components/bits'
 import { AssignedChip } from '../components/cohortBits'
 import { IconPlus, IconSearch } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, useApps } from '../lib/data'
 import { appStatusLabel, relDay, TARGET_TESTERS } from '../lib/progress'
-import { useAppCohorts, useCohorts, useMyAssignedApps, type AppCohort, type CohortStatus } from '../lib/cohorts'
+import { useAppCohorts, useBelumTesApps, useCohorts, useMyAssignedApps, type AppCohort, type CohortStatus } from '../lib/cohorts'
 import type { AppDoc, AppStatus } from '../lib/types'
 
 type Tab = 'all' | AppStatus
@@ -21,7 +21,7 @@ const COHORT_WORD: Record<CohortStatus, string> = { forming: 'dibentuk', active:
 const NO_COHORT = 'tanpa'
 
 interface Assigned { cohortId: string; name: string }
-interface Row { app: AppDoc; eligible: number; cohort?: AppCohort; assigned?: Assigned }
+interface Row { app: AppDoc; eligible: number; cohort?: AppCohort; assigned?: Assigned; belumTes?: boolean }
 
 export function AppList() {
   const apps = useApps()
@@ -47,6 +47,7 @@ export function AppList() {
   const cohortList = useCohorts()
   const appCohorts = useAppCohorts()
   const assigned = useMyAssignedApps(user?.uid)
+  const belumTes = useBelumTesApps()
   const cohortLoading = cohortList.loading || appCohorts.loading
   const cohortError = cohortList.error || appCohorts.error
   const retryCohorts = () => { cohortList.retry(); appCohorts.retry() }
@@ -69,7 +70,8 @@ export function AppList() {
     eligible: app.eligibleCount,
     cohort: appCohorts.data.get(app.id)?.find((c) => c.status !== 'closed'),
     assigned: assigned.data.get(app.id),
-  })), [apps.data, appCohorts.data, assigned.data])
+    belumTes: belumTes.data.has(app.id),
+  })), [apps.data, appCohorts.data, assigned.data, belumTes.data])
 
   // Cohort and "ditugaskan" narrow the base set; the status counts follow them, the search does not (as before).
   const base = useMemo(() => rows.filter((r) => {
@@ -286,7 +288,7 @@ function creatorLine(app: AppDoc) {
 }
 
 function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
-  const { app, eligible, cohort, assigned } = row
+  const { app, eligible, cohort, assigned, belumTes } = row
   const c = creatorLine(app)
   return (
     <tr className="clickable" onClick={onOpen}>
@@ -294,6 +296,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
         <div className="name-line">
           <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
           {assigned && <AssignedChip cohort={assigned.name} />}
+          {belumTes && <Chip tone="cabai" glyph="!">Belum tes</Chip>}
         </div>
         <span>{app.creatorName} · didaftarkan {relDay(app.createdAt)}{cohort && <> · {cohort.name}</>}</span>
         <span className="md-show">Kreatornya menguji {c.t} aplikasi <Badge tier={app.creatorBadgeTier} size="sm" /></span>
@@ -315,7 +318,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
 }
 
 function PhoneRow({ row }: { row: Row }) {
-  const { app, eligible, cohort, assigned } = row
+  const { app, eligible, cohort, assigned, belumTes } = row
   const c = creatorLine(app)
   return (
     <Link to={`/apps/${app.id}`} className="mrow">
@@ -329,6 +332,7 @@ function PhoneRow({ row }: { row: Row }) {
       <span className="l2">
         <StatusPill status={app.status} />
         {assigned && <AssignedChip cohort={assigned.name} />}
+        {belumTes && <Chip tone="cabai" glyph="!">Belum tes</Chip>}
         <span>{app.creatorName} · menguji {c.t} aplikasi</span>
         <Badge tier={app.creatorBadgeTier} size="sm" />
         {cohort && <span className="mrow-cohort">{cohort.name}</span>}

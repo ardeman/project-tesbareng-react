@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Avatar, Badge, Empty, ErrorBox, NotFound, Skel, StatusPill, TierProgress } from '../components/bits'
+import { CohortChip, StandingChip } from '../components/cohortBits'
 import { useApps, useAppsBy, useEntriesOf, usePublicProfile } from '../lib/data'
+import { useCohortMembershipsOf } from '../lib/cohorts'
 import { usePageMeta } from '../lib/pageMeta'
 import { daysActive, fmtDate, TARGET_DAYS, TARGET_TESTERS } from '../lib/progress'
 
@@ -11,6 +13,7 @@ export function Profile() {
   const created = useAppsBy(uid)
   const entries = useEntriesOf(uid)
   const apps = useApps()
+  const cohorts = useCohortMembershipsOf(uid)
   const byId = useMemo(() => new Map(apps.data.map((a) => [a.id, a])), [apps.data])
 
   const testing = useMemo(() => entries.data
@@ -82,6 +85,27 @@ export function Profile() {
         </div>
         </div>
       </section>
+
+      {!cohorts.error && cohorts.data.length > 0 && (
+        <section className="panel" aria-labelledby="cohorts-h" style={{ marginTop: 'var(--s-4)' }}>
+          <header>
+            <h2 id="cohorts-h">Riwayat cohort</h2>
+            <span className="meta num">{cohorts.data.length} cohort</span>
+          </header>
+          <ul>
+            {cohorts.data.map((m) => (
+              <li className="row-line" key={`${m.cohortId}:${uid}`}>
+                <span className="grow cell-2">
+                  <Link to={`/cohorts/${m.cohortId}`}><b>{m.cohortName}</b></Link>
+                  <span>{m.appId ? 'Kreator' : 'Tester murni'} · {fmtDate(m.joinedAt)}</span>
+                </span>
+                <CohortChip status={m.cohortStatus} />
+                {m.standing && <StandingChip standing={m.standing} />}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </>
   )
 }

@@ -4,8 +4,9 @@ import { Avatar, Bar, Chip, Dialog, Empty, ErrorBox, failToast, Field, fieldAria
 import { IconExternal, IconPlus, IconSearch } from '../components/icons'
 import { errorText, rows, useFetch, type Row } from '../lib/data'
 import {
-  addCohortMember, CLOSE_DAY, cohortDay, createCohort, fmtWib, LAST_JOIN_DAY, MIN_APPS, pinnedMessage, removeCohortMember, setCohortLink, settleMember, startCohort,
-  useCohort, useCohortLink, useCohorts, useMemberCandidates,
+  addCohortMember, closeCohort, CLOSE_DAY, cohortDay, createCohort, fmtWib, LAST_JOIN_DAY, MIN_APPS, pinnedMessage,
+  reassignSlot, removeCohortMember, setCohortLink, settleMember, startCohort,
+  useAssignmentStatus, useCohort, useCohortLink, useCohorts, useMemberCandidates, useObligations,
   type Candidate, type CohortDetail, type CohortDoc, type CohortMember, type CohortStatus,
 } from '../lib/cohorts'
 import { supabase } from '../lib/supabase'
@@ -218,6 +219,8 @@ function CohortWork({ id, focus, onFocused, onChanged }: { id: string; focus: bo
   return (
     <div className="ch-stack">
       <CohortPanel c={c} heading={heading} onChanged={changed} />
+      {c.status === 'active' && <ReassignPanel c={c} />}
+      {c.status === 'active' && <ReminderPanel c={c} />}
       <LinkPanel c={c} />
       <PinnedPanel c={c} />
     </div>
@@ -240,6 +243,7 @@ function CohortPanel({ c, heading, onChanged }: { c: CohortDetail; heading: RefO
           </p>
         </div>
         {c.status === 'forming' && <StartAction c={c} heading={heading} onStarted={onChanged} />}
+        {c.status === 'active' && <CloseAction c={c} heading={heading} onClosed={onChanged} />}
       </div>
 
       {c.status === 'forming' && <FormingProgress c={c} />}
@@ -733,6 +737,202 @@ function SettleForm({ c, m, onClose, onSettled }: { c: CohortDetail; m: CohortMe
         <button className="btn primary" aria-busy={busy || undefined}>{busy ? 'Menyimpan…' : 'Tandai lunas'}</button>
       </div>
     </form>
+  )
+}
+
+// ---------- B7: close cohort (FR-37) ----------
+
+function CloseAction({ c, heading, onClosed }: { c: CohortDetail; heading: RefObject<HTMLHeadingElement | null>; onClosed: () => void }) {
+  const [open, setOpen] = useState(false)
+  const focusHeading = useFocusAfterClose(open, heading)
+  return (
+    <div className="ch-start">
+      <button type="button" className="btn" onClick={() => setOpen(true)}>Tutup cohort</button>
+      <Dialog open={open} onClose={() => setOpen(false)} label={`Tutup ${c.name}`}>
+        {open && <CloseForm c={c} onClose={() => setOpen(false)} onClosed={() => { focusHeading(); onClosed() }} />}
+      </Dialog>
+    </div>
+  )
+}
+
+function CloseForm({ c, onClose, onClosed }: { c: CohortDetail; onClose: () => void; onClosed: () => void }) {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const title = useRef<HTMLHeadingElement>(null)
+  useEffect(() => { const t = window.setTimeout(() => title.current?.focus(), 0); return () => window.clearTimeout(t) }, [])
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy) return
+    setBusy(true); setErr(null)
+    try {
+      await closeCohort(c.id)
+      toast(`${c.name} ditutup. Anggota dengan kewajiban belum selesai ditandai Berutang.`)
+      onClosed(); onClose()
+    } catch (x) {
+      setErr(errorText(x)); setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate>
+      <div className="sheet-body">
+        <h2 ref={title} tabIndex={-1}>Tutup {c.name}?</h2>
+        <p className="lede">Saat ditutup, TesBareng langsung menetapkan standing setiap anggota.</p>
+        <ol className="ch-steps">
+          <li><b>Baik</b> jika semua kewajiban terpenuhi.</li>
+          <li><b>Berutang</b> jika belum. Anggota yang berutang tidak bisa ikut cohort berikutnya sampai ditandai Lunas.</li>
+        </ol>
+        <p className="notice admin-notice" role="note">
+          <span className="chip"><span className="g" aria-hidden="true">!</span>Tidak bisa dibatalkan</span>
+          <span>Standing yang sudah ditetapkan tidak bisa diubah kembali ke status sebelumnya.</span>
+        </p>
+        {err && <ErrorBox text={err} />}
+      </div>
+      <div className="sheet-foot">
+        <button type="button" className="btn" onClick={onClose}>Batal</button>
+        <button className="btn danger" aria-busy={busy || undefined}>{busy ? 'Menutup…' : 'Tutup cohort'}</button>
+      </div>
+    </form>
+  )
+}
+
+// ---------- B7: reassign behind slot ----------
+
+function ReassignPanel({ c }: { c: CohortDetail }) {
+  const status = useAssignmentStatus(c.id)
+  const [slot, setSlot] = useState<{ appId: string; testerId: string; appName: string } | null>(null)
+  const panelHead = useRef<HTMLHeadingElement>(null)
+  const focusHead = useFocusAfterClose(!!slot, panelHead)
+
+  const behindSlots = useMemo(() => status.data.filter((s) => s.isBehind && s.cell === 'not_joined'), [status.data])
+
+  if (status.error || (status.loading && behindSlots.length === 0)) return null
+  if (behindSlots.length === 0) return null
+
+  return (
+    <section className="panel" aria-labelledby="reassign-h">
+      <header>
+        <h2 id="reassign-h" ref={panelHead} tabIndex={-1}>Slot belum opt-in</h2>
+        <Chip tone="cabai" glyph="!">{behindSlots.length} slot</Chip>
+      </header>
+      <p className="meta">Tester tertinggal. Pindahkan slot ke tester yang belum ditugaskan.</p>
+      <ul>
+        {behindSlots.slice(0, 10).map((s) => {
+          const app = c.members.find((m) => m.appId === s.appId)
+          const tester = c.members.find((m) => m.userId === s.testerId)
+          return (
+            <li className="row-line" key={`${s.appId}:${s.testerId}`}>
+              <span className="grow cell-2">
+                <b>{app?.appName ?? 'Aplikasi'}</b>
+                <span>{tester?.displayName || 'Tester'} · belum opt-in</span>
+              </span>
+              <button type="button" className="btn sm"
+                onClick={() => setSlot({ appId: s.appId, testerId: s.testerId, appName: app?.appName ?? 'Aplikasi' })}>
+                Pindahkan<span className="sr-only"> slot {app?.appName}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      <Dialog open={!!slot} onClose={() => setSlot(null)} label={slot ? `Pindahkan slot ${slot.appName}` : 'Pindahkan slot'}>
+        {slot && <ReassignForm c={c} slot={slot} onClose={() => setSlot(null)} onDone={() => { focusHead(); setSlot(null) }} />}
+      </Dialog>
+    </section>
+  )
+}
+
+function ReassignForm({ c, slot, onClose, onDone }: {
+  c: CohortDetail; slot: { appId: string; testerId: string; appName: string }; onClose: () => void; onDone: () => void
+}) {
+  const toast = useToast()
+  const [newId, setNewId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const candidates = c.members.filter((m) => m.userId !== slot.testerId && m.appId !== slot.appId)
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!newId || busy) return
+    setBusy(true); setErr(null)
+    try {
+      await reassignSlot(c.id, slot.appId, slot.testerId, newId)
+      const name = c.members.find((m) => m.userId === newId)?.displayName ?? 'Tester baru'
+      toast(`Slot ${slot.appName} dipindahkan ke ${name}.`)
+      onDone()
+    } catch (x) {
+      setErr(errorText(x)); setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate>
+      <div className="sheet-body">
+        <h2>Pindahkan slot {slot.appName}?</h2>
+        <p className="lede">Pilih tester pengganti dari anggota cohort ini.</p>
+        <fieldset className="fieldset ch-opts">
+          <legend>Tester pengganti</legend>
+          {candidates.length === 0
+            ? <p className="meta">Tidak ada kandidat. Tambah tester murni ke cohort ini dulu.</p>
+            : candidates.map((m) => (
+              <label key={m.userId} className="ch-opt">
+                <input type="radio" name="ra-new" value={m.userId} checked={newId === m.userId} onChange={() => setNewId(m.userId)} />
+                <span className="cell-2"><b>{nameOf(m)}</b><span>{m.appId ? (m.appName ?? 'Kreator') : 'Tester murni'}</span></span>
+              </label>
+            ))}
+        </fieldset>
+        {err && <ErrorBox text={err} />}
+      </div>
+      <div className="sheet-foot">
+        <button type="button" className="btn" onClick={onClose}>Batal</button>
+        <button className="btn primary" disabled={!newId} aria-busy={busy || undefined}>{busy ? 'Memindahkan…' : 'Pindahkan slot'}</button>
+      </div>
+    </form>
+  )
+}
+
+// ---------- B7: WA reminder text for behind members ----------
+
+function ReminderPanel({ c }: { c: CohortDetail }) {
+  const oblig = useObligations(c.id)
+  const behind = useMemo(() => oblig.data.filter((o) => o.isBehind), [oblig.data])
+
+  if (oblig.error || (oblig.loading && behind.length === 0)) return null
+  if (behind.length === 0) return null
+
+  const lines = behind.map((o) => {
+    const m = c.members.find((mm) => mm.userId === o.userId)
+    return `• ${m?.displayName || 'Anggota'}: ${o.behindCount} slot belum opt-in`
+  })
+
+  return (
+    <section className="panel" aria-labelledby="remind-h">
+      <header>
+        <h2 id="remind-h">Anggota tertinggal</h2>
+        <Chip tone="cabai" glyph="!">{behind.length}</Chip>
+      </header>
+      <p className="meta">Salin dan kirim ke grup WhatsApp sebagai pengingat opt-in.</p>
+      <ul className="ch-behind-list">
+        {behind.map((o) => {
+          const m = c.members.find((mm) => mm.userId === o.userId)
+          return (
+            <li className="row-line" key={o.userId}>
+              <span className="grow cell-2">
+                <b>{m?.displayName || 'Anggota'}</b>
+                <span className="num">{o.behindCount} slot belum opt-in</span>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <textarea
+        className="input ch-pin" readOnly
+        value={`Pengingat opt-in cohort:\n${lines.join('\n')}`}
+        rows={behind.length + 2}
+        aria-label="Teks pengingat untuk disalin ke WhatsApp"
+      />
+    </section>
   )
 }
 

@@ -12,9 +12,11 @@ import { usePageMeta } from '../lib/pageMeta'
 import { fmtDate, fmtDateTime } from '../lib/progress'
 import {
   CLOSE_DAY, cohortDay, fmtWib, joinCohortAsTester, joinDeadline, joinOpen, LAST_JOIN_DAY, leaveCohort, MIN_APPS, ownDay, schedule,
-  useCohort, useCohortLink, useOwingCohorts, type CohortDetail as Cohort, type CohortMember,
+  useCohort, useCohortLink, useOwingCohorts, useAssignmentStatus,
+  type CohortDetail as Cohort, type CohortMember, type CellState,
 } from '../lib/cohorts'
 import type { BadgeTier } from '../lib/types'
+import './cohort-detail.css'
 
 const DAY = 86_400_000
 /** A pure tester counts as "late" when assigned after Day 0 (FR-33b). One minute of slack for clock noise. */
@@ -186,8 +188,7 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
         <Schedule c={c} me={me} late={late} />
         <Members c={c} creators={creators} pure={pure} badges={badges.data} myUid={user?.uid} />
 
-        {/* B5 slot: the obligation matrix (FR-38, contract `cohort_assignment_status`) goes here as a span-12
-            section. Render nothing until it exists: no placeholder UI (CLAUDE.md, no slop). */}
+        <ObligationMatrix c={c} />
       </div>
 
       <JoinDialog open={dialog === 'join'} onClose={() => setDialog(null)} c={c} onDone={done} />
@@ -372,6 +373,84 @@ function MemberRow({ m, c, tier, mine }: { m: CohortMember; c: Cohort; tier?: Ba
       </span>
       {m.standing && <StandingChip standing={m.standing} />}
     </li>
+  )
+}
+
+// ---------- B5: obligation matrix (FR-38, cohort_assignment_status view) ----------
+
+const CELL_GLYPH: Record<CellState, string> = {
+  not_joined: '○', left: '×', opted_in: '◑', used: '◕',
+  feedback_sent: '✓', feedback_verified: '✓✓', reassigned: '→',
+}
+const CELL_LABEL: Record<CellState, string> = {
+  not_joined: 'Belum opt-in', left: 'Keluar', opted_in: 'Opt-in', used: 'Memakai app',
+  feedback_sent: 'Feedback terkirim', feedback_verified: 'Feedback terverifikasi', reassigned: 'Dipindah',
+}
+
+function ObligationMatrix({ c }: { c: Cohort }) {
+  const apps = c.members.filter((m) => m.appId != null)
+  const shouldLoad = c.status !== 'forming' && apps.length > 0
+  const status = useAssignmentStatus(shouldLoad ? c.id : undefined)
+
+  const cells = useMemo<Map<string, Map<string, CellState>>>(() => {
+    const m = new Map<string, Map<string, CellState>>()
+    for (const s of status.data) {
+      const inner = m.get(s.appId) ?? new Map<string, CellState>()
+      inner.set(s.testerId, s.cell)
+      m.set(s.appId, inner)
+    }
+    return m
+  }, [status.data])
+
+  const behind = useMemo(() => new Set(status.data.filter((s) => s.isBehind).map((s) => s.testerId)), [status.data])
+
+  if (!shouldLoad || status.error) return null
+  if (status.loading && status.data.length === 0) return null
+
+  return (
+    <section className="panel span-12 matrix-panel" aria-labelledby="matrix-h">
+      <header>
+        <h2 id="matrix-h">Matriks penugasan</h2>
+        {status.loading && <span className="meta">Memuat…</span>}
+      </header>
+      <div className="matrix-wrap" tabIndex={0} role="region" aria-label="Matriks penugasan, scroll horizontal">
+        <table className="matrix-table num">
+          <thead>
+            <tr>
+              <th className="matrix-th-name" scope="col">Tester</th>
+              {apps.map((app) => (
+                <th key={app.appId} scope="col">
+                  <span className="matrix-app-name" title={app.appName ?? ''}>{app.appName ?? 'Aplikasi'}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {c.members.map((m) => (
+              <tr key={m.userId} className={behind.has(m.userId) ? 'behind-row' : ''}>
+                <td className="matrix-td-name">
+                  <Link to={`/u/${m.userId}`}>{m.displayName || 'Anggota'}</Link>
+                  {behind.has(m.userId) && <span className="sr-only"> (tertinggal)</span>}
+                </td>
+                {apps.map((app) => {
+                  if (app.userId === m.userId) {
+                    return <td key={app.appId} className="matrix-cell own" title="Aplikasi sendiri"><span aria-hidden="true">—</span></td>
+                  }
+                  const cell = cells.get(app.appId!)?.get(m.userId)
+                  if (!cell) {
+                    return <td key={app.appId} className="matrix-cell unassigned" title="Tidak ditugaskan"><span aria-hidden="true"> </span></td>
+                  }
+                  return <td key={app.appId} className={`matrix-cell ${cell}`} title={CELL_LABEL[cell]}><span aria-label={CELL_LABEL[cell]}>{CELL_GLYPH[cell]}</span></td>
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="matrix-legend small muted">
+        ○ Belum · ◑ Opt-in · ◕ Memakai · ✓ Feedback · ✓✓ Terverifikasi · × Keluar · → Dipindah · — Aplikasi sendiri
+      </p>
+    </section>
   )
 }
 

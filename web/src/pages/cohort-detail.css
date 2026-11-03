@@ -1,0 +1,48 @@
+/* B5: obligation matrix (FR-38, contract cohort_assignment_status). span-12 section.
+   Flat cells; hard shadows only on touchable elements (ADR-001 §2.2).
+   Status never by colour alone: cell glyph + title attr carry the text (ADR-001 §2.5). */
+
+.matrix-panel { overflow: hidden; }
+.matrix-wrap {
+  overflow-x: auto; overflow-y: visible; overscroll-behavior-x: contain;
+  position: relative;
+}
+.matrix-wrap:focus-visible { outline: var(--bw) solid var(--ink); outline-offset: 2px; }
+.matrix-table {
+  border-collapse: collapse; width: max-content; min-width: 100%;
+  font-size: var(--fs-small); line-height: 1.4;
+}
+.matrix-table th, .matrix-table td {
+  border: var(--bw-row) solid var(--ink); text-align: center; vertical-align: middle;
+}
+.matrix-th-name, .matrix-td-name {
+  position: sticky; left: 0; z-index: 1;
+  background: var(--kertas); text-align: left;
+  min-width: 120px; max-width: 200px; padding: var(--s-1) var(--s-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-right: var(--bw) solid var(--ink);
+}
+.matrix-th-name {
+  font-size: var(--fs-caption); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.matrix-td-name a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.matrix-app-name {
+  display: block; max-width: 80px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: var(--fs-caption); font-weight: 700;
+  padding: var(--s-1) var(--s-1);
+}
+.matrix-cell { width: 36px; min-width: 36px; height: 36px; padding: 0; font-size: var(--fs-caption); font-weight: 700; }
+/* colour carries status (PRD DR-3, ADR-001 §2.5) */
+.matrix-cell.not_joined { background: var(--surface-soft); color: var(--muted); }
+.matrix-cell.left        { background: var(--surface-soft); color: var(--muted); }
+.matrix-cell.reassigned  { background: var(--surface-soft); color: var(--muted); }
+.matrix-cell.opted_in    { background: var(--langit); color: var(--ink); }
+.matrix-cell.used        { background: var(--langit); color: var(--ink); }
+.matrix-cell.feedback_sent     { background: var(--pandan); color: var(--ink); }
+.matrix-cell.feedback_verified { background: var(--pandan); color: var(--ink); font-weight: 800; }
+.matrix-cell.own      { background: var(--surface-soft); color: var(--muted); }
+.matrix-cell.unassigned { background: var(--putih); }
+/* behind: cabai left edge on the name cell (ADR-001 §2.2; edge = inset shadow, not border, to preserve layout) */
+.behind-row .matrix-td-name { box-shadow: inset 4px 0 0 var(--cabai); }
+.matrix-legend { margin-top: var(--s-2); }

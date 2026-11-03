@@ -2,7 +2,7 @@
    Tokens only. Flat panels, list rows and chips; shadows stay on buttons and dialogs. */
 
 /* ---------- cohort index (left column) ---------- */
-.ch-index > header { margin-bottom: 0; padding-bottom: var(--s-3); }
+.ch-index > header { margin-bottom: 0; padding-bottom: var(--s-4); }
 .ch-create { display: grid; gap: var(--s-2); padding: var(--s-3) var(--s-4) var(--s-4); border-top: var(--bw) solid var(--ink); border-bottom: var(--bw) solid var(--ink); background: var(--kertas); }
 .ch-create .btn { justify-self: start; margin-top: var(--s-1); }
 .ch-create .error-box { margin: 0; }
@@ -120,6 +120,9 @@
 .ch-code { font-family: var(--font-mono); font-size: var(--fs-caption); overflow-wrap: anywhere; color: var(--ink); }
 .ch-pin-note { margin-bottom: var(--s-3); }
 .ch-pin.input { min-height: 0; resize: none; background: var(--kertas); white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-small); line-height: 1.5; cursor: text; field-sizing: content; }
+
+/* B7: reminder + reassign panels */
+.ch-behind-list { margin-bottom: var(--s-2); }
 
 @media (hover: hover) and (pointer: fine) {
   .ch-row:hover { background: var(--surface-soft); }

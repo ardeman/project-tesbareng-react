@@ -286,6 +286,118 @@ export const setCohortLink = (cohortId: string, url: string) => rpc('set_cohort_
 export const joinCohortAsTester = (cohortId: string) => rpc('join_cohort_as_tester', { p_cohort_id: cohortId })
 export const leaveCohort = (cohortId: string) => rpc('leave_cohort', { p_cohort_id: cohortId })
 
+// ---------- B5/B7/B8: obligation matrix, close/reassign, Belum tes, /me obligations, profile history ----------
+
+export type CellState = 'not_joined' | 'left' | 'opted_in' | 'used' | 'feedback_sent' | 'feedback_verified' | 'reassigned'
+
+export interface AssignmentStatus {
+  appId: string
+  testerId: string
+  cell: CellState
+  isBehind: boolean
+}
+
+export interface CohortObligation {
+  cohortId: string
+  userId: string
+  owesOptIn: boolean
+  allFulfilled: boolean
+  isBehind: boolean
+  behindCount: number
+  remainingCount: number
+}
+
+function toAssignmentStatus(r: Row): AssignmentStatus {
+  return { appId: r.app_id, testerId: r.tester_user_id, cell: r.cell, isBehind: !!r.is_behind }
+}
+
+function toObligation(r: Row): CohortObligation {
+  return {
+    cohortId: r.cohort_id, userId: r.user_id,
+    owesOptIn: !!r.owes_opt_in, allFulfilled: !!r.all_fulfilled, isBehind: !!r.is_behind,
+    behindCount: r.behind_count ?? 0, remainingCount: r.remaining_count ?? 0,
+  }
+}
+
+/** Per-slot state for one cohort (cohort_assignment_status view, A5). Empty until the view exists. */
+export const useAssignmentStatus = (cohortId: string | undefined) =>
+  useFetch<AssignmentStatus[]>(
+    cohortId ? async () => (await rows<Row[]>(supabase.from('cohort_assignment_status').select('*').eq('cohort_id', cohortId))).map(toAssignmentStatus) : null,
+    [] as AssignmentStatus[], [cohortId],
+  )
+
+/** Member obligations for one cohort (cohort_obligations view, A5). Empty until the view exists. */
+export const useObligations = (cohortId: string | undefined) =>
+  useFetch<CohortObligation[]>(
+    cohortId ? async () => (await rows<Row[]>(supabase.from('cohort_obligations').select('*').eq('cohort_id', cohortId))).map(toObligation) : null,
+    [] as CohortObligation[], [cohortId],
+  )
+
+/** Signed-in user's obligations across non-closed cohorts. Swallows errors (A5 view may not exist). */
+export const useMyObligations = (uid: string | undefined) =>
+  useFetch<(CohortObligation & { cohortName: string; cohortStatus: CohortStatus })[]>(
+    uid
+      ? async () => {
+          try {
+            const r = await rows<Row[]>(supabase.from('cohort_obligations').select('*, cohort:cohorts(name, status)').eq('user_id', uid))
+            return r
+              .filter((x) => x.cohort && x.cohort.status !== 'closed')
+              .map((x) => ({ ...toObligation(x), cohortName: x.cohort.name as string, cohortStatus: x.cohort.status as CohortStatus }))
+          } catch { return [] }
+        }
+      : null,
+    [] as (CohortObligation & { cohortName: string; cohortStatus: CohortStatus })[], [uid],
+  )
+
+/**
+ * App IDs whose creator owes opt-in in an active cohort (for "Belum tes" chip on /apps).
+ * Swallows all errors; returns an empty Set until A5 lands.
+ */
+export const useBelumTesApps = () =>
+  useFetch<Set<string>>(
+    async () => {
+      try {
+        const owing = await rows<Row[]>(supabase.from('cohort_obligations').select('cohort_id, user_id').eq('owes_opt_in', true))
+        if (owing.length === 0) return new Set<string>()
+        const cohortIds = [...new Set(owing.map((o) => o.cohort_id as string))]
+        const mems = await rows<Row[]>(
+          supabase.from('cohort_members').select('cohort_id, user_id, app_id, cohort:cohorts(status)').in('cohort_id', cohortIds).not('app_id', 'is', null),
+        )
+        const owingKey = new Set(owing.map((o) => `${o.cohort_id as string}:${o.user_id as string}`))
+        return new Set(
+          mems
+            .filter((m) => m.app_id && m.cohort?.status === 'active' && owingKey.has(`${m.cohort_id as string}:${m.user_id as string}`))
+            .map((m) => m.app_id as string),
+        )
+      } catch { return new Set<string>() }
+    },
+    new Set<string>(), [],
+  )
+
+/** Cohort memberships of a member (for the cohort history section on /u/:uid), newest first. */
+export const useCohortMembershipsOf = (uid: string | undefined) =>
+  useFetch<{ cohortId: string; cohortName: string; cohortStatus: CohortStatus; appId: string | null; standing: Standing | null; joinedAt: number }[]>(
+    uid
+      ? async () => {
+          const r = await rows<Row[]>(
+            supabase.from('cohort_members').select('cohort_id, app_id, standing, joined_at, cohort:cohorts(name, status)').eq('user_id', uid).order('joined_at', { ascending: false }),
+          )
+          return r
+            .filter((m) => m.cohort)
+            .map((m) => ({
+              cohortId: m.cohort_id as string, cohortName: m.cohort.name as string,
+              cohortStatus: m.cohort.status as CohortStatus, appId: m.app_id as string | null,
+              standing: m.standing as Standing | null, joinedAt: ms(m.joined_at)!,
+            }))
+        }
+      : null,
+    [] as { cohortId: string; cohortName: string; cohortStatus: CohortStatus; appId: string | null; standing: Standing | null; joinedAt: number }[], [uid],
+  )
+
+export const closeCohort = (cohortId: string) => rpc('close_cohort', { p_cohort_id: cohortId })
+export const reassignSlot = (cohortId: string, appId: string, oldTesterId: string, newTesterId: string) =>
+  rpc('reassign_slot', { p_cohort_id: cohortId, p_app_id: appId, p_old_tester_id: oldTesterId, p_new_tester_id: newTesterId })
+
 // ---------- app list / app detail (B6: cohort filter, "Ditugaskan" label; PRD FR-25, §5.2) ----------
 
 export interface AppCohort { cohortId: string; name: string; status: CohortStatus; createdAt: number }
