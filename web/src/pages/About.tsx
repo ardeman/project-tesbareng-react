@@ -266,7 +266,7 @@ export function About() {
 
         <Section id="tester-murni" n={4} title="Tester murni" lede="Belum punya app, atau sedang di antara dua app? Ikut cohort tanpa membawa app.">
           <ul className="ab-rule-list ab-rule-list--boxed">
-            <li><b>Gabung sampai hari 7</b><span>Selama cohort masih Forming, atau sudah berjalan sampai hari ke-7. Hari 7 adalah batasnya supaya kamu masih sempat 14 hari sebelum cohort tutup di hari 21.</span></li>
+            <li><b>Gabung sampai akhir hari 6</b><span>Selama cohort masih Forming, atau sudah berjalan sampai akhir hari ke-6 (tepat 7 × 24 jam setelah Hari 0). Batas ini menyisakan 14 hari sebelum cohort tutup di hari 21.</span></li>
             <li><b>14 app untukmu</b><span>Kamu ditugaskan 14 app (atau semua app kalau kurang dari itu), dimulai dari app yang testernya paling sedikit.</span></li>
             <li><b>48 jam milikmu sendiri</b><span>Batas opt-in dihitung dari saat kamu ditugaskan, bukan dari Hari 0. Titik cek berikutnya ikut bergeser.</span></li>
           </ul>

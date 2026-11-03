@@ -11,6 +11,7 @@ import { usePageMeta } from './lib/pageMeta'
 const AppList = lazy(() => import('./pages/AppList').then((m) => ({ default: m.AppList })))
 const AppDetail = lazy(() => import('./pages/AppDetail').then((m) => ({ default: m.AppDetail })))
 const AppForm = lazy(() => import('./pages/AppForm').then((m) => ({ default: m.AppForm })))
+const Cohorts = lazy(() => import('./pages/Cohorts'))
 const Me = lazy(() => import('./pages/Me').then((m) => ({ default: m.Me })))
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })))
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })))
@@ -34,6 +35,7 @@ createRoot(document.getElementById('root')!).render(
                   <Route path="/apps/new" element={<AppForm />} />
                   <Route path="/apps/:id" element={<AppDetail />} />
                   <Route path="/apps/:id/edit" element={<AppForm />} />
+                  <Route path="/cohorts/:id?" element={<Cohorts />} />
                   <Route path="/me" element={<Me />} />
                   <Route path="/u/:uid" element={<Profile />} />
                   <Route path="/admin" element={<Admin />} />

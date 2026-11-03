@@ -1,0 +1,91 @@
+/* ---------- cohorts (B2 /cohorts, B3 /cohorts/:id): ruled rows, flat; only buttons carry shadows.
+   Lazy: imported by pages/Cohorts.tsx so it stays out of the main stylesheet. ---------- */
+.cohort-group + .cohort-group { margin-top: var(--s-5); }
+.group-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s-1) var(--s-3); margin-bottom: var(--s-2); }
+.group-title { display: flex; align-items: baseline; gap: var(--s-2); font-size: var(--fs-h2); line-height: 1.25; font-weight: 700; }
+.group-title .n { color: var(--muted); font-size: var(--fs-small); font-weight: 500; }
+.cohort-fold {
+  display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--target); padding: 0; margin: 0 0 var(--s-1);
+  border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer;
+}
+.cohort-fold svg { width: 20px; height: 20px; transition: transform var(--t-press) var(--ease); }
+.cohort-fold[aria-expanded="true"] svg { transform: rotate(90deg); }
+.cohort-row {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 3fr); gap: var(--s-2) var(--s-4); align-items: center;
+  padding: var(--s-3) var(--s-4); border-top: var(--bw-row) solid var(--ink); color: var(--ink);
+}
+.cohort-row:first-child { border-top: 0; }
+.cr-main, .cr-progress, .cr-side { display: grid; gap: var(--s-1); min-width: 0; }
+.cr-name { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1) var(--s-2); min-width: 0; }
+.cr-name b { overflow-wrap: anywhere; }
+.cr-meta, .cr-open { color: var(--muted); font-size: var(--fs-small); line-height: 1.4; }
+.cr-day { font-size: var(--fs-small); line-height: 1.4; }
+.cr-side { justify-items: end; text-align: right; font-size: var(--fs-small); line-height: 1.4; }
+
+.cohort-head .rh-progress { justify-items: stretch; width: min(100%, 520px); }
+.cohort-head .rh-count b { font-weight: 800; }
+.rh-note { max-width: 300px; }
+.rh-note.err-text, .rh-note .err-text { font-weight: 500; }
+.own-day { padding: var(--s-1) 0 var(--s-1) var(--s-3); box-shadow: inset 6px 0 0 var(--kunyit); font-size: var(--fs-small); line-height: 1.4; }
+.standing-sum { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); font-size: var(--fs-small); line-height: 1.4; }
+
+/* Schedule: a ruled list. Today's row is the one kunyit fill (ADR-001 §2.1 "the active day on the cohort
+   schedule"), always with a "● Hari ini" chip so the position reads without colour. */
+.sched-note { margin-bottom: var(--s-2); }
+.sched-row {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--s-1) var(--s-3); align-items: start;
+  padding: 12px 0; border-top: var(--bw-row) solid var(--ink);
+}
+.sched-row:first-child { border-top: 0; }
+.sched-day { padding-top: 1px; font-size: var(--fs-small); line-height: 1.4; font-weight: 800; white-space: nowrap; }
+.sched-body { display: grid; gap: 2px; min-width: 0; }
+.sched-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); }
+.sched-title { font-weight: 700; }
+.sched-detail { color: var(--muted); font-size: var(--fs-small); line-height: 1.4; }
+.sched-at { font-size: var(--fs-small); line-height: 1.4; }
+.sched-done { color: var(--muted); font-size: var(--fs-small); line-height: 1.4; white-space: nowrap; }
+.sched-row.past .sched-title, .sched-row.past .sched-at { color: var(--muted); }
+.sched-row.today {
+  margin: 0 calc(-1 * var(--s-4)); padding-inline: var(--s-4); background: var(--kunyit); color: var(--on-fill);
+  border-top: var(--bw) solid var(--ink); border-bottom: var(--bw) solid var(--ink);
+}
+.sched-row.today + .sched-row { border-top: 0; }
+.sched-row.today .sched-detail, .sched-row.today .sched-title, .sched-row.today .sched-at { color: var(--on-fill); }
+.sched-row.today:last-child { border-bottom: 0; }
+
+/* Members: two groups under caption rules; the viewer's own row gets the kunyit edge plus "Anda". */
+.member-group {
+  margin-top: var(--s-4); padding-bottom: var(--s-1); border-bottom: var(--bw) solid var(--ink);
+  font-size: var(--fs-caption); line-height: 1.3; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.panel > header + .member-group { margin-top: 0; }
+.member-group + .empty { margin-top: var(--s-2); }
+.member-row { display: flex; align-items: center; gap: var(--s-3); min-height: 56px; padding: var(--s-2) 0; }
+.member-row + .member-row { border-top: var(--bw-row) solid var(--ink); }
+.member-row.mine { box-shadow: inset 6px 0 0 var(--kunyit); padding-left: var(--s-3); }
+.member-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.member-name, .member-app { display: inline-flex; align-items: center; min-height: 24px; } /* 24 px targets (WCAG 2.5.8) */
+.member-name { font-weight: 700; }
+.member-sub { min-width: 0; color: var(--muted); font-size: var(--fs-small); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member-app { color: var(--ink); font-weight: 700; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.member-none { padding: var(--s-2) 0 0; }
+
+/* Join / WhatsApp dialogs: what you commit to, as a short numbered list. */
+.duties { display: grid; gap: var(--s-2); padding-left: var(--s-4); list-style: decimal; }
+.duties.plain { list-style: square; }
+.duties li::marker { font-weight: 800; }
+
+@media (hover: hover) and (pointer: fine) {
+  .cohort-row:hover { background: var(--surface-soft); }
+  .cohort-row:hover .cr-name b, .member-name:hover, .cohort-fold:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .member-app:hover { background: var(--langit); }
+}
+@media (max-width: 1023px) {
+  .rh-note { max-width: none; }
+}
+@media (max-width: 640px) {
+  .cohort-row { grid-template-columns: minmax(0, 1fr); padding: var(--s-3); }
+  .cr-side { justify-items: start; text-align: left; }
+  .sched-row { grid-template-columns: 56px minmax(0, 1fr); }
+  .sched-row.today { margin: 0 calc(-1 * var(--s-3)); padding-inline: var(--s-3); }
+}

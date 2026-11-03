@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth'
 import { useAppsBy, useEntriesOf, errorText } from '../lib/data'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { Avatar, useToast } from './bits'
-import { IconAdmin, IconApps, IconBook, IconClose, IconMenu, IconSignOut, IconTodo, IconUser, Mark } from './icons'
+import { IconAdmin, IconApps, IconBook, IconClose, IconCohort, IconMenu, IconSignOut, IconTodo, IconUser, Mark } from './icons'
 
 export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -57,6 +57,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
         <nav className="nav-list primary" aria-label="Menu utama">
           <NavLink to="/apps" end className="nav-item"><IconApps /><span className="label">Aplikasi</span></NavLink>
+          <NavLink to="/cohorts" className="nav-item"><IconCohort /><span className="label">Cohort</span></NavLink>
           <NavLink to="/me" className="nav-item"><IconTodo /><span className="label">Tugas saya</span>{owed > 0 && <span className="count num">{owed > 99 ? '99+' : owed}<span className="sr-only"> feedback belum dikirim</span></span>}</NavLink>
           {user && <NavLink to={`/u/${user.uid}`} className="nav-item"><IconUser /><span className="label">Profil saya</span></NavLink>}
           <NavLink to="/about" className="nav-item"><IconBook /><span className="label">Cara kerja</span></NavLink>

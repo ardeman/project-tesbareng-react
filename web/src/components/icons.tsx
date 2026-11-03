@@ -136,6 +136,14 @@ export const IconAdmin = (p: P) => (
   </svg>
 )
 
+/** solar:users-group-rounded-linear (cohorts), Iconify's own compact path data */
+export const IconCohort = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="6" r="4" /><ellipse cx="12" cy="17" rx="6" ry="4" />
+    <path d="M18 9c1.657 0 3-1.12 3-2.5S19.657 4 18 4M6 9C4.343 9 3 7.88 3 6.5S4.343 4 6 4M20 19c1.754-.385 3-1.359 3-2.5s-1.246-2.115-3-2.5M4 19c-1.754-.385-3-1.359-3-2.5s1.246-2.115 3-2.5" />
+  </svg>
+)
+
 /** solar:logout-linear */
 export const IconSignOut = (p: P) => (
   <svg {...base(p)}><path d="M15 12H2m0 0l3-3m-3 3l3 3M9 8V7a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4h-6a4 4 0 0 1-4-4v-1" {...J}/></svg>
