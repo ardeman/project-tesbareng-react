@@ -667,6 +667,7 @@ async function main() {
       created_at: iso(createdAt),
       updated_at: iso(Math.max(createdAt, lastBuild)),
       deleted: app.deleted === true,
+      deleted_at: app.deleted === true ? iso(Math.max(createdAt, lastBuild)) : null,
     });
 
     for (const t of testersByApp.get(app.id)!) {
