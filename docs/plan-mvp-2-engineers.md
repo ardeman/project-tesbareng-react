@@ -46,9 +46,9 @@ Status values: Not started / In progress / In review / Done.
 
 | ID | Task | Owner | Days | Waits for | Status |
 | --- | --- | --- | --- | --- | --- |
-| A1 | Migration: `cohorts`, `cohort_members`, `assignments`, `check_ins`, `cohort_links`, RLS, write revokes, permission tests | A | 2 | T0 | Not started |
-| A2 | RPCs: `create_cohort`, `add_cohort_member` (one app per member per cohort, not Owing), `remove_cohort_member`, `leave_cohort`, `set_cohort_link`, `get_cohort_link`, `settle_member`, with tests | A | 1.5 | A1 | Not started |
-| A3 | Seed: one Forming and one Active cohort with assignments and check-ins | A | 0.5 | A1 | Not started |
+| A1 | Migration: `cohorts`, `cohort_members`, `assignments`, `check_ins`, `cohort_links`, RLS, write revokes, permission tests | A | 2 | T0 | In review |
+| A2 | RPCs: `create_cohort`, `add_cohort_member` (one app per member per cohort, not Owing), `remove_cohort_member`, `leave_cohort`, `set_cohort_link`, `get_cohort_link`, `settle_member`, with tests | A | 1.5 | A1 | In review |
+| A3 | Seed: one Forming and one Active cohort with assignments and check-ins | A | 0.5 | A1 | In review |
 | B1 | `/admin` shell and moderation: restore apps, edit tester entries (RPCs already exist) | B | 1.5 | — | Not started |
 | B2 | `/cohorts` list: Forming, Active, Closed | B | 1 | T0 (real data: A3) | Not started |
 | B3 | `/cohorts/:id`: members, schedule and day counter, "Gabung sebagai tester" until Day 7, leave button while Forming, WhatsApp button with the phone-number notice (FR-51) | B | 1.5 | T0 (real data: A2) | Not started |

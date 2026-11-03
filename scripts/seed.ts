@@ -598,7 +598,8 @@ async function must<T>(label: string, p: PromiseLike<{ data: T; error: unknown }
 
 async function clearDatabase() {
   const all = "00000000-0000-0000-0000-000000000000";
-  for (const table of ["builds", "testers", "apps", "profiles"]) {
+  // Deleting cohorts cascades to their members, assignments and WhatsApp links.
+  for (const table of ["check_ins", "cohorts", "builds", "testers", "apps", "profiles"]) {
     await must(`clear ${table}`, db.from(table).delete().neq("id", all));
   }
   for (;;) {
@@ -610,6 +611,145 @@ async function clearDatabase() {
 
 async function insertAll(table: string, rows: Record<string, unknown>[]) {
   for (let i = 0; i < rows.length; i += 500) await must(`insert ${table}`, db.from(table).insert(rows.slice(i, i + 500)));
+}
+
+// ---------------------------------------------------------------- cohorts and check-ins
+
+// Own PRNG, so the community above stays the same whatever happens here.
+const crand = mulberry32(20261103);
+const cchance = (p: number) => crand() < p;
+const crandInt = (min: number, max: number) => min + Math.floor(crand() * (max - min + 1));
+function shuffled<T>(xs: readonly T[]): T[] {
+  const out = [...xs];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(crand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * Cohort #1 is Active at Day 2: 13 apps (the minimum, so full mesh, k = 12) and two
+ * pure testers, just past the 48 h opt-in deadline. Two creators ghost part of their
+ * assignments, so the matrix shows Behind members and "Belum tes" labels. Cohort #2
+ * is Forming with the newest app. Only 14 live apps exist and two of them are a few
+ * days old, so the Active cohort cannot be further along without changing the community.
+ */
+const FORMING_APP = "bank-sampah-warga";
+const ACTIVE_PURE = ["hana", "made"];
+const FORMING_PURE = ["yohanes", "tri"];
+const GHOSTS = new Set(["putu", "anisa"]);
+const DAY0 = NOW - 2 * DAY_MS - 10 * HOUR_MS;
+const COHORT_LINK = "https://chat.whatsapp.com/TesBarengCohort1Lokal";
+
+type Row = Record<string, unknown>;
+const ms = (v: unknown) => Date.parse(String(v));
+
+function generateCohorts(appRows: Row[], testerRows: Row[], buildRows: Row[], maskedOf: Map<string, string>) {
+  const activeId = stableUuid("cohort:1");
+  const formingId = stableUuid("cohort:2");
+  const appIdOf = (key: string) => stableUuid(`app:${key}`);
+  const activeApps = APPS.filter((a) => !a.deleted && a.id !== FORMING_APP);
+  if (activeApps.length !== 13 || new Set(activeApps.map((a) => a.creator)).size !== 13) {
+    throw new Error("Cohort #1 needs 13 live apps from 13 different creators");
+  }
+  // An app cannot be older than the cohort it joined at Day 0.
+  for (const row of appRows) {
+    if (activeApps.some((a) => appIdOf(a.id) === row.id) && ms(row.created_at) > DAY0) row.created_at = iso(DAY0 - 6 * HOUR_MS);
+  }
+
+  const cohorts: Row[] = [
+    { id: activeId, name: "Cohort #1", status: "active", day0_at: iso(DAY0), created_at: iso(DAY0 - 5 * DAY_MS) },
+    { id: formingId, name: "Cohort #2", status: "forming", created_at: iso(NOW - 1 * DAY_MS) },
+  ];
+
+  // Ring order and assignments (FR-32, FR-33): k = N − 1 up to 16 apps, else 14.
+  const ring = shuffled(activeApps);
+  const n = ring.length;
+  const k = n <= 16 ? n - 1 : 14;
+  const members: Row[] = ring.map((a, i) => ({
+    cohort_id: activeId,
+    user_id: member(a.creator).uid,
+    app_id: appIdOf(a.id),
+    joined_at: iso(DAY0 - crandInt(2, 4) * DAY_MS),
+    assigned_at: iso(DAY0),
+    ring_position: i,
+  }));
+  const pairs: { tester: Member; app: AppSpec }[] = [];
+  ring.forEach((a, i) => {
+    for (let s = 1; s <= k; s++) pairs.push({ tester: member(a.creator), app: ring[(i + s) % n] });
+  });
+  for (const key of ACTIVE_PURE) {
+    members.push({ cohort_id: activeId, user_id: member(key).uid, joined_at: iso(DAY0 - crandInt(1, 3) * DAY_MS), assigned_at: iso(DAY0) });
+    // Fewer than 14 apps, so a pure tester gets all of them.
+    for (const a of ring.slice(0, Math.min(14, n))) pairs.push({ tester: member(key), app: a });
+  }
+  const assignments: Row[] = pairs.map(({ tester, app }) => ({
+    id: stableUuid(`assignment:1:${tester.uid}:${app.id}`),
+    cohort_id: activeId,
+    tester_user_id: tester.uid,
+    app_id: appIdOf(app.id),
+    assigned_at: iso(DAY0),
+    state: "open",
+    created_at: iso(DAY0),
+  }));
+
+  // Most assigned members opt in within the 48 h window; ghosts only for some apps.
+  let newEntries = 0;
+  const entryOf = new Map(testerRows.filter((t) => t.user_id).map((t) => [`${t.app_id}:${t.user_id}`, t]));
+  for (const { tester, app } of pairs) {
+    const appId = appIdOf(app.id);
+    if (entryOf.has(`${appId}:${tester.uid}`)) continue;
+    const p = GHOSTS.has(tester.key) ? 0.4 : ACTIVE_PURE.includes(tester.key) ? 0.85 : 0.92;
+    if (!cchance(p)) continue;
+    const optedInAt = DAY0 + crandInt(1, 40) * HOUR_MS;
+    const row: Row = {
+      id: stableUuid(`tester:${app.id}:${tester.uid}`),
+      app_id: appId,
+      user_id: tester.uid,
+      display_name: tester.name,
+      photo_url: null,
+      masked_email: maskedOf.get(tester.uid),
+      opted_in_at: iso(optedInAt),
+      left_at: null,
+      status: "active",
+      added_by: "self",
+      note: null,
+      feedback_sent: false,
+      feedback_sent_at: null,
+      feedback_summary: null,
+      feedback_verified: false,
+      replied: false,
+      created_at: iso(optedInAt),
+    };
+    testerRows.push(row);
+    entryOf.set(`${appId}:${tester.uid}`, row);
+    newEntries++;
+  }
+
+  const formingApp = APPS.find((a) => a.id === FORMING_APP)!;
+  members.push({ cohort_id: formingId, user_id: member(formingApp.creator).uid, app_id: appIdOf(formingApp.id), joined_at: iso(NOW - 20 * HOUR_MS) });
+  for (const key of FORMING_PURE) members.push({ cohort_id: formingId, user_id: member(key).uid, joined_at: iso(NOW - crandInt(2, 18) * HOUR_MS) });
+
+  // Check-ins on Active entries (PRD §6.10), each only once its window has opened:
+  // "Sudah buka app" from day 5, "Masih opt-in" from day 12, "Sudah update" after a build.
+  // Windows count from the tester's own opt-in (FR-40); entries made for Cohort #1 have
+  // no milestone open yet except new builds.
+  const checkIns: Row[] = [];
+  for (const t of testerRows) {
+    if (t.status !== "active" || !t.user_id) continue;
+    const optedIn = ms(t.opted_in_at);
+    const days = (NOW - optedIn) / DAY_MS;
+    const at = (from: number) => iso(Math.min(NOW - HOUR_MS, from + crandInt(1, 30) * HOUR_MS));
+    if (days >= 5 && cchance(0.7)) checkIns.push({ tester_id: t.id, kind: "used_app", created_at: at(optedIn + 5 * DAY_MS) });
+    if (days >= 12 && cchance(0.75)) checkIns.push({ tester_id: t.id, kind: "still_opted_in", created_at: at(optedIn + 12 * DAY_MS) });
+    for (const b of buildRows) {
+      if (b.app_id !== t.app_id || ms(b.created_at) <= optedIn || !cchance(0.55)) continue;
+      checkIns.push({ tester_id: t.id, kind: "updated_build", build_id: b.id, created_at: at(ms(b.created_at)) });
+    }
+  }
+
+  return { cohorts, members, assignments, links: [{ cohort_id: activeId, whatsapp_group_url: COHORT_LINK }], checkIns, newEntries };
 }
 
 // ---------------------------------------------------------------- main
@@ -696,6 +836,7 @@ async function main() {
 
     for (const b of builds) {
       buildRows.push({
+        id: stableUuid(`build:${app.id}:${b.versionName}`),
         app_id: appId,
         version_name: b.versionName,
         changelog: b.changelog,
@@ -705,14 +846,24 @@ async function main() {
     }
   }
 
+  const cohort = generateCohorts(appRows, testerRows, buildRows, maskedOf);
+
   await insertAll("apps", appRows);
   await insertAll("testers", testerRows);
   await insertAll("builds", buildRows);
+  await insertAll("cohorts", cohort.cohorts);
+  await insertAll("cohort_members", cohort.members);
+  await insertAll("assignments", cohort.assignments);
+  await insertAll("cohort_links", cohort.links);
+  await insertAll("check_ins", cohort.checkIns);
 
   // ---- summary, read back from the computed views
   const visible = APPS.filter((a) => !a.deleted);
   console.log(
     `Seeded ${SUPABASE_URL}: ${members.length} members, ${visible.length} apps (+${APPS.length - visible.length} soft-deleted), ${testerRows.length} tester entries, ${buildRows.length} builds.`,
+  );
+  console.log(
+    `Cohorts: ${cohort.cohorts.length} (${cohort.members.length} members, ${cohort.assignments.length} assignments, ${cohort.newEntries} entries from assignments), ${cohort.checkIns.length} check-ins.`,
   );
   console.log("");
   const stats = await must("app_stats", db.from("app_stats").select("*"));
