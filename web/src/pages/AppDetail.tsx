@@ -54,6 +54,7 @@ export function AppDetail() {
   const mine = user ? testers.data.find((t) => t.uid === user.uid) : undefined
   const loading = testers.loading || builds.loading
   const playUrl = a.storeUrl ?? a.optInUrl
+  const optInUrl = a.optInUrl
 
   const needLogin = async (then: DialogKind) => {
     try {
@@ -83,10 +84,10 @@ export function AppDetail() {
       const latest = builds.data[0]
       const buildWaiting = isNewBuild(a) && a.lastBuildAt != null && a.lastBuildAt > since && !(latest && flow.isDone('updated_build', latest.id))
       const leave: MenuItem = { label: 'Berhenti menguji', danger: true, onSelect: () => setDialog('leave') }
-      const play: Action = { label: 'Buka di Play', icon: <IconExternal />, href: playUrl }
+      const play: Action = { label: 'Buka link opt-in', icon: <IconExternal />, href: optInUrl }
       const editNote: Action = { label: 'Ubah catatan feedback', onClick: () => setDialog('feedback') }
       if (!mine.feedbackSent) return { primary: { label: 'Tandai sudah kirim', onClick: () => setDialog('feedback') }, secondary: [play], overflow: [leave] }
-      if (buildWaiting) return { primary: { label: 'Uji build baru di Play', icon: <IconExternal />, href: playUrl }, secondary: [editNote], overflow: [leave] }
+      if (buildWaiting) return { primary: { label: 'Uji build baru di Play', icon: <IconExternal />, href: optInUrl }, secondary: [editNote], overflow: [leave] }
       const next = flow.next
       if (next) {
         const primary: Action = { label: `Check-in: ${next.label}`, onClick: () => flow.run(next), busy: flow.pending === next.key, blocked: !!flow.pending && flow.pending !== next.key }
