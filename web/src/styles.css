@@ -223,10 +223,11 @@ table.data tr.mine td:first-child { box-shadow: inset 6px 0 0 var(--kunyit); }
 
 th.col-id { width: 30%; min-width: 220px; }
 .md-show { display: none !important; }
-@media (max-width: 1180px) {
+/* App list: below 1440 px (sidebar + six columns) the detail columns fold into the first two cells. */
+@media (max-width: 1439px) {
   .md-hide { display: none; }
   .md-show { display: block !important; }
-  th.col-id { width: 44%; }
+  th.col-id { width: 40%; min-width: 200px; }
 }
 
 /* Tester table: always a table. On narrow screens it scrolls sideways and the name column stays put. */
@@ -722,4 +723,34 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
 @media (max-width: 640px) {
   .admin-search { padding: 0 var(--s-3) var(--s-3); }
   .admin-table .summary-cell { min-width: 220px; }
+}
+
+/* /apps toolbar (B6): cohort filter, "Ditugaskan ke saya" toggle, count + sort kept together. */
+.app-toolbar .search { flex: 1 1 176px; max-width: 320px; }
+.app-toolbar .search .input { width: 100%; }
+.app-toolbar .cohort-select { width: auto; max-width: 200px; text-overflow: ellipsis; }
+.app-toolbar .cohort-select:disabled { background: var(--surface-soft); cursor: progress; }
+.app-toolbar .tb-end { display: flex; align-items: center; gap: var(--s-3); margin-left: auto; }
+.cohort-off { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0 var(--s-2); color: var(--muted); font-size: var(--fs-small); }
+.app-toolbar .mine-toggle:not([aria-pressed="true"]) { border-color: var(--ink); background: var(--putih); }
+.app-toolbar .mine-toggle:disabled { cursor: progress; background: var(--surface-soft); }
+.mine-toggle .tg {
+  display: inline-flex; align-items: center; justify-content: center; width: var(--s-3); height: var(--s-3);
+  border: var(--bw) solid var(--ink); background: var(--putih); font-size: var(--fs-caption); font-weight: 800; line-height: 1;
+}
+.cell-2 .name-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); min-width: 0; }
+.cell-2 .name-line b { display: inline; overflow-wrap: anywhere; }
+.mrow-cohort { overflow-wrap: anywhere; }
+.app-table .seat-cell { display: flex; flex-wrap: wrap; gap: 0 var(--s-2); }
+/* "Ditugaskan" chip: the kunyit edge is a fill (like .own-day), not a shadow; the chip stays flat. */
+.chip.assigned { box-shadow: inset var(--s-1) 0 0 var(--kunyit); padding-left: calc(var(--s-2) + var(--s-1)); }
+.chip.assigned .sr-only { text-transform: none; }
+.assigned-via { font-weight: 500; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .app-toolbar .search { flex-basis: 100%; max-width: none; }
+  .app-toolbar .tb-end { display: contents; }
+  .app-toolbar .cohort-select, .app-toolbar .cohort-off { order: 1; flex: 1 1 100%; max-width: none; min-width: 0; }
+  .app-toolbar #sort { order: 2; flex: 1 1 100%; min-width: 0; }
+  .app-toolbar .mine-toggle { order: 3; }
+  .app-toolbar .total { order: 4; margin-left: auto; }
 }

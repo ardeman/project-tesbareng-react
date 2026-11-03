@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Badge, Empty, ErrorBox, Seats, Skel, StatusPill, useToast } from '../components/bits'
+import { AssignedChip } from '../components/cohortBits'
 import { IconPlus, IconSearch } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, useApps } from '../lib/data'
 import { appStatusLabel, relDay, TARGET_TESTERS } from '../lib/progress'
+import { useAppCohorts, useCohorts, useMyAssignedApps, type AppCohort, type CohortStatus } from '../lib/cohorts'
 import type { AppDoc, AppStatus } from '../lib/types'
 
 type Tab = 'all' | AppStatus
@@ -13,7 +15,13 @@ type Sort = 'need' | 'creator' | 'new'
 const TABS: Tab[] = ['all', 'recruiting', 'testing', 'applied', 'live']
 const STILL_TESTING: AppStatus[] = ['recruiting', 'testing']
 
-interface Row { app: AppDoc; eligible: number }
+/** Same words as CohortChip (cohortBits), so the filter and the cohort pages agree. */
+const COHORT_WORD: Record<CohortStatus, string> = { forming: 'dibentuk', active: 'aktif', closed: 'selesai' }
+/** `?cohort=` value for apps not in any forming or active cohort (closed-only history counts as none; owner 2026-11-03). */
+const NO_COHORT = 'tanpa'
+
+interface Assigned { cohortId: string; name: string }
+interface Row { app: AppDoc; eligible: number; cohort?: AppCohort; assigned?: Assigned }
 
 export function AppList() {
   const apps = useApps()
@@ -25,17 +33,61 @@ export function AppList() {
   const [sort, setSort] = useState<Sort>('need')
   usePageMeta('Daftar aplikasi', 'Aplikasi Android anggota komunitas yang sedang uji tertutup dan butuh tester.')
 
-  const rows = useMemo<Row[]>(() => apps.data.map((app) => ({ app, eligible: app.eligibleCount })), [apps.data])
+  // Cohort filter (FR-25) and "Ditugaskan ke saya" live in the URL, so a cohort page can link here (?cohort=<id>).
+  const [params, setParams] = useSearchParams()
+  const cohortParam = params.get('cohort') ?? ''
+  const mineParam = params.get('ditugaskan') === '1'
+  const setParam = (key: string, value: string | null) => setParams((p) => {
+    const next = new URLSearchParams(p)
+    if (value) next.set(key, value); else next.delete(key)
+    return next
+  }, { replace: true })
+
+  // Cohort data is extra: if it fails, the list still works and only the cohort filter goes away (with a reason).
+  const cohortList = useCohorts()
+  const appCohorts = useAppCohorts()
+  const assigned = useMyAssignedApps(user?.uid)
+  const cohortLoading = cohortList.loading || appCohorts.loading
+  const cohortError = cohortList.error || appCohorts.error
+  const retryCohorts = () => { cohortList.retry(); appCohorts.retry() }
+
+  /** Open cohorts first (newest first, as fetched), then closed ones. */
+  const cohortOptions = useMemo(
+    () => [...cohortList.data.filter((c) => c.status !== 'closed'), ...cohortList.data.filter((c) => c.status === 'closed')],
+    [cohortList.data],
+  )
+  const pickedCohort = cohortOptions.find((c) => c.id === cohortParam)
+  const cohortFilter = !cohortLoading && !cohortError ? cohortParam : ''
+  const mineFilter = mineParam && !!user && !assigned.loading && !assigned.error
+  // While loading, the toggle holds its slot (disabled) so the toolbar does not jump; afterwards it stays only for
+  // members with assignments (or a linked ?ditugaskan=1).
+  const showMineToggle = !!user && !assigned.error && (assigned.loading || assigned.data.size > 0 || mineParam)
+  const mineFailed = !!user && mineParam && !!assigned.error
+
+  const rows = useMemo<Row[]>(() => apps.data.map((app) => ({
+    app,
+    eligible: app.eligibleCount,
+    cohort: appCohorts.data.get(app.id)?.find((c) => c.status !== 'closed'),
+    assigned: assigned.data.get(app.id),
+  })), [apps.data, appCohorts.data, assigned.data])
+
+  // Cohort and "ditugaskan" narrow the base set; the status counts follow them, the search does not (as before).
+  const base = useMemo(() => rows.filter((r) => {
+    if (mineFilter && !r.assigned) return false
+    if (!cohortFilter) return true
+    const list = appCohorts.data.get(r.app.id)
+    return cohortFilter === NO_COHORT ? !r.cohort : !!list?.some((c) => c.cohortId === cohortFilter)
+  }), [rows, mineFilter, cohortFilter, appCohorts.data])
 
   const counts = useMemo(() => {
-    const c: Record<Tab, number> = { all: rows.length, recruiting: 0, testing: 0, applied: 0, live: 0 }
-    for (const r of rows) c[r.app.status]++
+    const c: Record<Tab, number> = { all: base.length, recruiting: 0, testing: 0, applied: 0, live: 0 }
+    for (const r of base) c[r.app.status]++
     return c
-  }, [rows])
+  }, [base])
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    const list = rows.filter((r) => (tab === 'all' || r.app.status === tab) && (!needle || r.app.name.toLowerCase().includes(needle)))
+    const list = base.filter((r) => (tab === 'all' || r.app.status === tab) && (!needle || r.app.name.toLowerCase().includes(needle)))
     const still = (r: Row) => (STILL_TESTING.includes(r.app.status) ? 0 : 1)
     const created = (r: Row) => r.app.createdAt ?? 0
     return list.sort((a, b) => {
@@ -43,11 +95,12 @@ export function AppList() {
       if (sort === 'new') return created(b) - created(a)
       return still(a) - still(b) || a.app.activeTesterCount - b.app.activeTesterCount || created(b) - created(a)
     })
-  }, [rows, tab, q, sort])
+  }, [base, tab, q, sort])
 
   const short = rows.filter((r) => STILL_TESTING.includes(r.app.status) && r.app.activeTesterCount < TARGET_TESTERS).length
   const ready = rows.filter((r) => r.eligible >= TARGET_TESTERS && r.app.status !== 'live').length
-  const loading = apps.loading
+  // A linked ?cohort= or ?ditugaskan=1 view waits for its data instead of flashing the unfiltered list.
+  const loading = apps.loading || (!!cohortParam && cohortLoading) || (mineParam && !!user && assigned.loading)
 
   const add = async () => {
     try {
@@ -55,6 +108,26 @@ export function AppList() {
       navigate('/apps/new')
     } catch (e) { toast(errorText(e)) }
   }
+
+  const resetAll = () => {
+    setQ(''); setTab('all')
+    setParams((p) => { const next = new URLSearchParams(p); next.delete('cohort'); next.delete('ditugaskan'); return next }, { replace: true })
+  }
+  const filterWords: string[] = []
+  if (q.trim()) filterWords.push(`bernama “${q.trim()}”`)
+  if (tab !== 'all') filterWords.push(`berstatus ${appStatusLabel[tab].toLowerCase()}`)
+  if (cohortFilter === NO_COHORT) filterWords.push('tanpa cohort')
+  else if (cohortFilter && pickedCohort) filterWords.push(`di ${pickedCohort.name}`)
+  const unknownCohort = !!cohortFilter && cohortFilter !== NO_COHORT && !pickedCohort
+
+  // Screen readers hear the count once the list settles (debounced), not on every search keystroke.
+  const [said, setSaid] = useState('')
+  useEffect(() => {
+    if (loading) return
+    const t = setTimeout(() => setSaid(`${shown.length} aplikasi`), 600)
+    return () => clearTimeout(t)
+  }, [loading, shown.length])
+  if (mineFilter) filterWords.push('yang ditugaskan ke Anda')
 
   return (
     <>
@@ -83,27 +156,65 @@ export function AppList() {
         ))}
       </div>
 
-      <div className="toolbar">
+      <div className="toolbar app-toolbar">
         <label className="search">
           <span className="sr-only">Cari nama aplikasi</span>
           <IconSearch />
           <input className="input" type="search" placeholder="Cari nama aplikasi" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
-        <span className="spacer" />
-        <span className="total num">{loading ? '' : `${shown.length} aplikasi`}</span>
-        <label className="sr-only" htmlFor="sort">Urutkan</label>
-        <select id="sort" className="input" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-          <option value="need">Paling butuh tester</option>
-          <option value="creator">Kreator paling aktif menguji</option>
-          <option value="new">Terbaru</option>
-        </select>
+        {cohortError ? (
+          <span className="cohort-off">
+            <span>Saringan cohort tidak tersedia.</span>
+            <button type="button" className="text-action" onClick={retryCohorts}>Muat ulang</button>
+          </span>
+        ) : (
+          <>
+            <label className="sr-only" htmlFor="cohort-filter">Saring menurut cohort</label>
+            <select
+              id="cohort-filter" className="input cohort-select" value={cohortParam} disabled={cohortLoading}
+              onChange={(e) => setParam('cohort', e.target.value || null)}
+            >
+              <option value="">{cohortLoading ? 'Memuat cohort…' : 'Semua cohort'}</option>
+              {cohortOptions.map((c) => <option key={c.id} value={c.id}>{c.name} · {COHORT_WORD[c.status]}</option>)}
+              {cohortParam && cohortParam !== NO_COHORT && !cohortLoading && !pickedCohort && <option value={cohortParam}>Cohort tidak ditemukan</option>}
+              <option value={NO_COHORT}>Tanpa cohort</option>
+            </select>
+          </>
+        )}
+        {showMineToggle && (
+          <button
+            type="button" className="tab mine-toggle" aria-pressed={mineParam} disabled={assigned.loading}
+            onClick={() => setParam('ditugaskan', mineParam ? null : '1')}
+          >
+            {/* On/off shown by a check box glyph, not by the lifted shadow alone. */}
+            <span className="tg" aria-hidden="true">{mineParam ? '✓' : ''}</span>
+            Ditugaskan ke saya<span className="n num">{assigned.loading ? '' : assigned.data.size}</span>
+          </button>
+        )}
+        {mineFailed && (
+          <span className="cohort-off">
+            <span>Saringan “Ditugaskan” tidak tersedia.</span>
+            <button type="button" className="text-action" onClick={assigned.retry}>Muat ulang</button>
+          </span>
+        )}
+        {/* Count + sort stay together; when the filters fill the row they wrap as one group, right-aligned. */}
+        <span className="tb-end">
+          <span className="total num" aria-hidden="true">{loading ? '' : `${shown.length} aplikasi`}</span>
+          <span className="sr-only" role="status">{said}</span>
+          <label className="sr-only" htmlFor="sort">Urutkan</label>
+          <select id="sort" className="input" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+            <option value="need">Paling butuh tester</option>
+            <option value="creator">Kreator paling aktif</option>
+            <option value="new">Terbaru</option>
+          </select>
+        </span>
       </div>
 
       {apps.error && <ErrorBox text="Daftar aplikasi gagal dimuat." onRetry={apps.retry} />}
 
       <div className="panel flush">
         <div className="table-wrap dtable">
-          <table className="data">
+          <table className="data app-table">
             <thead>
               <tr>
                 <th className="col-id">Aplikasi</th>
@@ -138,13 +249,17 @@ export function AppList() {
               <Empty title="Belum ada aplikasi yang sedang uji tertutup.">
                 <p>Daftarkan aplikasi Anda lewat tombol Tambah aplikasi di atas, agar anggota lain bisa ikut menguji.</p>
               </Empty>
-            ) : q ? (
-              <Empty title={`Tidak ada aplikasi bernama “${q}” dengan status ini.`}>
-                <button className="text-action" onClick={() => { setQ(''); setTab('all') }}>Hapus pencarian dan lihat semua</button>
+            ) : unknownCohort ? (
+              <Empty title="Cohort ini tidak ditemukan.">
+                <p>Tautannya mungkin sudah lama, atau cohort-nya sudah dihapus.</p>
+                <button className="text-action" onClick={resetAll}>Hapus semua saringan</button>
               </Empty>
             ) : (
-              <Empty title="Belum ada aplikasi dengan status ini.">
-                <button className="text-action" onClick={() => setTab('all')}>Lihat semua aplikasi</button>
+              <Empty title={`Tidak ada aplikasi ${filterWords.join(' ')}.`}>
+                {pickedCohort && cohortFilter === pickedCohort.id && filterWords.length === 1 && (
+                  <p>Aplikasi muncul di sini setelah kreatornya bergabung ke {pickedCohort.name} dengan aplikasinya.</p>
+                )}
+                <button className="text-action" onClick={resetAll}>Hapus semua saringan</button>
               </Empty>
             )}
           </div>
@@ -171,13 +286,16 @@ function creatorLine(app: AppDoc) {
 }
 
 function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
-  const { app, eligible } = row
+  const { app, eligible, cohort, assigned } = row
   const c = creatorLine(app)
   return (
     <tr className="clickable" onClick={onOpen}>
       <td className="cell-2">
-        <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
-        <span>{app.creatorName} · didaftarkan {relDay(app.createdAt)}</span>
+        <div className="name-line">
+          <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
+          {assigned && <AssignedChip cohort={assigned.name} />}
+        </div>
+        <span>{app.creatorName} · didaftarkan {relDay(app.createdAt)}{cohort && <> · {cohort.name}</>}</span>
         <span className="md-show">Kreatornya menguji {c.t} aplikasi <Badge tier={app.creatorBadgeTier} size="sm" /></span>
       </td>
       <td className="cell-2"><SeatCell app={app} eligible={eligible} /><span className="md-show">{eligible} lewat 14 hari</span></td>
@@ -197,7 +315,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
 }
 
 function PhoneRow({ row }: { row: Row }) {
-  const { app, eligible } = row
+  const { app, eligible, cohort, assigned } = row
   const c = creatorLine(app)
   return (
     <Link to={`/apps/${app.id}`} className="mrow">
@@ -210,8 +328,10 @@ function PhoneRow({ row }: { row: Row }) {
       </span>
       <span className="l2">
         <StatusPill status={app.status} />
+        {assigned && <AssignedChip cohort={assigned.name} />}
         <span>{app.creatorName} · menguji {c.t} aplikasi</span>
         <Badge tier={app.creatorBadgeTier} size="sm" />
+        {cohort && <span className="mrow-cohort">{cohort.name}</span>}
       </span>
     </Link>
   )

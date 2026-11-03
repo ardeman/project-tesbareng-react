@@ -29,7 +29,7 @@ Contrast of ink `#121212` text on each fill (computed 2 Nov 2026): kertas 17.4, 
 
 | Token | Hex (light) | Hex (dark) | Use |
 |---|---|---|---|
-| `{colors.primary}` = `--kunyit` (turmeric) | `#FFC83D` | `#FFC83D` | Primary action fill, the active day on the cohort schedule, focus highlight (see focus rule) |
+| `{colors.primary}` = `--kunyit` (turmeric) | `#FFC83D` | `#FFC83D` | Primary action fill, the active day on the cohort schedule, focus highlight (see focus rule), and the "this concerns you" left edge: the current user's own row and the Ditugaskan chip (owner approved 3 Nov 2026) |
 | `{colors.primary-active}` | `#FFC83D` | `#FFC83D` | Same fill; pressed state is shown by movement (translate + shadow 0), not a colour change |
 | `{colors.primary-disabled}` **[proposed]** | `#F2E6C8` | `#3A362F` | Disabled primary fill, with ink text at 4.5:1+ and no shadow |
 | `{colors.accent}` = `--ubi` (purple yam) | `#B9A3FF` | `#B9A3FF` | Badges and reciprocity **only** |
@@ -164,6 +164,7 @@ Native scrolling only; no Lenis/Locomotive. No bounce, elastic or spring oversho
 | `progress-12/14` | putih track | — | small | 0 | — | 12 or 14 ruled segments, filled in status colour, label "X / 12" tabular |
 | `table-row` | putih | ink | small | 0 | 12px 16px | Height 44–48px, 1 px ink rule, ink header row on kunyit or putih, sticky first column on mobile |
 | `matrix-cell` | status fill / surface-soft (unassigned) | ink | small | 0 | — | Glyph + text, no shadow; current user's row has a kunyit left edge |
+| `chip-assigned` | putih | ink | chip | 0 | chip padding + 4px left | Glyph ◆ + "Ditugaskan", 4 px kunyit inset left edge (same idiom as the own-row edge), no shadow; cohort name in text or sr-only (owner approved 3 Nov 2026) |
 | `input` | putih | ink | body | 0 | 10px 12px, min-height 44px | 2 px ink border, no shadow at rest |
 | `avatar` | — | — | — | 9999px | — | Google photo in 2 px ink-bordered circle; no generated faces |
 

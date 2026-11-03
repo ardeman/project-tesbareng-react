@@ -285,3 +285,45 @@ export const settleMember = (cohortId: string, userId: string) => rpc('settle_me
 export const setCohortLink = (cohortId: string, url: string) => rpc('set_cohort_link', { p_cohort_id: cohortId, p_url: url.trim() || null })
 export const joinCohortAsTester = (cohortId: string) => rpc('join_cohort_as_tester', { p_cohort_id: cohortId })
 export const leaveCohort = (cohortId: string) => rpc('leave_cohort', { p_cohort_id: cohortId })
+
+// ---------- app list / app detail (B6: cohort filter, "Ditugaskan" label; PRD FR-25, §5.2) ----------
+
+export interface AppCohort { cohortId: string; name: string; status: CohortStatus; createdAt: number }
+
+/**
+ * Every cohort each app has been in, newest first (an app is in at most one non-closed cohort, but may have
+ * closed ones behind it). Drives the cohort filter on /apps.
+ */
+export const useAppCohorts = () =>
+  useFetch(
+    async () => {
+      const r = await rows<Row[]>(supabase.from('cohort_members').select('app_id, cohort:cohorts(id, name, status, created_at)').not('app_id', 'is', null))
+      const byApp = new Map<string, AppCohort[]>()
+      for (const m of r) {
+        if (!m.cohort) continue
+        const list = byApp.get(m.app_id) ?? []
+        list.push({ cohortId: m.cohort.id, name: m.cohort.name, status: m.cohort.status, createdAt: ms(m.cohort.created_at)! })
+        byApp.set(m.app_id, list)
+      }
+      for (const list of byApp.values()) list.sort((a, b) => b.createdAt - a.createdAt)
+      return byApp
+    },
+    new Map<string, AppCohort[]>(), [],
+  )
+
+/**
+ * Apps assigned to this member through a cohort that is not closed (open assignments only; reassigned slots
+ * moved away). Map appId → cohort name, for the "Ditugaskan" label.
+ */
+export const useMyAssignedApps = (uid?: string | null) =>
+  useFetch(
+    uid
+      ? async () => {
+          const r = await rows<Row[]>(supabase.from('assignments').select('app_id, cohort:cohorts(id, name, status)')
+            .eq('tester_user_id', uid).eq('state', 'open'))
+          return new Map(r.filter((a) => a.cohort && a.cohort.status !== 'closed')
+            .map((a) => [a.app_id as string, { cohortId: a.cohort.id as string, name: a.cohort.name as string }]))
+        }
+      : null,
+    new Map<string, { cohortId: string; name: string }>(), [uid],
+  )

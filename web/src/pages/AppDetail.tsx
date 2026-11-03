@@ -7,7 +7,9 @@ import {
 import { IconBack, IconChevron, IconExternal, IconPlus, IconSort, IconSortNone } from '../components/icons'
 import { Board, BoardLegend } from '../components/Board'
 import { BuildDialog, FeedbackDialog, JoinDialog, ManualTesterDialog, TesterDialog } from '../components/dialogs'
+import { AssignedChip } from '../components/cohortBits'
 import { useAuth } from '../lib/auth'
+import { useMyAssignedApps } from '../lib/cohorts'
 import { usePageMeta } from '../lib/pageMeta'
 import { api, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useTesters } from '../lib/data'
 import {
@@ -28,6 +30,8 @@ export function AppDetail() {
   const testers = useTesters(id)
   const builds = useBuilds(id)
   const { user, isAdmin, signIn } = useAuth()
+  // "Ditugaskan" in the header (PRD §5.2 step 2). If it fails to load, the label is simply absent.
+  const myAssigned = useMyAssignedApps(user?.uid)
   const toast = useToast()
   const [dialog, setDialog] = useState<DialogKind>(null)
   usePageMeta(app.data && !app.data.deleted ? app.data.name : 'Aplikasi', app.data && !app.data.deleted ? app.data.description : undefined)
@@ -92,7 +96,7 @@ export function AppDetail() {
   return (
     <>
       <Link to="/apps" className="crumb"><IconBack />Aplikasi</Link>
-      <RecordHead app={a} p={progress} loading={testers.loading} actions={actions} />
+      <RecordHead app={a} p={progress} loading={testers.loading} actions={actions} assigned={myAssigned.data.get(a.id)} />
 
       <Finding app={a} p={progress} loading={loading} description={a.description} />
 
@@ -152,7 +156,9 @@ function ActionButton({ a, primary, small }: { a: Action; primary?: boolean; sma
   return <button type="button" className={cls} onClick={a.onClick}>{a.icon}{a.label}</button>
 }
 
-function RecordHead({ app, p, loading, actions }: { app: AppDoc; p: Progress; loading: boolean; actions: Actions }) {
+function RecordHead({ app, p, loading, actions, assigned }: {
+  app: AppDoc; p: Progress; loading: boolean; actions: Actions; assigned?: { cohortId: string; name: string }
+}) {
   const head = useRef<HTMLElement>(null)
   const [stuck, setStuck] = useState(false)
   // Once the header scrolls away, a slim bar keeps name, progress and the primary action in view.
@@ -175,6 +181,12 @@ function RecordHead({ app, p, loading, actions }: { app: AppDoc; p: Progress; lo
             <Link to={`/u/${app.creatorUid}`} className="creator-link">
               <Avatar name={app.creatorName} photo={app.creatorPhotoURL} /><span>{app.creatorName}</span>
             </Link>
+            {assigned && (
+              // Reuses .creator-link (inline-flex, 44 px target, bold); the cohort name says where the assignment came from.
+              <Link to={`/cohorts/${assigned.cohortId}`} className="creator-link">
+                <AssignedChip /><span className="assigned-via">lewat {assigned.name}</span>
+              </Link>
+            )}
             {app.packageName && <span className="pkg">{app.packageName}</span>}
           </div>
         </div>

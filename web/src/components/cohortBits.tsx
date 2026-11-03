@@ -37,3 +37,17 @@ const STANDING: Record<Standing, { tone: 'pandan' | 'cabai' | 'putih'; glyph: st
 export const StandingChip = ({ standing }: { standing: Standing }) => (
   <Chip tone={STANDING[standing].tone} glyph={STANDING[standing].glyph}>{STANDING[standing].label}</Chip>
 )
+
+/**
+ * "Ditugaskan" (PRD §5.2 step 2, B6): the app was assigned to the signed-in member through a cohort. White chip,
+ * "◆" glyph and text, with the kunyit left edge that already means "yours" on the cohort matrix (DESIGN.md
+ * matrix-cell, .own-day). The edge is a fill, not a shadow; the chip stays flat. No new fill colour: langit, pandan,
+ * cabai and ubi all carry other meanings (PRD DR-3). Styles: `.chip.assigned` in styles.css. "◆" + VS15 keeps text
+ * presentation on older WebViews. `cohort` adds the cohort name for screen readers where it is not visible.
+ */
+export const AssignedChip = ({ cohort }: { cohort?: string }) => (
+  <span className="chip assigned">
+    <span className="g" aria-hidden="true">{'\u25C6\uFE0E'}</span>Ditugaskan
+    {cohort && <span className="sr-only"> ke Anda lewat {cohort}</span>}
+  </span>
+)
