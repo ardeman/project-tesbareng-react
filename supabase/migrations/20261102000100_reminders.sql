@@ -8,7 +8,7 @@
 -- the first deploy (see supabase/snippets/setup_cron.sql).
 
 create extension if not exists pg_cron   with schema extensions;
-create extension if not exists pg_net    with schema net;
+create extension if not exists pg_net    with schema extensions; -- pg_net creates its own `net` schema
 
 -- ---------------------------------------------------------------------------
 -- reminder_log: one row per (user, kind, ref, day). Unique constraint is the
