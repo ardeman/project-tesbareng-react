@@ -22,6 +22,7 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   border-right: var(--bw) solid var(--ink);
 }
+.matrix-td-name { min-height: 44px; }
 .matrix-th-name {
   font-size: var(--fs-caption); font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.04em;

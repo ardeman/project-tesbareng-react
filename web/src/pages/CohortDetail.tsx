@@ -404,8 +404,13 @@ function ObligationMatrix({ c }: { c: Cohort }) {
 
   const behind = useMemo(() => new Set(status.data.filter((s) => s.isBehind).map((s) => s.testerId)), [status.data])
 
-  if (!shouldLoad || status.error) return null
+  if (!shouldLoad) return null
   if (status.loading && status.data.length === 0) return null
+  if (status.error) return (
+    <section className="panel span-12" aria-label="Matriks penugasan">
+      <p className="meta cabai">Matriks penugasan gagal dimuat. <button type="button" className="link" onClick={status.retry}>Coba lagi</button></p>
+    </section>
+  )
 
   return (
     <section className="panel span-12 matrix-panel" aria-labelledby="matrix-h">
@@ -434,11 +439,11 @@ function ObligationMatrix({ c }: { c: Cohort }) {
                 </td>
                 {apps.map((app) => {
                   if (app.userId === m.userId) {
-                    return <td key={app.appId} className="matrix-cell own" title="Aplikasi sendiri"><span aria-hidden="true">—</span></td>
+                    return <td key={app.appId} className="matrix-cell own"><span aria-label="Aplikasi sendiri">—</span></td>
                   }
                   const cell = cells.get(app.appId!)?.get(m.userId)
                   if (!cell) {
-                    return <td key={app.appId} className="matrix-cell unassigned" title="Tidak ditugaskan"><span aria-hidden="true"> </span></td>
+                    return <td key={app.appId} className="matrix-cell unassigned"><span aria-label="Tidak ditugaskan"></span></td>
                   }
                   return <td key={app.appId} className={`matrix-cell ${cell}`} title={CELL_LABEL[cell]}><span aria-label={CELL_LABEL[cell]}>{CELL_GLYPH[cell]}</span></td>
                 })}

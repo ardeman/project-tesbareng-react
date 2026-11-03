@@ -49,9 +49,9 @@ Status values: Not started / In progress / In review / Done.
 | A1 | Migration: `cohorts`, `cohort_members`, `assignments`, `check_ins`, `cohort_links`, RLS, write revokes, permission tests | A | 2 | T0 | In review |
 | A2 | RPCs: `create_cohort`, `add_cohort_member` (one app per member per cohort, not Owing), `remove_cohort_member`, `leave_cohort`, `set_cohort_link`, `get_cohort_link`, `settle_member`, with tests | A | 1.5 | A1 | In review |
 | A3 | Seed: one Forming and one Active cohort with assignments and check-ins | A | 0.5 | A1 | In review |
-| B1 | `/admin` shell and moderation: restore apps, edit tester entries (RPCs already exist) | B | 1.5 | — | Not started |
-| B2 | `/cohorts` list: Forming, Active, Closed | B | 1 | T0 (real data: A3) | Not started |
-| B3 | `/cohorts/:id`: members, schedule and day counter, "Gabung sebagai tester" until Day 7, leave button while Forming, WhatsApp button with the phone-number notice (FR-51) | B | 1.5 | T0 (real data: A2) | Not started |
+| B1 | `/admin` shell and moderation: restore apps, edit tester entries (RPCs already exist) | B | 1.5 | — | Done |
+| B2 | `/cohorts` list: Forming, Active, Closed | B | 1 | T0 (real data: A3) | Done |
+| B3 | `/cohorts/:id`: members, schedule and day counter, "Gabung sebagai tester" until Day 7, leave button while Forming, WhatsApp button with the phone-number notice (FR-51) | B | 1.5 | T0 (real data: A2) | Done |
 
 ### Wave 2: days 6–10 (A and B in parallel)
 
@@ -60,9 +60,9 @@ Status values: Not started / In progress / In review / Done.
 | A5 | `cohort_obligations` view: fulfilled, Behind, milestones due (own offset for late pure testers, FR-33b), with tests. **Build first in this wave.** | A | 2 | A1 | In review |
 | A4 | `start_cohort` (full mesh at N = 13–16, ring k = 14 above) and `join_cohort_as_tester` (lowest coverage first, Day 7 cut-off), with tests | A | 2 | A2 | In review |
 | A6 | Check-ins end to end: `check_in` RPC with window rules (PRD §6.10) and the check-in section on app detail | A | 1.5 | A1 | In review |
-| B4 | Admin cohort forms: create, add and remove members, start (warn at 13 apps with no pure testers), settle, WhatsApp link, pinned-message template (FR-52) | B | 2 | A2 (start: A4) | Not started |
-| B5 | Obligation matrix: sticky first column, glyph plus text in every cell, greyed unassigned cells | B | 2.5 | T0 (real data: A5) | Not started |
-| B6 | `/apps` cohort filter and "Ditugaskan" label | B | 1 | A3 | Not started |
+| B4 | Admin cohort forms: create, add and remove members, start (warn at 13 apps with no pure testers), settle, WhatsApp link, pinned-message template (FR-52) | B | 2 | A2 (start: A4) | Done |
+| B5 | Obligation matrix: sticky first column, glyph plus text in every cell, greyed unassigned cells | B | 2.5 | T0 (real data: A5) | Done |
+| B6 | `/apps` cohort filter and "Ditugaskan" label | B | 1 | A3 | Done |
 
 ### Wave 3: days 11–14 (A and B in parallel)
 
@@ -70,15 +70,15 @@ Status values: Not started / In progress / In review / Done.
 | --- | --- | --- | --- | --- | --- |
 | A7 | `reassign_slot` and `close_cohort` (Day 21 hard close; only milestones due before close count), with tests | A | 1.5 | A5 | In review |
 | A8 | Reminders: cohort-day kinds (Day 1, 2, 5, 7, 13) and check-ins due in `due_reminders()`, `setup_cron.sql`, tests for `due_reminders()` | A | 2 | A5 | In review |
-| B7 | Admin: reassign and close screens, WhatsApp reminder panel (FR-48), archive reminder (FR-53) | B | 1.5 | A7 | Not started |
-| B8 | "Belum tes" label on app cards, cohort obligations and to-do order on `/me` (FR-28), cohort history on profiles (FR-55) | B | 2 | A5 | Not started |
+| B7 | Admin: reassign and close screens, WhatsApp reminder panel (FR-48), archive reminder (FR-53) | B | 1.5 | A7 | Done |
+| B8 | "Belum tes" label on app cards, cohort obligations and to-do order on `/me` (FR-28), cohort history on profiles (FR-55) | B | 2 | A5 | Done |
 
 ### Wave 4: day 15, together
 
 | ID | Task | Owner | Days | Waits for | Status |
 | --- | --- | --- | --- | --- | --- |
-| Q1 | Run one cohort end to end on seed data; screenshots at 375, 768 and 1280 px; `design-qa-review` with no Critical findings left | A + B | 1 | all | Not started |
-| Q2 | Deploy prep with the owner: hosted Supabase project, secrets, cron job, absolute `og:image` URLs | A + owner | 0.5 | Q1 | Not started |
+| Q1 | Run one cohort end to end on seed data; screenshots at 375, 768 and 1280 px; `design-qa-review` with no Critical findings left | A + B | 1 | all | In review |
+| Q2 | Deploy prep with the owner: hosted Supabase project, secrets, cron job, absolute `og:image` URLs | A + owner | 0.5 | Q1 | Done |
 
 Totals: each engineer has 13 days of their own tasks over days 2–14, plus 2.5 shared days. Wave 2 is half a day over for both, and wave 3 has half a day spare to absorb it.
 

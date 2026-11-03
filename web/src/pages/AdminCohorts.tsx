@@ -424,7 +424,7 @@ function Members({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
       ) : (
         <>
           <MemberList title="Kreator dan aplikasinya" items={creators} forming={forming} busyId={busyId} onRemove={remove}
-            empty="Belum ada kreator. Cohort butuh minimal 13 aplikasi." />
+            empty={`Belum ada kreator. Cohort butuh minimal ${MIN_APPS} aplikasi.`} />
           <MemberList title="Tester murni" items={pure} forming={forming} busyId={busyId} onRemove={remove}
             empty={forming ? 'Belum ada. Tester murni gabung sendiri dari halaman cohort, atau tambahkan tanpa aplikasi.' : 'Tidak ada tester murni di cohort ini.'} />
         </>
@@ -808,7 +808,12 @@ function ReassignPanel({ c }: { c: CohortDetail }) {
 
   const behindSlots = useMemo(() => status.data.filter((s) => s.isBehind && s.cell === 'not_joined'), [status.data])
 
-  if (status.error || (status.loading && behindSlots.length === 0)) return null
+  if (status.loading && behindSlots.length === 0) return null
+  if (status.error) return (
+    <section className="panel" aria-label="Slot belum opt-in">
+      <p className="meta cabai">Gagal memuat slot tertinggal. <button type="button" className="link" onClick={status.retry}>Coba lagi</button></p>
+    </section>
+  )
   if (behindSlots.length === 0) return null
 
   return (
@@ -898,7 +903,12 @@ function ReminderPanel({ c }: { c: CohortDetail }) {
   const oblig = useObligations(c.id)
   const behind = useMemo(() => oblig.data.filter((o) => o.isBehind), [oblig.data])
 
-  if (oblig.error || (oblig.loading && behind.length === 0)) return null
+  if (oblig.loading && behind.length === 0) return null
+  if (oblig.error) return (
+    <section className="panel" aria-label="Anggota tertinggal">
+      <p className="meta cabai">Gagal memuat data kewajiban. <button type="button" className="link" onClick={oblig.retry}>Coba lagi</button></p>
+    </section>
+  )
   if (behind.length === 0) return null
 
   const lines = behind.map((o) => {
