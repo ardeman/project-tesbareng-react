@@ -28,7 +28,7 @@ img, svg { display: block; }
 .app { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100svh; }
 .sidebar {
   position: sticky; top: 0; height: 100svh; display: flex; flex-direction: column; gap: var(--s-1);
-  padding: var(--s-4) var(--s-3) var(--s-3); overflow: auto; border-right: var(--bw) solid var(--ink); background: var(--kertas);
+  padding: var(--s-4) var(--s-3) var(--s-3); overflow-x: hidden; overflow-y: auto; border-right: var(--bw) solid var(--ink); background: var(--kertas);
 }
 .sidebar-head { display: flex; align-items: center; }
 .sidebar-head .spacer { flex: 1; }
@@ -45,7 +45,7 @@ img, svg { display: block; }
 .nav-item {
   position: relative; display: flex; align-items: center; gap: 12px; min-height: var(--target); padding: 0 12px;
   border: var(--bw) solid transparent; border-radius: var(--r-sm); font-weight: 700; color: var(--ink);
-  transition: transform var(--t-press) var(--ease);
+  transition: transform var(--t-press) var(--ease); min-width: 0;
 }
 .nav-item svg { width: 20px; height: 20px; flex: none; }
 .nav-item > .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
