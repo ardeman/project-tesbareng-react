@@ -57,9 +57,9 @@ Status values: Not started / In progress / In review / Done.
 
 | ID | Task | Owner | Days | Waits for | Status |
 | --- | --- | --- | --- | --- | --- |
-| A5 | `cohort_obligations` view: fulfilled, Behind, milestones due (own offset for late pure testers, FR-33b), with tests. **Build first in this wave.** | A | 2 | A1 | Not started |
-| A4 | `start_cohort` (full mesh at N = 13–16, ring k = 14 above) and `join_cohort_as_tester` (lowest coverage first, Day 7 cut-off), with tests | A | 2 | A2 | Not started |
-| A6 | Check-ins end to end: `check_in` RPC with window rules (PRD §6.10) and the check-in section on app detail | A | 1.5 | A1 | Not started |
+| A5 | `cohort_obligations` view: fulfilled, Behind, milestones due (own offset for late pure testers, FR-33b), with tests. **Build first in this wave.** | A | 2 | A1 | In review |
+| A4 | `start_cohort` (full mesh at N = 13–16, ring k = 14 above) and `join_cohort_as_tester` (lowest coverage first, Day 7 cut-off), with tests | A | 2 | A2 | In review |
+| A6 | Check-ins end to end: `check_in` RPC with window rules (PRD §6.10) and the check-in section on app detail | A | 1.5 | A1 | In review |
 | B4 | Admin cohort forms: create, add and remove members, start (warn at 13 apps with no pure testers), settle, WhatsApp link, pinned-message template (FR-52) | B | 2 | A2 (start: A4) | Not started |
 | B5 | Obligation matrix: sticky first column, glyph plus text in every cell, greyed unassigned cells | B | 2.5 | T0 (real data: A5) | Not started |
 | B6 | `/apps` cohort filter and "Ditugaskan" label | B | 1 | A3 | Not started |

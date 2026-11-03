@@ -108,7 +108,7 @@ export function errorText(e: unknown) {
   return 'Terjadi kesalahan di server. Coba lagi sebentar lagi.'
 }
 
-async function rows<T>(p: PromiseLike<{ data: T | null; error: unknown }>): Promise<T> {
+export async function rows<T>(p: PromiseLike<{ data: T | null; error: unknown }>): Promise<T> {
   const { data, error } = await p
   if (error) throw error
   return data as T
@@ -157,7 +157,7 @@ interface FetchOptions {
  * Loads once, then refetches on window focus (and on Realtime changes for the detail page).
  * `loading` is true only until the first result, so refetches never flash skeletons.
  */
-function useFetch<T>(load: (() => Promise<T>) | null, initial: T, deps: unknown[], opts: FetchOptions = {}): Live<T> {
+export function useFetch<T>(load: (() => Promise<T>) | null, initial: T, deps: unknown[], opts: FetchOptions = {}): Live<T> {
   const [state, setState] = useState<{ data: T; loading: boolean; error: string | null }>({ data: initial, loading: true, error: null })
   const [nonce, setNonce] = useState(0)
   const loadRef = useRef(load)
@@ -289,7 +289,7 @@ export const useBadgesOf = (userIds: string[]) => {
 
 // ---------- writes (all through RPC) ----------
 
-async function rpc<T = null>(fn: string, args: Record<string, unknown>): Promise<T> {
+export async function rpc<T = null>(fn: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args)
   if (error) throw error
   return data as T
