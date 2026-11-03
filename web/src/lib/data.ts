@@ -1,13 +1,19 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
-import type { AppDoc, BadgeTier, BuildDoc, PublicProfile, TesterDoc, TesterStatus } from './types'
+import type { AdminTesterRow, AppDoc, BadgeTier, BuildDoc, PublicProfile, TesterDoc, TesterStatus } from './types'
 
-export interface Live<T> { data: T; loading: boolean; error: string | null; retry: () => void }
+export interface Live<T> {
+  data: T; loading: boolean; error: string | null
+  /** Reload from scratch (skeletons show again). */
+  retry: () => void
+  /** Reload in the background, keeping the current rows (after a write, so focus and scroll survive). */
+  refresh: () => void
+}
 
 // ---------- row mapping (the only place snake_case meets the UI) ----------
 
-type Row = Record<string, any>
+export type Row = Record<string, any>
 
 const ms = (v: string | null | undefined) => (v ? Date.parse(v) : null)
 /** A date column (YYYY-MM-DD) as 00:00 WIB, matching how the forms enter it. */
@@ -43,6 +49,7 @@ function toApp(r: Row, s: Row | undefined): AppDoc {
     createdAt: ms(r.created_at)!,
     updatedAt: ms(r.updated_at) ?? undefined,
     deleted: r.deleted,
+    deletedAt: ms(r.deleted_at),
   }
 }
 
@@ -108,7 +115,7 @@ export function errorText(e: unknown) {
   return 'Terjadi kesalahan di server. Coba lagi sebentar lagi.'
 }
 
-async function rows<T>(p: PromiseLike<{ data: T | null; error: unknown }>): Promise<T> {
+export async function rows<T>(p: PromiseLike<{ data: T | null; error: unknown }>): Promise<T> {
   const { data, error } = await p
   if (error) throw error
   return data as T
@@ -157,10 +164,11 @@ interface FetchOptions {
  * Loads once, then refetches on window focus (and on Realtime changes for the detail page).
  * `loading` is true only until the first result, so refetches never flash skeletons.
  */
-function useFetch<T>(load: (() => Promise<T>) | null, initial: T, deps: unknown[], opts: FetchOptions = {}): Live<T> {
+export function useFetch<T>(load: (() => Promise<T>) | null, initial: T, deps: unknown[], opts: FetchOptions = {}): Live<T> {
   const [state, setState] = useState<{ data: T; loading: boolean; error: string | null }>({ data: initial, loading: true, error: null })
   const [nonce, setNonce] = useState(0)
   const loadRef = useRef(load)
+  const quietRef = useRef<() => void>(() => {})
   loadRef.current = load
 
   useEffect(() => {
@@ -177,6 +185,7 @@ function useFetch<T>(load: (() => Promise<T>) | null, initial: T, deps: unknown[
     }
     run(true)
     const refetch = () => run(false)
+    quietRef.current = refetch
     const onFocus = () => { if (document.visibilityState === 'visible') refetch() }
     window.addEventListener('focus', refetch)
     document.addEventListener('visibilitychange', onFocus)
@@ -193,7 +202,8 @@ function useFetch<T>(load: (() => Promise<T>) | null, initial: T, deps: unknown[
   }, [...deps, nonce])
 
   const retry = useCallback(() => setNonce((n) => n + 1), [])
-  return { ...state, retry }
+  const refresh = useCallback(() => quietRef.current(), [])
+  return { ...state, retry, refresh }
 }
 
 async function loadApps(filter: (q: any) => any): Promise<AppDoc[]> {
@@ -287,9 +297,53 @@ export const useBadgesOf = (userIds: string[]) => {
   )
 }
 
+// ---------- admin reads (RLS lets the admin see soft-deleted apps; others get an empty list) ----------
+
+/** Soft-deleted apps, newest deletion first (admin moderation: restore). */
+export const useDeletedApps = (enabled: boolean) =>
+  useFetch(
+    enabled
+      ? async () => {
+          const [apps, stats] = await Promise.all([
+            rows<Row[]>(supabase.from('apps').select(APP_COLUMNS).eq('deleted', true).order('deleted_at', { ascending: false })),
+            rows<Row[]>(supabase.from('app_stats').select('*')),
+          ])
+          const byId = new Map(stats.map((s) => [s.app_id, s]))
+          return apps.map((a) => toApp(a, byId.get(a.id)))
+        }
+      : null,
+    [] as AppDoc[], [enabled],
+  )
+
+const TESTER_WITH_APP = '*, app:apps!testers_app_id_fkey(name, deleted)'
+const toAdminTester = (r: Row): AdminTesterRow => ({ ...toTester(r), appName: r.app?.name ?? '', appDeleted: !!r.app?.deleted })
+
+/** PostgREST `or` filters break on these characters; a search term never needs them. */
+const cleanTerm = (q: string) => q.replace(/[,()*%\\:."']/g, ' ').trim().slice(0, 50)
+
+/**
+ * Admin moderation list. Empty query: the latest feedback summaries (the usual thing to moderate).
+ * Otherwise: entries whose tester name or masked email matches, newest first. Capped at 50 rows.
+ */
+export const useTesterSearch = (query: string, enabled: boolean) => {
+  const term = cleanTerm(query)
+  return useFetch(
+    enabled
+      ? async () => {
+          let q = supabase.from('testers').select(TESTER_WITH_APP)
+          q = term
+            ? q.or(`display_name.ilike.*${term}*,masked_email.ilike.*${term}*`).order('opted_in_at', { ascending: false })
+            : q.not('feedback_summary', 'is', null).order('feedback_sent_at', { ascending: false, nullsFirst: false })
+          return (await rows<Row[]>(q.limit(50))).map(toAdminTester)
+        }
+      : null,
+    [] as AdminTesterRow[], [term, enabled],
+  )
+}
+
 // ---------- writes (all through RPC) ----------
 
-async function rpc<T = null>(fn: string, args: Record<string, unknown>): Promise<T> {
+export async function rpc<T = null>(fn: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args)
   if (error) throw error
   return data as T
@@ -384,6 +438,32 @@ export function updateTesterAsCreator(_appId: string, t: TesterDoc, p: TesterPat
   if (p.note !== undefined) patch.note = p.note.trim() || null
   if (p.feedbackVerified !== undefined) patch.feedback_verified = p.feedbackVerified
   if (p.replied !== undefined) patch.replied = p.replied
+  return rpc('update_tester', { p_tester_id: t.id, p_patch: patch })
+}
+
+export interface ModerationPatch extends TesterPatch {
+  feedbackSent?: boolean
+  /** empty string clears the summary */
+  feedbackSummary?: string
+}
+
+/**
+ * Admin only (update_tester's admin keys). Turning feedback off also clears its time and summary,
+ * the same as a tester un-marking it (mark_feedback_sent false); turning it on stamps the time once.
+ */
+export function updateTesterAsAdmin(t: TesterDoc, p: ModerationPatch) {
+  const patch: Record<string, unknown> = {}
+  if (p.status && p.status !== t.status) patch.status = p.status
+  if (p.optedInAt !== undefined) patch.opted_in_at = localDay(p.optedInAt)
+  if (p.note !== undefined) patch.note = p.note.trim() || null
+  if (p.feedbackVerified !== undefined) patch.feedback_verified = p.feedbackVerified
+  if (p.replied !== undefined) patch.replied = p.replied
+  if (p.feedbackSummary !== undefined) patch.feedback_summary = p.feedbackSummary.trim() || null
+  if (p.feedbackSent !== undefined && p.feedbackSent !== t.feedbackSent) {
+    patch.feedback_sent = p.feedbackSent
+    if (p.feedbackSent) patch.feedback_sent_at = new Date().toISOString()
+    else { patch.feedback_sent_at = null; patch.feedback_summary = null; patch.feedback_verified = false }
+  }
   return rpc('update_tester', { p_tester_id: t.id, p_patch: patch })
 }
 

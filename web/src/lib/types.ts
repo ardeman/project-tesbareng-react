@@ -34,6 +34,14 @@ export interface AppDoc {
   createdAt: number
   updatedAt?: number
   deleted: boolean
+  /** when it was soft-deleted; null while live */
+  deletedAt?: number | null
+}
+
+/** A tester entry with the name of its app, for the admin moderation list. */
+export interface AdminTesterRow extends TesterDoc {
+  appName: string
+  appDeleted: boolean
 }
 
 export interface TesterDoc {

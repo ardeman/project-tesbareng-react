@@ -401,6 +401,7 @@ select.input { cursor: pointer; accent-color: var(--ink); }
 dialog.sheet {
   width: min(560px, calc(100vw - 32px)); max-height: calc(100svh - 32px); padding: 0; border: var(--bw) solid var(--ink); border-radius: var(--r-sm);
   background: var(--putih); color: var(--ink); box-shadow: var(--shadow-modal); overflow: auto;
+  margin: auto; /* Tailwind's preflight zeroes margins, which pins a modal <dialog> to the top-left corner */
 }
 dialog.sheet::backdrop { background: var(--scrim); }
 dialog.sheet[open] { animation: rise var(--t-enter) var(--ease); }
@@ -688,4 +689,37 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
   .record-head h1 { font-size: calc(var(--fs-display) - 4px); }
   .sheet-scroll { max-height: 70vh; }
   .detail-body { padding-left: var(--s-3); }
+}
+
+/* ---------- admin (ADR-009): section nav, moderation lists, entry dialog ---------- */
+/* Section nav: links, so the selected one is aria-current (same lifted look as a selected tab). */
+.tab[aria-current="page"] { background: var(--putih); border-color: var(--ink); box-shadow: var(--shadow); }
+.deleted-list .cell-2 b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-search { display: grid; gap: var(--s-2); padding: 0 var(--s-4) var(--s-3); border-bottom: var(--bw) solid var(--ink); }
+.admin-search .field { max-width: 480px; }
+/* Inline app links in dense rows: 44 px hit area without changing the row height (ADR-009, WCAG 2.5.8). */
+.hit { position: relative; }
+.hit::after { content: ""; position: absolute; inset: -12px -4px; }
+.admin-notice { margin: 0; }
+.row-open {
+  display: block; width: 100%; min-height: var(--target); padding: 0; margin: 0; border: 0; background: none;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.row-open b, .row-open > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-cell { display: grid; justify-items: start; gap: var(--s-1); min-width: 128px; max-width: 200px; }
+.app-cell .name-link { max-width: 100%; overflow-wrap: anywhere; }
+.state-cell { display: grid; justify-items: start; gap: var(--s-1); }
+.admin-table .summary-cell { min-width: 240px; }
+.clamp-2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.entry-sub { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); margin-top: var(--s-1); }
+.entry-sub b { color: var(--ink); }
+.fieldset { display: grid; gap: var(--s-3); min-width: 0; margin: 0; padding: var(--s-3) 0 0; border: 0; border-top: var(--bw-row) solid var(--ink); }
+.fieldset > legend { float: left; width: 100%; padding: 0; font-size: var(--fs-caption); line-height: 1.3; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.fieldset .check { padding: var(--s-1) 0; }
+@media (hover: hover) and (pointer: fine) {
+  .row-open:hover b { text-decoration: underline; text-underline-offset: 3px; }
+}
+@media (max-width: 640px) {
+  .admin-search { padding: 0 var(--s-3) var(--s-3); }
+  .admin-table .summary-cell { min-width: 220px; }
 }

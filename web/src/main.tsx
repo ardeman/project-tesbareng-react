@@ -13,6 +13,7 @@ const AppDetail = lazy(() => import('./pages/AppDetail').then((m) => ({ default:
 const AppForm = lazy(() => import('./pages/AppForm').then((m) => ({ default: m.AppForm })))
 const Me = lazy(() => import('./pages/Me').then((m) => ({ default: m.Me })))
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })))
+const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })))
 const About = lazy(() => import('./pages/About').then((m) => ({ default: m.About })))
 // Story surface (ADR-001, ADR-008 option A): its own chunk, so work screens never load its motion code.
 const Landing = lazy(() => import('./pages/Landing').then((m) => ({ default: m.Landing })))
@@ -35,6 +36,7 @@ createRoot(document.getElementById('root')!).render(
                   <Route path="/apps/:id/edit" element={<AppForm />} />
                   <Route path="/me" element={<Me />} />
                   <Route path="/u/:uid" element={<Profile />} />
+                  <Route path="/admin" element={<Admin />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Routes>
                 </Suspense>

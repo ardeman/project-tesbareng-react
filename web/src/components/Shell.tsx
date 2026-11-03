@@ -4,12 +4,12 @@ import { useAuth } from '../lib/auth'
 import { useAppsBy, useEntriesOf, errorText } from '../lib/data'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { Avatar, useToast } from './bits'
-import { IconApps, IconBook, IconClose, IconMenu, IconSignOut, IconTodo, IconUser, Mark } from './icons'
+import { IconAdmin, IconApps, IconBook, IconClose, IconMenu, IconSignOut, IconTodo, IconUser, Mark } from './icons'
 
 export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const { pathname } = useLocation()
-  const { user, ready, signIn, signOut } = useAuth()
+  const { user, isAdmin, ready, signIn, signOut } = useAuth()
   const toast = useToast()
   const entries = useEntriesOf(user?.uid)
   const mine = useAppsBy(user?.uid)
@@ -60,6 +60,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <NavLink to="/me" className="nav-item"><IconTodo /><span className="label">Tugas saya</span>{owed > 0 && <span className="count num">{owed > 99 ? '99+' : owed}<span className="sr-only"> feedback belum dikirim</span></span>}</NavLink>
           {user && <NavLink to={`/u/${user.uid}`} className="nav-item"><IconUser /><span className="label">Profil saya</span></NavLink>}
           <NavLink to="/about" className="nav-item"><IconBook /><span className="label">Cara kerja</span></NavLink>
+          {isAdmin && <NavLink to="/admin" className="nav-item"><IconAdmin /><span className="label">Admin</span></NavLink>}
         </nav>
 
         {mine.data.length > 0 && (
