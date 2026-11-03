@@ -28,13 +28,47 @@ testers             select: everyone · write: none (RPC only)
 
 builds              select: everyone · write: none (RPC only)
   id uuid pk, app_id → apps, version_name (≤ 40), uploaded_at, changelog (≤ 140), created_at
+
+check_ins           select: everyone · write: none (RPC only)                     PRD §6.10
+  id uuid pk, tester_id → testers, kind 'used_app' | 'updated_build' | 'still_opted_in',
+  build_id? → builds (required for 'updated_build', null for the other kinds), created_at
+  unique (tester_id, kind, coalesce(build_id, nil uuid))
+
+cohorts             select: everyone · write: none (RPC only)                     PRD §6.9
+  id uuid pk, name (≤ 50), status 'forming' | 'active' | 'closed',
+  day0_at? (set by start_cohort), closed_at? (set by close_cohort), created_at
+  check: forming ⇔ day0_at null; closed ⇔ closed_at not null
+
+cohort_members      select: everyone · write: none (RPC only)
+  cohort_id → cohorts, user_id → profiles, app_id? → apps (null = pure tester),
+  joined_at, assigned_at? (when this member's assignments were generated: day0_at for members
+  present at start, the join time for later pure testers, FR-33b),
+  ring_position? (members with an app only, 0 … N−1, set at start),
+  standing? 'good' | 'owing' | 'settled' (null until close), settled_at?
+  pk (cohort_id, user_id)            -- one app per member per cohort (PRD §17 Q7)
+  unique (cohort_id, app_id) where app_id is not null
+
+assignments         select: everyone · write: none (RPC only)
+  id uuid pk, cohort_id → cohorts, tester_user_id → profiles, app_id → apps,
+  assigned_at (base time for this assignment's deadlines), state 'open' | 'reassigned',
+  reassigned_to? → assignments (set on the original when the admin moves the slot), created_at
+  unique (cohort_id, tester_user_id, app_id)
+
+cohort_links        select: members of that cohort + admin (RLS) · write: none (RPC only)
+  cohort_id pk → cohorts, whatsapp_group_url (prefix https://chat.whatsapp.com/), updated_at
+
+reminder_log        no client access (service role only)
+  id uuid pk, user_id, kind, ref_id?, sent_on date, created_at
+  unique (user_id, kind, ref_id, sent_on)
 ```
+
+An app is in at most one non-closed cohort. The constraint spans two tables, so `add_cohort_member` enforces it under a row lock instead of an index. The web client never reads `cohort_links` directly; it calls `get_cohort_link`.
 
 `insert`, `update` and `delete` are revoked from `anon` and `authenticated` on every table. Check constraints repeat the limits and formats (opt-in URL prefix `https://play.google.com/apps/testing/`, store URL prefix `https://play.google.com/store/apps/`, package name `^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$`, masked email `^[^@\s]{1,2}\*{5}@…$`), and a partial unique index allows one live app per package name.
 
 The full email exists only in `auth.users`, which the API does not expose. `security definer` functions read it to mask it. The member sees their own address from their session (`supabase.auth.getUser()`).
 
-Realtime publishes `apps`, `testers` and `builds`. The web app subscribes only on the app detail page (one channel per app); other pages refetch on mount and on window focus.
+Realtime publishes `apps`, `testers`, `builds` and `check_ins`. The web app subscribes only on the app detail page (one channel per app); other pages, the cohort pages and matrix included, refetch on mount and on window focus.
 
 ## Computed views (counters)
 
@@ -64,6 +98,52 @@ Both views use `security_invoker = true`, so the RLS of the base tables applies.
 
 Days active per tester are computed on the client (`web/src/lib/progress.ts`).
 
+### Cohort milestones (shared by the two cohort views and `check_in`)
+
+Every assignment has a **base time** `b = assignments.assigned_at`: Day 0 for members present at start, the join time for later pure testers (FR-33b), the move time for a reassigned slot. "Due Day N" means due at `b + N × 24 h` (owner decision 2026-11-03).
+
+| Milestone | Met when | Due | Check-in opens |
+|---|---|---|---|
+| `opt_in` | the assigned member has a tester entry on the app that is Active, or Left with `left_at − opted_in_at ≥ 14 days` ("fulfilled", FR-34) | `b + 48 h` | — |
+| `used_app` | a `used_app` check-in exists | `b + 7 d` | `b + 5 d` |
+| `feedback` | `feedback_sent` on the entry | `b + 7 d` | — |
+| `still_opted_in` | a `still_opted_in` check-in exists | `b + 13 d` | `b + 12 d` |
+| `updated_build` | an `updated_build` check-in exists for every build of the app logged (`builds.created_at`) after `b` | build `created_at + 72 h` | when the build is logged |
+
+The views judge milestones at the **as-of time** `coalesce(cohorts.closed_at, now())`. A milestone counts only when its due time is at or before the as-of time, so a closed cohort never judges a milestone that was due after the close (FR-37). Only `open` assignments count; `reassigned` ones are kept for history.
+
+Outside a cohort, check-in windows use the tester's own `opted_in_at` as `b` (FR-40).
+
+### `cohort_assignment_status` (one row per assignment; drives the matrix)
+
+| column | meaning |
+|---|---|
+| `assignment_id`, `cohort_id`, `tester_user_id`, `app_id`, `state`, `assigned_at` | from `assignments` |
+| `tester_id`, `tester_status` | the assigned member's entry on that app, null if none |
+| `fulfilled` | `opt_in` met (table above) |
+| `used_app_at`, `still_opted_in_at` | check-in times, null if none |
+| `feedback_sent`, `feedback_verified` | from the entry; false if none |
+| `builds_due_count`, `builds_updated_count` | builds of the app logged after `b` whose 72 h have passed / of those, builds with an `updated_build` check-in |
+| `cell` | the furthest state reached, for the matrix (FR-38): `'not_joined'`, `'left'` (entry Left before 14 days or Removed), `'opted_in'`, `'used'`, `'feedback_sent'`, `'feedback_verified'`; `'reassigned'` when `state = 'reassigned'` |
+| `behind_on` | `text[]` of milestones that are due and unmet (`'opt_in'`, `'used_app'`, `'feedback'`, `'still_opted_in'`, `'updated_build'`); empty for reassigned rows |
+| `is_behind` | `cardinality(behind_on) > 0` |
+
+Pairs with no assignment row are "unassigned" and the matrix greys them out.
+
+### `cohort_obligations` (one row per cohort member; PRD §9.2)
+
+| column | meaning |
+|---|---|
+| `cohort_id`, `user_id`, `app_id` | from `cohort_members` (`app_id` null = pure tester) |
+| `assigned_count` | open assignments |
+| `opted_in_count`, `used_app_count`, `feedback_sent_count`, `feedback_verified_count`, `still_opted_in_count` | open assignments with that milestone met |
+| `builds_due_count`, `builds_updated_count` | sums over open assignments |
+| `all_fulfilled` | every open assignment is fulfilled (the target rule for `reassign_slot`, FR-36) |
+| `is_behind` | any open assignment is behind (FR-42) |
+| `owes_opt_in` | any open assignment has `opt_in` in `behind_on`; on the member's own app this drives the public "Belum tes" label (FR-35) |
+
+Both views use `security_invoker = true`. **Cohort day** for display is `floor((now − day0_at) / 24 h)`, computed on the client; a late pure tester also sees their own day from `assigned_at`. "Ready to apply" for an app stays `app_stats.eligible_count ≥ 12`.
+
 ## RPCs (`supabase.rpc(name, args)`)
 
 All are `security definer` with `set search_path = ''`. Every one except `mask_email` requires a session and raises `unauthenticated` without one. Date arguments are ISO strings: a bare `YYYY-MM-DD` means midnight UTC; the web client sends full timestamps for dates a member picks (local midnight).
@@ -82,6 +162,18 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 | `update_tester` | `p_tester_id, p_patch` (JSON object, snake_case keys) | — | Creator or admin: `status, opted_in_at, left_at, note, feedback_verified, replied`. Admin also: `feedback_sent, feedback_sent_at, feedback_summary` (moderation). Any other key → `permission-denied`. Status change without `left_at`: active clears it, left/removed keep it or set now. |
 | `add_build` | `p_app_id, p_version_name, p_uploaded_at, p_changelog` | `uuid` | Creator or admin. ≤ 40 / ≤ 140, date not in the future. 10 per app per rolling 24 h → `resource-exhausted`. |
 | `set_email_reminders` | `p_enabled` | — | Signed-in member, own profile only. Null → `invalid-argument`. |
+| `check_in` | `p_app_id, p_kind, p_build_id?` | `uuid` | Own entry on the app: none → `not-found`, not Active → `failed-precondition`. Unknown kind, `build_id` missing for `updated_build`, given for another kind, or from another app → `invalid-argument`. Window not open yet (milestone table; `b` = the open assignment's `assigned_at` when the app is in a non-closed cohort assigned to the caller, else the entry's `opted_in_at`) → `failed-precondition`. Same kind (and build) twice → `already-exists`. |
+| `create_cohort` | `p_name` | `uuid` | Admin. Name trimmed, 1–50 → else `invalid-argument`. Starts `forming`. |
+| `add_cohort_member` | `p_cohort_id, p_user_id, p_app_id?` | — | Admin. Cohort missing → `not-found`; not `forming` → `failed-precondition`. Profile missing → `not-found`. Already a member → `already-exists`. Member has `standing = 'owing'` in any cohort → `failed-precondition`. App missing or soft-deleted → `not-found`; not owned by `p_user_id` → `invalid-argument`; already in this or another non-closed cohort → `already-exists`. Null `p_app_id` adds a pure tester. |
+| `remove_cohort_member` | `p_cohort_id, p_user_id` | — | Admin. Not `forming` → `failed-precondition`; not a member → `not-found`. |
+| `join_cohort_as_tester` | `p_cohort_id` | — | Member, as a pure tester (FR-33a). Cohort missing → `not-found`; closed, or Active after `day0_at + 7 d` → `failed-precondition`. Already a member → `already-exists`; Owing → `failed-precondition`. If Active: assigns 14 apps (all if fewer), fewest open assignments first, ties random, never the caller's own app; `assigned_at = now()`. |
+| `leave_cohort` | `p_cohort_id` | — | The caller, pure testers only, while `forming` (owner decision 2026-11-03). Not a member → `not-found`; has an app in the cohort → `permission-denied` (the admin removes creators); not `forming` → `failed-precondition`. |
+| `start_cohort` | `p_cohort_id` | — | Admin. Not `forming` → `failed-precondition`. Fewer than 13 members with an app, or any of their apps soft-deleted → `failed-precondition`. Shuffles members with an app into `ring_position` 0 … N−1. With k = N − 1 for N ≤ 16 and k = 14 for N > 16, the member at position i is assigned the apps at positions i+1 … i+k (mod N), so every app gets exactly k (FR-32). Then pure testers, one by one in random order, get 14 apps each (all if fewer), fewest open assignments first, ties random (FR-33). Sets `status = 'active'`, `day0_at = now()`, and `assigned_at = now()` on members and assignments. |
+| `reassign_slot` | `p_assignment_id, p_to_user_id` | `uuid` | Admin (FR-36). Assignment missing → `not-found`; not `open`, already fulfilled, or cohort not `active` → `failed-precondition`. Target not a member of the cohort → `not-found`; the same member, or the app's creator → `invalid-argument`; target not `all_fulfilled` → `failed-precondition`; target already assigned that app → `already-exists`. Inserts the new assignment (`assigned_at = now()`), sets the original to `reassigned` with `reassigned_to`. Returns the new id. |
+| `close_cohort` | `p_cohort_id` | — | Admin (FR-37). Not `active` → `failed-precondition`. Before `day0_at + 21 d` it also needs every member's app at `eligible_count ≥ 12`, else `failed-precondition`. Sets `closed_at = now()`, `status = 'closed'`, and each member's `standing` to `'owing'` if `is_behind` at that moment, else `'good'`. Nothing closes a cohort automatically; past Day 21 the admin panel shows it as overdue (owner decision 2026-11-03). |
+| `settle_member` | `p_cohort_id, p_user_id` | — | Admin. Not a member → `not-found`; standing not `owing` → `failed-precondition`. Sets `'settled'` and `settled_at`. |
+| `set_cohort_link` | `p_cohort_id, p_url` | — | Admin, any status (FR-49). Cohort missing → `not-found`. Trimmed URL must start with `https://chat.whatsapp.com/` → else `invalid-argument`; null or empty removes the link. |
+| `get_cohort_link` | `p_cohort_id` | `text` or null | A member of that cohort (any role) or admin, else `permission-denied` (FR-50). Cohort missing → `not-found`. Null when no link is set. |
 | `mask_email` | `email` | `text` | Pure helper, callable by anyone. |
 
 Only the admin may act on a soft-deleted app (edit, manage testers, add builds, restore); for everyone else, its creator included, it is `not-found`.
@@ -90,7 +182,7 @@ Only the admin may act on a soft-deleted app (edit, manage testers, add builds, 
 
 RPCs raise SQLSTATE `P0001` with an Indonesian `message` the UI shows as-is and the contract code in `hint`:
 
-`unauthenticated` (no session), `invalid-argument` (validation, checklist, `group_confirmed`), `not-found` (app missing or soft-deleted, no own entry), `permission-denied` (creator joins own app, removed tester re-joins, non-creator manages testers/builds, forbidden patch key), `already-exists` (double join, duplicate package), `failed-precondition` (leave/feedback when the entry is not active), `resource-exhausted` (rate limits).
+`unauthenticated` (no session), `invalid-argument` (validation, checklist, `group_confirmed`, wrong check-in build, app not owned by the member being added, bad reassign target), `not-found` (app, cohort, member or assignment missing; app soft-deleted; no own entry), `permission-denied` (creator joins own app, removed tester re-joins, non-creator manages testers/builds, forbidden patch key, non-admin calls an admin cohort RPC, non-member asks for the WhatsApp link, creator tries `leave_cohort`), `already-exists` (double join, duplicate package, double check-in, already a cohort member, app already in an open cohort, duplicate assignment), `failed-precondition` (leave/feedback/check-in when the entry is not active, check-in window not open, cohort in the wrong status, join after Day 7, Owing member, fewer than 13 apps, slot already fulfilled, target not all fulfilled, early close with apps not ready, settle when not Owing), `resource-exhausted` (rate limits).
 
 `errorCode()` / `errorText()` in `web/src/lib/data.ts` map other errors without showing raw Postgres text: `42501` → permission-denied, `22P02` (malformed uuid) and constraint violations → invalid-argument, `23505` → already-exists, network failures → "Server tidak bisa dihubungi…", anything else → a generic server error sentence.
 

@@ -30,7 +30,7 @@ A cohort solves this by making testing reciprocal and scheduled: a group of crea
 3. **Pure testers** (members without an app) are each assigned 14 apps (or all, if fewer), **lowest coverage first**, to even out the buffer. Those present at Day 0 are assigned at start; later joiners (until Day 7) are assigned when they join, with their own 48-hour opt-in deadline (FR-33b).
 4. An assignment is **fulfilled** by a normal Active tester entry on that app (§5.2). There is no separate cohort join flow.
 5. **Ghosting:** after the 48-hour deadline, unmet assignments make the member **Behind**, and their own app shows a public **"Belum tes"** label. The admin can **reassign** an unfulfilled slot to a member who has fulfilled all their own.
-6. **Close** at all apps "Ready to apply" or Day 21. Members with unmet obligations are **Owing** and cannot join another cohort until the admin marks them **Settled**.
+6. **Close** at all apps "Ready to apply" or Day 21, whichever comes first; Day 21 is a hard close (PRD §17 Q6, answered 3 Nov 2026). Standing counts only milestones due at or before the close, so a late reassignment that cannot reach 14 days by Day 21 does not make anyone Owing. Members with unmet obligations are **Owing** and cannot join another cohort until the admin marks them **Settled**. Tester entries outlive the cohort; an app that is not ready can join a later cohort.
 7. Generation happens inside the `start_cohort` and `join_cohort_as_tester` RPCs (ADR-004). Assignments are rows, never recomputed, so a later change in membership cannot silently move obligations.
 
 ## Alternatives considered
@@ -49,4 +49,4 @@ A cohort solves this by making testing reciprocal and scheduled: a group of crea
 - Workload per member is predictable: at most 15 apps (N = 16) and exactly 14 above that.
 - Random shuffle means nobody can choose their testers; the ring order is stored (`cohort_members.ring_position`) so the matrix and the signature ring visual (ADR-001 §4) show the real order.
 - Tests must cover: full mesh at N = 13–16, ring k = 14 at N > 16, every app receiving exactly k, pure-tester coverage balancing, and the Day 7 join cut-off.
-- Open questions that may change this ADR: PRD §17 Q6 (Day 21 hard close) and Q7 (one member bringing two apps).
+- PRD §17 Q6 and Q7 are answered (3 Nov 2026): Day 21 hard close with early close when all apps are ready, and one app per member per cohort (a second app goes into a different cohort).

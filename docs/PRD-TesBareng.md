@@ -8,7 +8,7 @@
 | **Last updated** | 2 November 2026 |
 | **Owner** | Community Admin |
 | **Community group** | `google-tester-indonesia@googlegroups.com` |
-| **Stack** | Supabase (free plan) + Cloudflare Pages |
+| **Stack** | Supabase (free plan) + Vercel |
 
 ---
 
@@ -256,13 +256,13 @@ Feedback itself lives in Google Play. TesBareng tracks engagement around it.
   - **N = 13–16 → full mesh:** every member tests every other app (k = N − 1).
   - **N > 16 → ring:** the member at position *i* tests the apps at positions *i+1 … i+14* (wrapping around), so k = 14. Every member tests exactly 14 apps and every app receives exactly 14 assigned testers.
 - **FR-33** Pure testers are each assigned 14 apps (or all apps if fewer), chosen to even out coverage: apps with the fewest assigned testers first. Pure testers present at Day 0 are assigned when the cohort starts; later joiners are assigned at the moment they join.
-- **FR-33a** A member can join a cohort as a pure tester while it is Forming or Active up to Day 7, if they are not already in it and not Owing. Day 7 is the last join day so a pure tester can still reach 14 days before the Day 21 close.
+- **FR-33a** A member can join a cohort as a pure tester while it is Forming or Active up to Day 7, if they are not already in it and not Owing. Day 7 is the last join day so a pure tester can still reach 14 days before the Day 21 close. A pure tester may leave the cohort themselves only while it is Forming (owner decision 3 Nov 2026); after Day 0 only the admin moves their slots (FR-36).
 - **FR-33b** A pure tester's opt-in deadline is 48 hours from their own assignment time, not from Day 0. All later milestones (FR-42) use the same offset.
 - **FR-34** An assignment is **fulfilled** when the assigned member has an Active tester entry on that app. Joining uses the normal flow (§5.2).
 - **FR-35** **Opt-in deadline:** 48 hours after Day 0. After the deadline, a member with unfulfilled assignments shows as **Behind**, and their own app shows a public **"Belum tes"** label until fulfilled.
 - **FR-36** **Slot reassignment:** the admin can move an unfulfilled assignment to another cohort member who has fulfilled all their own assignments. The original assignment is marked Reassigned.
-- **FR-37** **Closing:** at close, each member's standing is set to **Good** (all obligations met) or **Owing**. Owing members cannot be added to a new cohort until the admin marks them **Settled**.
-- **FR-38** **Cohort page** shows the members, the WhatsApp button (members only, §6.12), the schedule with today's day number, and an **obligation matrix**: rows are members, columns are apps, cells show not joined / opted in / used / feedback sent / feedback verified. Unassigned cells are greyed out.
+- **FR-37** **Closing:** the admin closes a cohort when every app is Ready to apply, or at Day 21 at the latest (hard close, §17 Q6). At close, each member's standing is set to **Good** (all obligations met) or **Owing**. Only milestones whose due time is at or before the close count: a slot reassigned late, whose 14 days cannot end by Day 21, does not make the member Owing. Owing members cannot be added to a new cohort until the admin marks them **Settled**. Tester entries outlive the cohort: testers still opted in keep counting toward the app's progress, and an app that is not ready can join a later cohort.
+- **FR-38** **Cohort page** shows the members, the WhatsApp button (members only, §6.12), the schedule with today's day number, and an **obligation matrix**: rows are members, columns are apps, cells show not joined / left / opted in / used / feedback sent / feedback verified, or reassigned. Unassigned cells are greyed out.
 - **FR-38a** Cohorts and the open pool are one system. Any member can still join any app freely, including apps not in a cohort; that testing counts toward reciprocity and badges but not toward cohort obligations. Pure testers who want structure and a faster badge join a cohort (§5.8).
 
 ### 6.10 Milestone check-ins (attendance)
@@ -276,6 +276,7 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 | New build | Within 3 days of each build | Check in "Sudah update" | Log the build |
 | Still opted in | From Day 12, due Day 13 | Check in "Masih opt-in" | — |
 
+- **Due times** (owner decision 3 Nov 2026): "due Day N" means due at the assignment's base time + N × 24 h (opt-in + 48 h, used app and feedback + 7 days, still opted in + 13 days, each new build + 72 h after it is logged). The base time is Day 0, or the assignment time for late pure testers (FR-33b) and reassigned slots. The "Sudah update" check-in counts toward Behind and Owing like the other milestones.
 - **FR-39** Check-ins are available to Active testers on their own entry, cohort or open pool, each kind at most once per entry (per build for "Sudah update").
 - **FR-40** Check-in windows outside a cohort are relative to the tester's own `opted_in_at`.
 - **FR-41** Verified feedback is the strongest signal because the creator can confirm it in Play Console. Opt-in, usage and update check-ins are honesty-based, and the UI says so.
@@ -336,6 +337,7 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 | Add manual tester / edit tester status, date, note | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Tick "Feedback sent" + summary (own entry) | ❌ | ❌ | ✅ | ❌ | ✅ (moderation) |
 | Join a cohort as pure tester (Forming, or Active ≤ Day 7) | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Leave a cohort as pure tester (Forming only) | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Check in (own entry) | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Set Verified / Replied | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Edit feedback guide, add build log | ❌ | ❌ | ❌ | ✅ | ✅ |
@@ -409,11 +411,12 @@ cohorts                       -- public read
 cohort_members                -- public read
   cohort_id → cohorts, user_id → profiles, app_id uuid null → apps (null = pure tester),
   assigned_at?,                -- when this member's assignments were generated (FR-33b)
-  ring_position int?, standing ('good' | 'owing' | 'settled')?, joined_at
+  ring_position int?, standing ('good' | 'owing' | 'settled')?, settled_at?, joined_at
   pk (cohort_id, user_id)
 
 assignments                   -- public read
   id uuid pk, cohort_id → cohorts, tester_user_id → profiles, app_id → apps,
+  assigned_at,                 -- base time for this assignment's deadlines
   state ('open' | 'reassigned'), reassigned_to uuid null → assignments, created_at
   unique (cohort_id, tester_user_id, app_id)
 
@@ -435,6 +438,7 @@ All views use `security_invoker = true`, so no client can tamper with counts and
 
 - **`app_stats`** — per app: `active_tester_count`, `eligible_count` (Active and `now() - opted_in_at >= 14 days`), `feedback_sent_count`, `feedback_verified_count`, `replied_count` (all on Active testers), `build_count`, `last_build_at`, and the creator's reciprocity numbers.
 - **`profile_stats`** — per user: `apps_created_count`, `testing_count` (Active, or Left with `left_at - opted_in_at >= 14 days`; never Removed; never on deleted apps), `apps_tested_count` (entries that reached 14+ days active: Active with `now() - opted_in_at >= 14 days`, or Left with `left_at - opted_in_at >= 14 days`; never Removed; never on deleted apps), `badge_tier` (`none` | `bronze` | `silver` | `gold` | `platinum`, from `apps_tested_count` per FR-27h), `next_tier_at`, `feedback_sent_count`, `feedback_verified_count` (status ≠ removed).
+- **`cohort_assignment_status`** — per assignment: fulfilled, check-in times, feedback flags, builds due/updated, the matrix `cell` state, `behind_on` (milestones due and unmet) and `is_behind`. Drives the obligation matrix; `cohort_obligations` aggregates it. Exact columns: `docs/contract.md`.
 - **`cohort_obligations`** — per cohort member: assigned count, opted-in count, used-app count, feedback sent/verified counts, latest-build-updated count, still-opted-in count, `is_behind` (per FR-42), and `owes_opt_in` (drives the "Belum tes" label).
 
 Days active per tester stays a client calculation.
@@ -461,6 +465,7 @@ Days active per tester stays a client calculation.
 | `join_cohort_as_tester(cohort_id)` | Member | Cohort Forming, or Active and ≤ Day 7; not already a member; not Owing; if Active, assign 14 apps by lowest coverage and set `assigned_at` |
 | `add_cohort_member(cohort_id, user_id, app_id?)` | Admin | Cohort Forming; app owned by user and not in another open cohort; user not Owing |
 | `remove_cohort_member(cohort_id, user_id)` | Admin | Cohort Forming only |
+| `leave_cohort(cohort_id)` | Pure tester | Own membership, no app in the cohort; cohort Forming only |
 | `start_cohort(cohort_id)` | Admin | ≥ 13 apps; shuffle ring; generate assignments per FR-32/33; set `day0_at` |
 | `reassign_slot(assignment_id, to_user_id)` | Admin | Target is a cohort member with all assignments fulfilled |
 | `close_cohort(cohort_id)` | Admin | Set standings from `cohort_obligations` |
@@ -505,7 +510,7 @@ Supersedes the v1 Firebase stack (moved 31 October 2026 because Firebase's Blaze
 | Server logic | Postgres functions (RPC) + Row Level Security; computed views for counters |
 | Scheduled jobs | `pg_cron` (Supabase Cron) |
 | Email | One Edge Function, `send-reminders`, sending through Gmail SMTP |
-| Hosting | Cloudflare Pages (free), `_redirects` with `/* /index.html 200` for SPA routes |
+| Hosting | Vercel (Hobby, free), `web/vercel.json` rewrites all routes to `/index.html` (ADR-003) |
 | Client SDK | `@supabase/supabase-js` |
 
 ### 11.1 Email reminders
@@ -535,12 +540,12 @@ Supersedes the v1 Firebase stack (moved 31 October 2026 because Firebase's Blaze
 ### 11.4 Manual setup by the owner (later)
 
 1. Create the Supabase project in `ap-southeast-1`.
-2. Create a Google OAuth client; add Supabase callback and Cloudflare Pages URLs as redirect URIs.
+2. Create a Google OAuth client; add Supabase callback and Vercel URLs as redirect URIs.
 3. Disable the email/password provider in production.
 4. Set the admin role in SQL.
 5. Create the Gmail community account, enable 2-Step Verification, generate an App Password, and store it as an Edge Function secret.
 6. Enable `pg_cron` and `pg_net`; schedule the daily job.
-7. Create the Cloudflare Pages project with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+7. Create the Vercel project with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 
 ## 12. Non-functional Requirements
 
@@ -687,10 +692,10 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 3. Should Left/Removed testers stay visible in the public table or collapse into a history section?
 4. Should the 3-build target be a community rule, or just a guideline shown in progress?
 5. Should creators who leave verified feedback unreplied for a long time be flagged publicly?
-6. Is Day 21 the right hard close for a cohort, or should it stay open until every app is ready?
-7. Should a member with two apps be allowed to bring both into one cohort (testing twice as many apps in return)?
+6. ~~Is Day 21 the right hard close for a cohort, or should it stay open until every app is ready?~~ **Answered 3 Nov 2026: Day 21 is the hard close, or earlier when every app is Ready to apply. Standing counts only milestones due before close; apps not ready keep their testers and can join a later cohort (FR-37).**
+7. ~~Should a member with two apps be allowed to bring both into one cohort (testing twice as many apps in return)?~~ **Answered 3 Nov 2026: no. One member brings one app per cohort; a second app goes into a different cohort (FR-30).**
 8. Who besides the owner may act as admin for running cohorts?
 9. ~~Should logged-out visitors land on the story page at `/`, with the app list moved to `/apps`?~~ **Answered 2 Nov 2026: yes, for everyone (ADR-008 option A).**
 10. Will the design pass be done in-house with Taste Skill alone, or with a dedicated designer or creative developer for the signature moment?
 11. Should badge names be Indonesian (e.g. Perunggu, Perak, Emas, Platinum) or stay in English?
-12. Is there a cap on pure testers per cohort, or can any number join until Day 7?
+12. ~~Is there a cap on pure testers per cohort, or can any number join until Day 7?~~ **Answered 3 Nov 2026: no cap; any number can join until Day 7 (FR-33a).**

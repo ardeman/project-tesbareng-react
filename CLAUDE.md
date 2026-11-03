@@ -68,7 +68,7 @@ Requires Node 22+. Screenshots need Chrome/Edge/Chromium (Playwright's Chromium 
 - Frontend: React + Vite (TypeScript) SPA + Tailwind CSS + React Router, in `web/`.
 - Backend: Supabase free plan. Postgres + Row Level Security + Postgres functions (RPC) in `supabase/migrations/`. Auth: Supabase Auth, Google provider only; any Google account may sign in, not only `@gmail.com` (PRD §6.1).
 - Edge Functions: only one, `send-reminders`, for the daily email digest via Gmail SMTP (ADR-006, PRD §11.1), because Postgres cannot speak SMTP. Everything else stays in SQL.
-- Hosting: **undecided** (ADR-003). The repo has `web/vercel.json` (SPA rewrite to `index.html`); PRD §11 says Cloudflare Pages with `web/public/_redirects`. Do not add or remove either config until the owner decides.
+- Hosting: **Vercel** (ADR-003, accepted 2026-11-02; the site is on Vercel). `web/vercel.json` rewrites all routes to `index.html`. No `web/public/_redirects`.
 - Stack moved from Firebase on 2026-10-31 (ADR-002): Firebase needs the Blaze plan (credit card) to deploy Cloud Functions; Supabase's free plan does not.
 - Development runs against the local Supabase stack (Docker). No hosted project exists yet. Never create remote projects, set secrets or deploy without asking.
 
