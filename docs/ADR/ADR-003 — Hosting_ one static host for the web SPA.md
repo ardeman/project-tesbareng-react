@@ -2,7 +2,7 @@
 
 |  |  |
 | --- | --- |
-| **Status** | **Proposed — needs the owner's decision** |
+| **Status** | **Accepted — Vercel (2 November 2026)** |
 | **Decider** | Community Admin |
 | **Date** | 2 November 2026 |
 | **PRD ref** | PRD v2.2 §11, §11.4 step 7. Also `CLAUDE.md` (Stack), `docs/migrate_supabase.md` (Hosting prep) |
@@ -46,7 +46,7 @@ Pick **one** host and make every doc and config match it. The ADR author's sugge
 
 ## Decision
 
-_To be filled in by the owner: chosen host, date._
+**Vercel**, 2 November 2026. Owner confirmed via conversation. `web/vercel.json` (SPA rewrite) already in repo. `web/public/_redirects` tidak dibuat.
 
 ## Consequences (whichever host wins)
 

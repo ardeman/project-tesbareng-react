@@ -73,8 +73,8 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 | `ensure_profile` | — | `uuid` | Upserts the caller's profile from the Google identity (name, photo, masked email). Never touches `role`. A trigger on `auth.users` insert creates the profile on first sign-in. |
 | `create_app` | `p_name, p_description, p_opt_in_url, p_store_url?, p_package_name?, p_test_start_date?, p_feedback_guide?, p_group_confirmed` | `uuid` | FR-4 validation; `p_group_confirmed` must be true (`invalid-argument`); live duplicate package → `already-exists`; 5 apps per member per rolling 24 h → `resource-exhausted`. Starts `recruiting`. |
 | `update_app` | `p_app_id`, same fields as create, `p_status?` | — | Creator or admin. Replaces the editable fields; null `p_status` keeps the status. Package uniqueness checked. |
-| `delete_app` | `p_app_id` | — | Creator or admin. Soft delete (`deleted = true`); one-way for creators. |
-| `restore_app` | `p_app_id` | — | Admin only (`permission-denied`). Refuses if the package name was taken meanwhile (`already-exists`). |
+| `delete_app` | `p_app_id` | — | Creator or admin. Soft delete (`deleted = true`, `deleted_at = now()`). |
+| `restore_app` | `p_app_id` | — | Admin any time; the creator only within 10 minutes of deleting (the "Urungkan" undo, ADR-009 §7), otherwise `permission-denied`. Refuses if the package name was taken meanwhile (`already-exists`). |
 | `join_as_tester` | `p_app_id, p_checklist {joinedGroup, optedIn, installed}` | — | All three must be JSON `true`. Creator → `permission-denied`. Existing entry: active → `already-exists`; removed → `permission-denied`; left → re-activated with a new `opted_in_at` and `left_at` cleared. Masks the email. |
 | `leave_testing` | `p_app_id` | — | Own active entry → left, `left_at = now()`. Not active → `failed-precondition`; no entry → `not-found`. |
 | `mark_feedback_sent` | `p_app_id, p_sent, p_summary?` | — | Own **active** entry only. `true`: `feedback_sent_at = now()`, summary trimmed (≤ 500, empty → null). `false`: clears all three. |
