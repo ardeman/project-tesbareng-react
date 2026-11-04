@@ -25,11 +25,12 @@ Precedence and conflicts:
 | 003 | Hosting: Vercel | Accepted (2026-11-02) |
 | 004 | Data access: RLS reads, RPC-only writes, computed counters | Accepted, implemented |
 | 005 | Privacy: masked emails, full email never in a public table | Accepted, implemented |
-| 006 | Reminders: daily digest via Gmail SMTP from one Edge Function | Accepted, not implemented |
-| 007 | Cohorts: ring assignment of testers | Accepted, not implemented |
+| 006 | Reminders: daily digest via Gmail SMTP from one Edge Function | Accepted, implemented (cron job set up at first deploy) |
+| 007 | Cohorts: ring assignment of testers | Accepted, implemented |
 | 008 | Routing: story page at `/`, app list at `/apps` (PRD §17 Q9) | Accepted (option A, 2026-11-02) |
 | 009 | Work surface UX: the "B2B" rules | Accepted (2026-11-02) |
 | 010 | Story surface UX: the "B2C" rules | Accepted (2026-11-02) |
+| 012 | Tester slots: creator chooses how many testers an app needs (amends 007, builds on 011) | **Proposed** (2026-11-05, not implemented) |
 
 ## UI work
 
