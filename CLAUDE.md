@@ -84,6 +84,10 @@ Requires Node 22+. Screenshots need Chrome/Edge/Chromium (Playwright's Chromium 
 - Local Google sign-in needs a real OAuth client in `supabase/.env` (see `supabase/.env.example`); otherwise use `?devLogin`.
 - New schema changes go in new migration files; never edit a migration that has already been applied.
 
+## Commits
+
+Every commit uses [Conventional Commits](https://www.conventionalcommits.org): `<type>(<optional scope>)!: <description>`, subject ≤ 100 chars. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`. Scopes are optional, e.g. `web`, `db`, `cohort`, `auth`. Use `!` (and a `BREAKING CHANGE:` footer) for breaking changes. The `.githooks/commit-msg` hook rejects anything else; `npm install` enables it (`core.hooksPath`). Do not bypass it with `--no-verify`.
+
 ## Hard rules (security and data integrity)
 
 1. **Never store a full email in a public table** (ADR-005). RLS cannot hide columns. Full emails live only in `auth.users`, which the API does not expose; only `security definer` functions read them, to mask them, plus the `send-reminders` Edge Function (service role) to send the digest. No public table or view has an email column, and check constraints reject anything that is not a masked address.
