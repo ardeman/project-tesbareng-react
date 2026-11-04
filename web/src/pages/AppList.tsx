@@ -5,10 +5,10 @@ import { AssignedChip } from '../components/cohortBits'
 import { IconPlus, IconSearch } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { usePageMeta } from '../lib/pageMeta'
-import { errorText, useApps } from '../lib/data'
-import { appStatusLabel, relDay, TARGET_TESTERS } from '../lib/progress'
+import { errorText, useApps, useEntriesOf } from '../lib/data'
+import { appStatusLabel, daysActive, relDay, TARGET_TESTERS } from '../lib/progress'
 import { useAppCohorts, useBelumTesApps, useCohorts, useMyAssignedApps, type AppCohort, type CohortStatus } from '../lib/cohorts'
-import type { AppDoc, AppStatus } from '../lib/types'
+import type { AppDoc, AppStatus, TesterDoc } from '../lib/types'
 
 type Tab = 'all' | AppStatus
 type Sort = 'need' | 'creator' | 'new'
@@ -21,7 +21,7 @@ const COHORT_WORD: Record<CohortStatus, string> = { forming: 'dibentuk', active:
 const NO_COHORT = 'tanpa'
 
 interface Assigned { cohortId: string; name: string }
-interface Row { app: AppDoc; eligible: number; cohort?: AppCohort; assigned?: Assigned; belumTes?: boolean }
+interface Row { app: AppDoc; eligible: number; cohort?: AppCohort; assigned?: Assigned; belumTes?: boolean; own?: boolean; mine?: TesterDoc }
 
 export function AppList() {
   const apps = useApps()
@@ -48,6 +48,9 @@ export function AppList() {
   const appCohorts = useAppCohorts()
   const assigned = useMyAssignedApps(user?.uid)
   const belumTes = useBelumTesApps()
+  // The signed-in member's own tester entries, so each row says "Anda menguji" (or "Anda keluar").
+  const entries = useEntriesOf(user?.uid)
+  const myEntry = useMemo(() => new Map(entries.data.filter((t) => t.status !== 'removed').map((t) => [t.appId, t])), [entries.data])
   const cohortLoading = cohortList.loading || appCohorts.loading
   const cohortError = cohortList.error || appCohorts.error
   const retryCohorts = () => { cohortList.retry(); appCohorts.retry() }
@@ -71,7 +74,9 @@ export function AppList() {
     cohort: appCohorts.data.get(app.id)?.find((c) => c.status !== 'closed'),
     assigned: assigned.data.get(app.id),
     belumTes: belumTes.data.has(app.id),
-  })), [apps.data, appCohorts.data, assigned.data, belumTes.data])
+    own: !!user && app.creatorUid === user.uid,
+    mine: myEntry.get(app.id),
+  })), [apps.data, appCohorts.data, assigned.data, belumTes.data, user, myEntry])
 
   // Cohort and "ditugaskan" narrow the base set; the status counts follow them, the search does not (as before).
   const base = useMemo(() => rows.filter((r) => {
@@ -271,6 +276,15 @@ export function AppList() {
   )
 }
 
+/** Who the signed-in member is to this app: its creator, or one of its testers (active or left).
+ *  Neutral fills: colour already means status/progress here (PRD DR-3), so glyph + text carry it. */
+function MineChips({ own, mine }: Pick<Row, 'own' | 'mine'>) {
+  if (own) return <Chip glyph="★" className="mine">Aplikasi Anda</Chip>
+  if (!mine) return null
+  if (mine.status === 'left') return <Chip tone="soft" glyph="←" className="mine">Anda keluar</Chip>
+  return <Chip glyph="●" className="mine">Anda menguji<span className="num"> · {daysActive(mine)} hari</span></Chip>
+}
+
 function SeatCell({ app, eligible }: Row) {
   return (
     <span className="seat-cell">
@@ -288,13 +302,14 @@ function creatorLine(app: AppDoc) {
 }
 
 function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
-  const { app, eligible, cohort, assigned, belumTes } = row
+  const { app, eligible, cohort, assigned, belumTes, own, mine } = row
   const c = creatorLine(app)
   return (
     <tr className="clickable" onClick={onOpen}>
       <td className="cell-2">
         <div className="name-line">
           <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
+          <MineChips own={own} mine={mine} />
           {assigned && <AssignedChip cohort={assigned.name} />}
           {belumTes && <Chip tone="cabai" glyph="!">Belum tes</Chip>}
         </div>
@@ -318,7 +333,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
 }
 
 function PhoneRow({ row }: { row: Row }) {
-  const { app, eligible, cohort, assigned, belumTes } = row
+  const { app, eligible, cohort, assigned, belumTes, own, mine } = row
   const c = creatorLine(app)
   return (
     <Link to={`/apps/${app.id}`} className="mrow">
@@ -331,6 +346,7 @@ function PhoneRow({ row }: { row: Row }) {
       </span>
       <span className="l2">
         <StatusPill status={app.status} />
+        <MineChips own={own} mine={mine} />
         {assigned && <AssignedChip cohort={assigned.name} />}
         {belumTes && <Chip tone="cabai" glyph="!">Belum tes</Chip>}
         <span>{app.creatorName} · menguji {c.t} aplikasi</span>
