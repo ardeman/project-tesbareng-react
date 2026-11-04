@@ -11,7 +11,7 @@ import { AssignedChip } from '../components/cohortBits'
 import { useAuth } from '../lib/auth'
 import { useMyAssignedApps } from '../lib/cohorts'
 import { usePageMeta } from '../lib/pageMeta'
-import { api, errorCode, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useTesters } from '../lib/data'
+import { api, errorCode, markEmailListed, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useEmailListings, useTesters } from '../lib/data'
 import { checkIn, milestones, useCheckIns, type CheckIn, type Milestone } from '../lib/checkins'
 import {
   computeProgress, daysActive, fmtDate, fmtDateTime, fmtDayHeading, inDays, isNewBuild, isoDate, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
@@ -141,6 +141,8 @@ export function AppDetail() {
           app={a} testers={testers.data} loading={testers.loading} isCreator={isCreator} myUid={user?.uid}
           onEdit={(t) => setDialog({ tester: t })}
         />
+
+        {a.testerMethod === 'email_list' && user?.uid === a.creatorUid && <EmailListPanel app={a} />}
 
         <section className="panel split-host span-12" aria-label="Build dan catatan feedback">
           <div className="split">
@@ -330,7 +332,9 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
       <h2>{mine?.status === 'left' ? 'Uji lagi aplikasi ini' : 'Ikut menguji'}</h2>
       {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi memulai hitungan 14 hari dari awal.</p>}
       {guide}
-      <p className="muted small">Butuh 3 langkah: gabung grup, buka link opt-in, pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>
+      {app.testerMethod === 'email_list'
+        ? <p className="muted small">Aplikasi ini memakai daftar email: minta ditambahkan, tunggu kreator menambahkan email Anda, lalu opt-in dan pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>
+        : <p className="muted small">Butuh 3 langkah: gabung grup, buka link opt-in, pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>}
     </section>
   )
 }
@@ -872,6 +876,56 @@ function FeedbackList({ testers, loading }: { testers: TesterDoc[]; loading: boo
         </ul>
       )}
       {withSummary.length > FEW && <ShowAll open={all} total={withSummary.length} onToggle={() => setAll((x) => !x)} controls="fb-list" />}
+    </section>
+  )
+}
+
+// ---------- email-list testing (ADR-011): the creator's own view only ----------
+
+function EmailListPanel({ app }: { app: AppDoc }) {
+  const toast = useToast()
+  const list = useEmailListings(app.id)
+  const [busy, setBusy] = useState<string | null>(null)
+  const pending = list.data.filter((r) => r.listedAt == null)
+  const copy = async (emails: string[]) => {
+    try {
+      await navigator.clipboard.writeText(emails.join(', '))
+      toast(`${emails.length} email disalin. Tempel di Play Console → Uji tertutup → Penguji → daftar email.`)
+    } catch { toast('Gagal menyalin. Pilih dan salin emailnya manual.') }
+  }
+  const mark = async (uid: string, listed: boolean) => {
+    if (busy) return
+    setBusy(uid)
+    try { await markEmailListed(app.id, uid, listed); list.refresh() } catch (e) { toast(failToast(e)) } finally { setBusy(null) }
+  }
+  return (
+    <section className="panel stack-12 span-12" aria-labelledby="emails-h">
+      <header className="creator-nums">
+        <h2 id="emails-h">Email untuk Play Console</h2>
+        <span className="muted small num">{pending.length} belum ditambahkan · {list.data.length - pending.length} sudah</span>
+        <span className="spacer" />
+        {pending.length > 0 && <button type="button" className="btn" onClick={() => copy(pending.map((r) => r.email))}>Salin {pending.length} email</button>}
+      </header>
+      <p className="muted small">Hanya Anda yang melihat email ini, karena tester menyetujuinya. Tempel di daftar email jalur uji tertutup, lalu tandai “Sudah ditambahkan” agar tester bisa opt-in.</p>
+      {list.error ? <ErrorBox text="Daftar email gagal dimuat." onRetry={list.retry} />
+        : list.loading ? <Skel w="60%" />
+        : list.data.length === 0 ? <p className="muted">Belum ada yang meminta ditambahkan.</p>
+        : (
+          <ul className="email-list">
+            {list.data.map((r) => (
+              <li key={r.uid}>
+                <span className="cell-2">
+                  <b>{r.displayName}</b>
+                  <span className="addr">{r.email}</span>
+                  <span className="muted small num">{r.listedAt ? `✓ Ditambahkan ${fmtDate(r.listedAt)}` : `○ Menunggu · diminta ${fmtDate(r.requestedAt)}`}</span>
+                </span>
+                {r.listedAt
+                  ? <button type="button" className="text-action quiet" disabled={busy === r.uid} onClick={() => mark(r.uid, false)}>Batalkan tanda</button>
+                  : <button type="button" className="btn primary" disabled={busy === r.uid} onClick={() => mark(r.uid, true)}>{busy === r.uid ? 'Menyimpan…' : 'Sudah ditambahkan'}</button>}
+              </li>
+            ))}
+          </ul>
+        )}
     </section>
   )
 }

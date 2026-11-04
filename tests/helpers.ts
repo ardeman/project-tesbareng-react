@@ -3,7 +3,21 @@ import { createClient, type PostgrestError, type SupabaseClient } from "@supabas
 import { afterAll, expect } from "vitest";
 import { DEV_PASSWORD, localSupabase } from "../scripts/local";
 
-const { url, anonKey, serviceRoleKey } = localSupabase();
+/**
+ * Local stack by default. A cloud dev project only when all four TEST_REMOTE_* variables
+ * are set and TEST_REMOTE_CONFIRM repeats the URL (same guard as the seed script).
+ * The tests create and delete their own users there; never point this at production.
+ */
+function target() {
+  const { TEST_REMOTE_URL: u, TEST_REMOTE_ANON_KEY: a, TEST_REMOTE_SERVICE_ROLE_KEY: s, TEST_REMOTE_CONFIRM: c } = process.env;
+  if (!u && !a && !s && !c) return { ...localSupabase(), remote: false };
+  if (!u || !a || !s || c !== u) {
+    throw new Error("Remote tests need TEST_REMOTE_URL, TEST_REMOTE_ANON_KEY, TEST_REMOTE_SERVICE_ROLE_KEY and TEST_REMOTE_CONFIRM (= the URL).");
+  }
+  return { url: u, anonKey: a, serviceRoleKey: s, remote: true };
+}
+
+const { url, anonKey, serviceRoleKey, remote } = target();
 const opts = { auth: { persistSession: false, autoRefreshToken: false } };
 
 /** Bypasses RLS; used only to arrange fixtures and to clean up. */
@@ -38,8 +52,16 @@ export async function member(local: string, name: string, role: "member" | "admi
   created.push(data.user.id);
   if (role === "admin") await must(service.from("profiles").update({ role: "admin" }).eq("id", data.user.id));
   const db = anon();
-  const signIn = await db.auth.signInWithPassword({ email, password: DEV_PASSWORD });
-  if (signIn.error) throw signIn.error;
+  if (remote) {
+    // Cloud projects keep email sign-in off; an admin magic link still yields a session.
+    const link = await service.auth.admin.generateLink({ type: "magiclink", email });
+    if (link.error) throw link.error;
+    const v = await db.auth.verifyOtp({ token_hash: link.data.properties.hashed_token, type: "magiclink" });
+    if (v.error) throw v.error;
+  } else {
+    const signIn = await db.auth.signInWithPassword({ email, password: DEV_PASSWORD });
+    if (signIn.error) throw signIn.error;
+  }
   return { id: data.user.id, email, name, db };
 }
 

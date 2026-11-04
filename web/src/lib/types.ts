@@ -3,6 +3,22 @@
 
 export type AppStatus = 'recruiting' | 'testing' | 'applied' | 'live'
 export type TesterStatus = 'active' | 'left' | 'removed'
+export type TesterMethod = 'google_group' | 'email_list'
+
+/** A member's request to be added to an email-list app's Play Console list (ADR-011). No email here. */
+export interface EmailListing {
+  appId: string
+  uid: string
+  requestedAt: number
+  listedAt: number | null
+}
+
+/** Creator-only view of a request, with the full address from app_email_listings(). */
+export interface EmailListingRow extends EmailListing {
+  displayName: string
+  photoURL?: string | null
+  email: string
+}
 export type BadgeTier = 'none' | 'bronze' | 'silver' | 'gold' | 'platinum'
 
 export interface AppDoc {
@@ -19,6 +35,8 @@ export interface AppDoc {
   /** local midnight of the start date */
   testStartDate?: number | null
   feedbackGuide?: string | null
+  /** How testers are added to the Play Console closed track (ADR-011). */
+  testerMethod: TesterMethod
   // computed by the app_stats view
   activeTesterCount: number
   eligibleCount: number

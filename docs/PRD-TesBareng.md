@@ -3,9 +3,9 @@
 |  |  |
 | --- | --- |
 | **Product** | TesBareng ("test together") |
-| **Version** | 2.2 |
+| **Version** | 2.3 (draft) |
 | **Status** | Draft |
-| **Last updated** | 2 November 2026 |
+| **Last updated** | 4 November 2026 |
 | **Owner** | Community Admin |
 | **Community group** | `google-tester-indonesia@googlegroups.com` |
 | **Stack** | Supabase (free plan) + Vercel |
@@ -13,6 +13,10 @@
 ---
 
 ## Changelog
+
+**v2.3 (draft) — 4 November 2026** — pending the owner's decision on ADR-011 (Proposed)
+
+- **Email-list testing** (§5.1, §5.2a, FR-14a–FR-14e): an app whose closed track uses a Play Console email list (which cannot be combined with Google Groups) can take community testers. The tester consents to share their Google-account email with that app's creator only; the creator pastes it into Play Console and marks it added. Cohort deadlines for these apps start when the creator marks the tester added.
 
 **v2.2 — 2 November 2026**
 
@@ -86,7 +90,9 @@ A single user can be a Creator of their own app(s), a Tester of other apps and a
 1. Log in with Google.
 2. Click **Add App**.
 3. Fill in: app name, short description, Play Store opt-in link, optional Play Store listing link, optional package name, and a **feedback guide** (§6.5).
-4. Confirm: "I have added `google-tester-indonesia@googlegroups.com` as the tester list in my closed testing track."
+4. Choose how testers are added in Play Console (a closed track takes Google Groups **or** email lists, not both):
+   - **Google Group** (default): confirm "I have added `google-tester-indonesia@googlegroups.com` as the tester list in my closed testing track."
+   - **Email list**: no confirmation; testers ask to be added (§5.2a).
 5. The app is published with status **Recruiting** and can be added to a cohort by the admin.
 
 ### 5.2 Register as a tester (Member)
@@ -99,6 +105,13 @@ A single user can be a Creator of their own app(s), a Tester of other apps and a
    - [ ] I have opened the opt-in link and tapped "Become a tester" on Google Play (link provided).
    - [ ] I have installed the app.
 5. Click **Confirm**. The member is added immediately (no creator approval). `opted_in_at` is set to now. This is the cohort's opt-in milestone.
+
+### 5.2a Register as a tester on an email-list app (Member)
+
+1. Open the app page and click **Gabung sebagai tester**. The dialog explains the app uses an email list.
+2. **Ask to be added:** tick "I agree the creator of this app sees my full Google-account email" and send. The dialog shows the address and asks the member to make sure it is the account used on Play.
+3. **Wait:** the creator copies the address on their app page, pastes it into Play Console, and marks it **Sudah ditambahkan**. The member can withdraw at any time.
+4. **Opt in:** once marked, the checklist is "opened the opt-in link" and "installed" (no group step). Confirm as in §5.2 step 5.
 
 ### 5.3 Send feedback via Google Play (Tester)
 
@@ -188,6 +201,14 @@ For members without an app, or between their own apps, who want to help and earn
 - **FR-12** A member cannot hold two entries on the same app. Re-joining after Left re-activates the entry with a new `opted_in_at` and clears its check-ins, since the 14-day count restarts (owner decision 3 Nov 2026). Removed testers cannot re-join.
 - **FR-13** A creator cannot register as a tester on their own app.
 - **FR-14** The table is sortable by name, opt-in date and days active.
+
+**Email-list apps** (ADR-011, Proposed):
+
+- **FR-14a** Each app has a tester method, **Google Group** (default) or **Email list**, chosen on the app form and editable later.
+- **FR-14b** On an email-list app, a member asks to be added with explicit consent that the app's creator sees their full Google-account email. Not on own app; not when Removed. Asking twice is harmless.
+- **FR-14c** Only the creator of that app (not the admin) sees the full addresses, with copy-all for Play Console, and marks each **Sudah ditambahkan** (creator or admin; can be undone). Members who withdrew, left or were removed are no longer shown.
+- **FR-14d** A member registers on an email-list app only after being marked added; the checklist drops the group step.
+- **FR-14e** In a cohort, an assignment on an email-list app counts its milestones from the time the tester was marked added, provided they asked within the 48 h opt-in window; until marked, nothing is due. Asking late keeps the normal deadline.
 
 ### 6.4 Progress indicators (per app)
 
@@ -335,6 +356,9 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 | Register as tester | ❌ | ✅ | — | ❌ (own app) | ✅ |
 | Leave testing | ❌ | ❌ | ✅ | — | ✅ |
 | Add manual tester / edit tester status, date, note | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Ask to be added / withdraw on an email-list app (own request) | ❌ | ✅ | ✅ | ❌ (own app) | ✅ |
+| See full emails of members who asked (email-list app) | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Mark a request as added in Play Console | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Tick "Feedback sent" + summary (own entry) | ❌ | ❌ | ✅ | ❌ | ✅ (moderation) |
 | Join a cohort as pure tester (Forming, or Active ≤ Day 7) | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Leave a cohort as pure tester (Forming only) | ❌ | ✅ | ✅ | ✅ | ✅ |
@@ -363,6 +387,7 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 - The full email is read from `auth.users` only inside `security definer` functions (for masking) and by the reminder Edge Function using the service role (for sending).
 - Manually added testers: the email is masked inside the RPC and the original is discarded.
 - Creators don't need full emails because testers are managed through the shared Google Group in Play Console.
+- **Exception (ADR-011, Proposed):** on an email-list app, the creator sees the full Google-account email of members who consented, read live from `auth.users` by `app_email_listings()`. No table stores it; withdrawing, leaving or being removed hides it again.
 
 ### 8.3 Other personal data
 
@@ -384,7 +409,12 @@ apps                          -- public read where deleted = false; admin sees a
   id uuid pk, creator_id → profiles, name, description, opt_in_url,
   store_url?, package_name?, test_start_date?, feedback_guide?,
   status ('recruiting' | 'testing' | 'applied' | 'live'),
-  group_confirmed bool, deleted bool default false, created_at, updated_at
+  group_confirmed bool, tester_method ('google_group' | 'email_list'),
+  deleted bool default false, created_at, updated_at
+
+email_listings                -- public read; no email column (ADR-011)
+  app_id → apps, user_id → profiles, requested_at, listed_at?
+  pk (app_id, user_id)
 
 testers                       -- public read
   id uuid pk, app_id → apps, user_id uuid null (null = manual entry),
@@ -453,7 +483,10 @@ Days active per tester stays a client calculation.
 | `create_app(...)` | Member | FR-4 validation; `group_confirmed` true; unique non-deleted package name; 5 per rolling 24 h |
 | `update_app(app_id, ...)` | Creator, admin | Editable fields only; package uniqueness |
 | `delete_app(app_id)` / `restore_app(app_id)` | Creator, admin / admin, or creator within 10 min | Soft delete; creator undo window 10 min (ADR-009 §7), then admin only |
-| `join_as_tester(app_id, checklist)` | Member | All 3 checklist items; not own app; Active → already exists; Removed → denied; Left → re-activate with new `opted_in_at`, clear `left_at` and the entry's check-ins |
+| `request_email_listing(app_id, consent)` / `cancel_email_listing(app_id)` | Member | Consent true; email-list app; not own app; not Removed |
+| `app_email_listings(app_id)` | Creator only | Full emails of members who asked and did not withdraw, leave or get removed |
+| `mark_email_listed(app_id, user_id, listed)` | Creator, admin | Sets or clears `listed_at` |
+| `join_as_tester(app_id, checklist)` | Member | All 3 checklist items (email-list app: opt-in + installed, and a listed request); not own app; Active → already exists; Removed → denied; Left → re-activate with new `opted_in_at`, clear `left_at` and the entry's check-ins |
 | `leave_testing(app_id)` | Tester | Own Active entry only |
 | `mark_feedback_sent(app_id, sent, summary)` | Tester | Own Active entry; trim; empty → null; `sent = false` clears all three fields |
 | `add_manual_tester(app_id, display_name, email, opted_in_at)` | Creator, admin | Mask and discard the email |
@@ -688,7 +721,7 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 ## 17. Open Questions
 
 1. Should there be a cap on apps per creator overall? (Within a cohort it is one app per member.)
-2. Should creators see full emails of their own testers to cross-check with Play Console, or is masked-only acceptable?
+2. Should creators see full emails of their own testers to cross-check with Play Console, or is masked-only acceptable? *(ADR-011, Proposed, covers only email-list apps with the tester's consent; the general question stays open.)*
 3. Should Left/Removed testers stay visible in the public table or collapse into a history section?
 4. Should the 3-build target be a community rule, or just a guideline shown in progress?
 5. Should creators who leave verified feedback unreplied for a long time be flagged publicly?

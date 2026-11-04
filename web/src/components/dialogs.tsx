@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from 'react'
-import { api, errorText, updateTesterAsCreator } from '../lib/data'
+import { useEffect, useState, type FormEvent } from 'react'
+import { useAuth } from '../lib/auth'
+import { supabase } from '../lib/supabase'
+import { api, cancelEmailListing, errorText, requestEmailListing, updateTesterAsCreator, useMyEmailListing } from '../lib/data'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
-import { isoDate, todayIso } from '../lib/progress'
+import { fmtDate, isoDate, todayIso } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 import { BUILD_LIMITS, MANUAL_LIMITS, validateBuild, validateManual, type BuildInput, type ManualInput } from '../lib/validate'
 import { useValidation } from '../lib/useValidation'
@@ -22,7 +24,9 @@ function useSubmit(onDone: () => void) {
 export function JoinDialog({ open, onClose, app, rejoin }: { open: boolean; onClose: () => void; app: AppDoc; rejoin?: boolean }) {
   return (
     <Dialog open={open} onClose={onClose} label={`Gabung sebagai tester ${app.name}`}>
-      <JoinForm app={app} rejoin={rejoin} onClose={onClose} />
+      {app.testerMethod === 'email_list'
+        ? <EmailJoinForm app={app} rejoin={rejoin} onClose={onClose} />
+        : <JoinForm app={app} rejoin={rejoin} onClose={onClose} />}
     </Dialog>
   )
 }
@@ -73,6 +77,90 @@ function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; 
           {!all && <span className="why" id="join-why">Centang ketiga langkah untuk lanjut.</span>}
           <button type="button" className="btn" onClick={onClose}>Batal</button>
           <button className="btn primary" disabled={!all || busy} aria-describedby={!all ? 'join-why' : undefined}>{busy ? 'Menyimpan…' : 'Gabung sebagai tester'}</button>
+        </div>
+      </form>
+  )
+}
+
+/**
+ * Email-list apps (ADR-011): Play Console takes this app's testers by email, not through
+ * the community group. Three states: ask (with consent) → wait for the creator → opt in.
+ */
+function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
+  const toast = useToast()
+  const { user } = useAuth()
+  const listing = useMyEmailListing(app.id, user?.uid)
+  // The full address lives only in the member's own session (ADR-005); profiles hold the masked one.
+  const [email, setEmail] = useState<string | null>(null)
+  useEffect(() => { supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null)) }, [])
+  const [consent, setConsent] = useState(false)
+  const [c, setC] = useState({ optedIn: false, installed: false })
+  const asked = useSubmit(() => listing.refresh())
+  const joined = useSubmit(() => { toast(`Anda tercatat sebagai tester ${app.name}. Hitungan 14 hari dimulai hari ini.`); onClose() })
+  const l = listing.data
+  const step = !l ? 'ask' : l.listedAt == null ? 'wait' : 'join'
+  const all = c.optedIn && c.installed
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (step === 'ask' && consent) asked.run(async () => { await requestEmailListing(app.id); toast('Permintaan terkirim. Kreator akan menambahkan email Anda.') })
+    if (step === 'join' && all) joined.run(() => api.joinAsTester({ appId: app.id, checklist: { optedIn: true, installed: true } }))
+  }
+  const withdraw = () => asked.run(async () => { await cancelEmailListing(app.id); toast('Permintaan dibatalkan. Kreator tidak lagi melihat email Anda.') })
+  const err = asked.err ?? joined.err ?? listing.error
+  const busy = asked.busy || joined.busy
+
+  return (
+      <form onSubmit={submit}>
+        <div className="sheet-body">
+          <h2>Gabung sebagai tester {app.name}</h2>
+          {rejoin && <p className="muted">Hitungan 14 hari dimulai lagi dari hari ini.</p>}
+          <p className="lede">Aplikasi ini memakai daftar email di Play Console, bukan Google Group. Kreator perlu menambahkan email Anda dulu sebelum Anda bisa opt-in.</p>
+          <ol className="steps" aria-label="Langkah">
+            <li aria-current={step === 'ask' ? 'step' : undefined}><span className="num" aria-hidden="true">{step !== 'ask' ? '✓' : '1'}</span><span>Minta ditambahkan{step !== 'ask' && <span className="muted small"> · selesai</span>}</span></li>
+            <li aria-current={step === 'wait' ? 'step' : undefined}><span className="num" aria-hidden="true">{step === 'join' ? '✓' : '2'}</span><span>Kreator menambahkan email Anda{step === 'join' && <span className="muted small"> · selesai</span>}</span></li>
+            <li aria-current={step === 'join' ? 'step' : undefined}><span className="num" aria-hidden="true">3</span><span>Opt-in dan pasang aplikasinya</span></li>
+          </ol>
+          {listing.loading ? <p className="muted">Memuat…</p> : step === 'ask' ? (
+            <label className="check">
+              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+              <span><span className="t">Saya setuju kreator {app.name} melihat email lengkap akun Google saya</span>
+                {email && <span className="d addr">{email}</span>}
+                <span className="d">Hanya kreator aplikasi ini yang melihatnya, untuk ditempel di Play Console. Pastikan ini akun yang sama dengan akun Play Store di HP Anda. Anda bisa membatalkan kapan saja.</span></span>
+            </label>
+          ) : step === 'wait' ? (
+            <div className="notice info" role="status">
+              <span>Menunggu kreator menambahkan email Anda · diminta <span className="num">{fmtDate(l!.requestedAt)}</span>. Anda akan bisa opt-in setelah ditandai “Sudah ditambahkan”.</span>
+            </div>
+          ) : (
+            <div>
+              <label className="check">
+                <input type="checkbox" checked={c.optedIn} onChange={(e) => setC({ ...c, optedIn: e.target.checked })} />
+                <span><span className="t">Saya sudah buka link opt-in dan ketuk “Jadi penguji”</span>
+                  <span className="d"><a className="link" href={app.optInUrl} target="_blank" rel="noreferrer">Buka link opt-in</a> di Google Play, dengan akun yang emailnya Anda bagikan.</span></span>
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={c.installed} onChange={(e) => setC({ ...c, installed: e.target.checked })} />
+                <span><span className="t">Saya sudah memasang aplikasinya</span>
+                  <span className="d">Biarkan terpasang minimal 14 hari berturut-turut.</span></span>
+              </label>
+            </div>
+          )}
+          {err && <ErrorBox text={err} />}
+        </div>
+        <div className="sheet-foot">
+          {step !== 'ask' && !listing.loading && (
+            <button type="button" className="text-action quiet" style={{ marginRight: 'auto' }} disabled={busy} onClick={withdraw}>Batalkan permintaan</button>
+          )}
+          {step === 'ask' && !consent && <span className="why" id="join-why">Centang persetujuan untuk lanjut.</span>}
+          {step === 'join' && !all && <span className="why" id="join-why">Centang kedua langkah untuk lanjut.</span>}
+          <button type="button" className="btn" onClick={onClose}>{step === 'wait' ? 'Tutup' : 'Batal'}</button>
+          {step === 'ask' && (
+            <button className="btn primary" disabled={!consent || busy || listing.loading} aria-describedby={!consent ? 'join-why' : undefined}>{busy ? 'Mengirim…' : 'Minta ditambahkan'}</button>
+          )}
+          {step === 'join' && (
+            <button className="btn primary" disabled={!all || busy} aria-describedby={!all ? 'join-why' : undefined}>{busy ? 'Menyimpan…' : 'Gabung sebagai tester'}</button>
+          )}
         </div>
       </form>
   )

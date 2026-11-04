@@ -99,7 +99,7 @@ describe("full email never readable", () => {
   it.each(["visitor", "member", "creator"] as const)("%s finds no full address in any public table or view", async (role) => {
     const db = roles()[role];
     const known = [creator.email, tester.email, other.email, admin.email, "wulan.sari@gmail.com"];
-    for (const table of ["profiles", "apps", "testers", "builds", "app_stats", "profile_stats", "cohorts", "cohort_members", "assignments", "check_ins", "cohort_links"]) {
+    for (const table of ["profiles", "apps", "testers", "builds", "app_stats", "profile_stats", "cohorts", "cohort_members", "assignments", "check_ins", "cohort_links", "email_listings"]) {
       const text = JSON.stringify(await must(db.from(table).select("*")));
       for (const email of known) expect(text, `${table} leaks ${email}`).not.toContain(email);
       for (const addr of text.match(/[^\s"@]+@[^\s"@]+/g) ?? []) expect(addr, `${table}: ${addr}`).toContain("*****@");
@@ -175,6 +175,9 @@ describe("direct table writes are denied for every client role", () => {
     await denied(db.from("cohort_links").insert({ cohort_id: cohortId, whatsapp_group_url: "https://chat.whatsapp.com/Palsu" }));
     await denied(db.from("cohort_links").update({ whatsapp_group_url: "https://chat.whatsapp.com/Palsu" }).eq("cohort_id", cohortId));
     await denied(db.from("cohort_links").delete().eq("cohort_id", cohortId));
+    await denied(db.from("email_listings").insert({ app_id: appId, user_id: other.id }));
+    await denied(db.from("email_listings").update({ listed_at: new Date().toISOString() }).eq("app_id", appId));
+    await denied(db.from("email_listings").delete().eq("app_id", appId));
   });
 
   it.each(roleNames)("%s cannot write the stats views", async (role) => {
