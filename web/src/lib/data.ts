@@ -1,7 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
-import type { AdminTesterRow, AppDoc, BadgeTier, BuildDoc, PublicProfile, TesterDoc, TesterStatus } from './types'
+import type { AdminTesterRow, AppDoc, BadgeTier, BuildDoc, EmailListing, EmailListingRow, PublicProfile, TesterDoc, TesterMethod, TesterStatus } from './types'
 
 export interface Live<T> {
   data: T; loading: boolean; error: string | null
@@ -35,6 +35,7 @@ function toApp(r: Row, s: Row | undefined): AppDoc {
     status: r.status,
     testStartDate: dayMs(r.test_start_date),
     feedbackGuide: r.feedback_guide,
+    testerMethod: r.tester_method ?? 'google_group',
     activeTesterCount: s?.active_tester_count ?? 0,
     eligibleCount: s?.eligible_count ?? 0,
     feedbackSentCount: s?.feedback_sent_count ?? 0,
@@ -359,7 +360,7 @@ export interface AppInput {
   feedbackGuide?: string
 }
 
-const appArgs = (input: AppInput) => ({
+const appArgs = (input: AppInput & { testerMethod?: TesterMethod }) => ({
   p_name: input.name,
   p_description: input.description,
   p_opt_in_url: input.optInUrl,
@@ -367,6 +368,7 @@ const appArgs = (input: AppInput) => ({
   p_package_name: input.packageName || null,
   p_test_start_date: input.testStartDate || null,
   p_feedback_guide: input.feedbackGuide || null,
+  p_tester_method: input.testerMethod ?? null,
 })
 
 /** A date picked in the form (YYYY-MM-DD) as the start of that day in WIB, whatever the device time zone. */
@@ -379,9 +381,9 @@ const instantFor = (iso: string) => {
 }
 
 export const api = {
-  createApp: async (input: AppInput & { groupConfirmed: true }) =>
+  createApp: async (input: AppInput & { groupConfirmed: boolean; testerMethod: TesterMethod }) =>
     ({ appId: await rpc<string>('create_app', { ...appArgs(input), p_group_confirmed: input.groupConfirmed }) }),
-  joinAsTester: async (input: { appId: string; checklist: { joinedGroup: true; optedIn: true; installed: true } }) => {
+  joinAsTester: async (input: { appId: string; checklist: { joinedGroup?: true; optedIn: true; installed: true } }) => {
     await rpc('join_as_tester', { p_app_id: input.appId, p_checklist: input.checklist })
     return { ok: true as const }
   },
@@ -413,9 +415,41 @@ export const api = {
     }),
 }
 
+// ---------- email-list testing (ADR-011) ----------
+
+const toListing = (r: Row): EmailListing => ({ appId: r.app_id, uid: r.user_id, requestedAt: ms(r.requested_at)!, listedAt: ms(r.listed_at) })
+
+/** The signed-in member's own request on an email-list app (null when none). */
+export const useMyEmailListing = (appId?: string, uid?: string | null) =>
+  useFetch(
+    appId && uid
+      ? async () => {
+          const r = await rows<Row[]>(supabase.from('email_listings').select('*').eq('app_id', appId).eq('user_id', uid))
+          return r[0] ? toListing(r[0]) : null
+        }
+      : null,
+    null as EmailListing | null, [appId, uid],
+  )
+
+/** Creator only: requests with full addresses, to paste into Play Console. */
+export const useEmailListings = (appId?: string, enabled = true) =>
+  useFetch(
+    appId && enabled
+      ? async () => (await rpc<Row[]>('app_email_listings', { p_app_id: appId })).map((r): EmailListingRow => ({
+          ...toListing({ ...r, app_id: appId }), displayName: r.display_name, photoURL: r.photo_url, email: r.email,
+        }))
+      : null,
+    [] as EmailListingRow[], [appId, enabled], { liveApp: appId, liveTables: ['testers'] },
+  )
+
+export const requestEmailListing = (appId: string) => rpc('request_email_listing', { p_app_id: appId, p_consent: true })
+export const cancelEmailListing = (appId: string) => rpc('cancel_email_listing', { p_app_id: appId })
+export const markEmailListed = (appId: string, uid: string, listed: boolean) =>
+  rpc('mark_email_listed', { p_app_id: appId, p_user_id: uid, p_listed: listed })
+
 export const setEmailReminders = (enabled: boolean) => rpc('set_email_reminders', { p_enabled: enabled })
 
-export const updateApp = (appId: string, input: AppInput & { status?: AppDoc['status'] }) =>
+export const updateApp = (appId: string, input: AppInput & { status?: AppDoc['status']; testerMethod?: TesterMethod }) =>
   rpc('update_app', { p_app_id: appId, ...appArgs(input), p_status: input.status ?? null })
 
 export const softDeleteApp = (appId: string) => rpc('delete_app', { p_app_id: appId })

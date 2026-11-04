@@ -16,7 +16,8 @@ profiles            select: everyone · write: none (trigger + RPC only)
 apps                select: everyone where deleted = false; admin sees all · write: none (RPC only)
   id uuid pk, name (≤ 50), description (≤ 280), opt_in_url, store_url?, package_name?,
   creator_id → profiles, status 'recruiting' | 'testing' | 'applied' | 'live',
-  test_start_date?, feedback_guide? (≤ 500), created_at, updated_at, deleted bool
+  test_start_date?, feedback_guide? (≤ 500), created_at, updated_at, deleted bool,
+  tester_method 'google_group' | 'email_list' (default 'google_group'; ADR-011)
 
 testers             select: everyone · write: none (RPC only)
   id uuid pk, app_id → apps, user_id? → profiles (null for manual entries),
@@ -25,6 +26,10 @@ testers             select: everyone · write: none (RPC only)
   feedback_sent bool, feedback_sent_at?, feedback_summary? (≤ 500),
   feedback_verified bool, replied bool, created_at
   unique (app_id, user_id) where user_id is not null
+
+email_listings      select: everyone · write: none (RPC only)                     ADR-011
+  app_id → apps, user_id → profiles, requested_at, listed_at? (creator marked it added in Play Console)
+  pk (app_id, user_id). No email column: the address is read live by app_email_listings().
 
 builds              select: everyone · write: none (RPC only)
   id uuid pk, app_id → apps, version_name (≤ 40), uploaded_at, changelog (≤ 140), created_at
@@ -100,7 +105,7 @@ Days active per tester are computed on the client (`web/src/lib/progress.ts`).
 
 ### Cohort milestones (shared by the two cohort views and `check_in`)
 
-Every assignment has a **base time** `b = assignments.assigned_at`: Day 0 for members present at start, the join time for later pure testers (FR-33b), the move time for a reassigned slot. "Due Day N" means due at `b + N × 24 h` (owner decision 2026-11-03).
+Every assignment has a **base time** `b` (`cohort_assignment_status.base_at`). Email-list apps (ADR-011): if the tester asked within `assigned_at + 48 h`, `b = greatest(assigned_at, listed_at)`, and null (nothing due) until the creator marks them added; otherwise, and for Google Group apps, `b = assignments.assigned_at`: Day 0 for members present at start, the join time for later pure testers (FR-33b), the move time for a reassigned slot. "Due Day N" means due at `b + N × 24 h` (owner decision 2026-11-03).
 
 | Milestone | Met when | Due | Check-in opens |
 |---|---|---|---|
@@ -127,6 +132,7 @@ Outside a cohort, check-in windows use the tester's own `opted_in_at` as `b` (FR
 | `cell` | the furthest state reached, for the matrix (FR-38): `'not_joined'`, `'left'` (entry Left before 14 days or Removed), `'opted_in'`, `'used'`, `'feedback_sent'`, `'feedback_verified'`; `'reassigned'` when `state = 'reassigned'` |
 | `behind_on` | `text[]` of milestones that are due and unmet (`'opt_in'`, `'used_app'`, `'feedback'`, `'still_opted_in'`, `'updated_build'`); empty for reassigned rows |
 | `is_behind` | `cardinality(behind_on) > 0` |
+| `base_at` | the base time `b` above; null while an email-list tester waits for the creator |
 
 Pairs with no assignment row are "unassigned" and the matrix greys them out.
 
@@ -151,11 +157,15 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 | RPC | Args | Returns | Rules |
 |---|---|---|---|
 | `ensure_profile` | — | `uuid` | Upserts the caller's profile from the Google identity (name, photo, masked email). Never touches `role`. A trigger on `auth.users` insert creates the profile on first sign-in. |
-| `create_app` | `p_name, p_description, p_opt_in_url, p_store_url?, p_package_name?, p_test_start_date?, p_feedback_guide?, p_group_confirmed` | `uuid` | FR-4 validation; `p_group_confirmed` must be true (`invalid-argument`); live duplicate package → `already-exists`; 5 apps per member per rolling 24 h → `resource-exhausted`. Starts `recruiting`. |
-| `update_app` | `p_app_id`, same fields as create, `p_status?` | — | Creator or admin. Replaces the editable fields; null `p_status` keeps the status. Package uniqueness checked. |
+| `create_app` | `p_name, p_description, p_opt_in_url, p_store_url?, p_package_name?, p_test_start_date?, p_feedback_guide?, p_group_confirmed, p_tester_method?` | `uuid` | FR-4 validation; `p_tester_method` `'google_group'` (default) or `'email_list'`, else `invalid-argument`; for Google Group apps `p_group_confirmed` must be true (`invalid-argument`); live duplicate package → `already-exists`; 5 apps per member per rolling 24 h → `resource-exhausted`. Starts `recruiting`. |
+| `update_app` | `p_app_id`, same fields as create, `p_status?`, `p_tester_method?` | — | Creator or admin. Replaces the editable fields; null `p_status` / `p_tester_method` keeps the current value. Package uniqueness checked. |
 | `delete_app` | `p_app_id` | — | Creator or admin. Soft delete (`deleted = true`, `deleted_at = now()`). |
 | `restore_app` | `p_app_id` | — | Admin any time; the creator only within 10 minutes of deleting (the "Urungkan" undo, ADR-009 §7), otherwise `permission-denied`. Refuses if the package name was taken meanwhile (`already-exists`). |
-| `join_as_tester` | `p_app_id, p_checklist {joinedGroup, optedIn, installed}` | — | All three must be JSON `true`. Creator → `permission-denied`. Existing entry: active → `already-exists`; removed → `permission-denied`; left → re-activated with a new `opted_in_at`, `left_at` cleared and the entry's check-ins deleted (owner decision 2026-11-03). Masks the email. |
+| `request_email_listing` | `p_app_id, p_consent` | — | ADR-011. `p_consent` must be true (`invalid-argument`). App missing/deleted → `not-found`; Google Group app → `failed-precondition`; own app or Removed entry → `permission-denied`. Idempotent. |
+| `cancel_email_listing` | `p_app_id` | — | Deletes the caller's own request; none → `not-found`. |
+| `app_email_listings` | `p_app_id` | `{user_id, display_name, photo_url, email, requested_at, listed_at}[]` | **Creator of the app only** (admin too gets `permission-denied`). Full emails from `auth.users`; skips members whose entry is Left or Removed. Not-yet-added first. |
+| `mark_email_listed` | `p_app_id, p_user_id, p_listed` | — | Creator or admin. `true` sets `listed_at` (keeps the first time), `false` clears it. No request → `not-found`. |
+| `join_as_tester` | `p_app_id, p_checklist {joinedGroup, optedIn, installed}` | — | All three must be JSON `true`; on an email-list app `joinedGroup` is not needed but the caller's request must be marked added (else `failed-precondition`). Creator → `permission-denied`. Existing entry: active → `already-exists`; removed → `permission-denied`; left → re-activated with a new `opted_in_at`, `left_at` cleared and the entry's check-ins deleted (owner decision 2026-11-03). Masks the email. |
 | `leave_testing` | `p_app_id` | — | Own active entry → left, `left_at = now()`. Not active → `failed-precondition`; no entry → `not-found`. |
 | `mark_feedback_sent` | `p_app_id, p_sent, p_summary?` | — | Own **active** entry only. `true`: `feedback_sent_at = now()`, summary trimmed (≤ 500, empty → null). `false`: clears all three. |
 | `add_manual_tester` | `p_app_id, p_display_name, p_email, p_opted_in_at?` | `uuid` | Creator or admin. Email is masked and discarded. `added_by = 'creator'`, opt-in not in the future (1 day slack). |
