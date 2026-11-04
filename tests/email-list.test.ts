@@ -30,7 +30,16 @@ beforeAll(async () => {
     member("sari", "Sari Indah"),
     member("yusuf", "Yusuf Hidayat", "admin"),
   ]);
+  await unlock(creator);
 });
+
+/** Email-list apps need the creator to be testing 3 other apps first. */
+async function unlock(m: Member) {
+  for (let i = 0; i < 3; i++) {
+    const app = await createApp(admin);
+    await must(m.db.rpc("join_as_tester", { p_app_id: app, p_checklist: checklist }));
+  }
+}
 
 const emailApp = (m: Member = creator) => createApp(m, { p_tester_method: "email_list", p_group_confirmed: false });
 const request = (m: Member, appId: string, consent: unknown = true) =>
@@ -52,6 +61,26 @@ describe("create_app / update_app tester method", () => {
     const id = await emailApp();
     const a = await must(anon().from("apps").select("tester_method").eq("id", id).single());
     expect(a.tester_method).toBe("email_list");
+  });
+
+  it("email list unlocks only after testing 3 other apps", async () => {
+    const fresh = await member("budi.santoso", "Budi Santoso");
+    const asEmailList = () => fresh.db.rpc("create_app", appInput({ p_tester_method: "email_list", p_group_confirmed: false }));
+    await expectCode(asEmailList(), "failed-precondition", /3 aplikasi.*sekarang 0/);
+    const id = await createApp(fresh);
+    const base = { p_app_id: id, p_name: "Kasir Warung", p_description: "Aplikasi kasir sederhana.", p_opt_in_url: `https://play.google.com/apps/testing/id.kasir${randomUUID().slice(0, 6)}` };
+    await expectCode(fresh.db.rpc("update_app", { ...base, p_tester_method: "email_list" }), "failed-precondition");
+    await expectCode(admin.db.rpc("update_app", { ...base, p_tester_method: "email_list" }), "failed-precondition");
+
+    await unlock(fresh);
+    await must(fresh.db.rpc("update_app", { ...base, p_tester_method: "email_list" }));
+    expect((await must(anon().from("apps").select("tester_method").eq("id", id).single())).tester_method).toBe("email_list");
+
+    // An app already on an email list keeps it if the count drops later.
+    await must(service.from("testers").update({ status: "removed" }).eq("user_id", fresh.id));
+    await must(fresh.db.rpc("update_app", { ...base, p_name: "Kasir Warung 2" }));
+    await must(fresh.db.rpc("update_app", { ...base, p_tester_method: "email_list" }));
+    await expectCode(asEmailList(), "failed-precondition");
   });
 
   it("rejects an unknown method", async () => {

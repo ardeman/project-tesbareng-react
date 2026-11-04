@@ -4,8 +4,8 @@ import { ErrorBox, failToast, NotFound, RelTime, ShowAll, Skel, useToast } from 
 import { BuildDialog } from '../components/dialogs'
 import { IconBack, IconPlus } from '../components/icons'
 import { useAuth } from '../lib/auth'
-import { api, errorText, restoreApp, softDeleteApp, updateApp, useApp, useBuilds, type AppInput } from '../lib/data'
-import { COMMUNITY_GROUP } from '../lib/community'
+import { api, errorText, restoreApp, softDeleteApp, updateApp, useApp, useBuilds, usePublicProfile, type AppInput } from '../lib/data'
+import { COMMUNITY_GROUP, EMAIL_LIST_MIN_TESTING } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
 import { appStatusLabel, fmtDate, isoDate } from '../lib/progress'
 import type { AppDoc, AppStatus, TesterMethod } from '../lib/types'
@@ -58,6 +58,11 @@ function Form({ existing }: { existing?: AppDoc }) {
   const [status, setStatus] = useState<AppStatus>(existing?.status ?? 'recruiting')
   const [group, setGroup] = useState(false)
   const [method, setMethod] = useState<TesterMethod>(existing?.testerMethod ?? 'google_group')
+  // Email list unlocks after testing others (the database enforces it too). An app already on it keeps it.
+  const { user } = useAuth()
+  const creatorStats = usePublicProfile(existing ? existing.creatorUid : user?.uid)
+  const testingCount = creatorStats.data?.testingCount ?? 0
+  const emailListLocked = existing?.testerMethod !== 'email_list' && testingCount < EMAIL_LIST_MIN_TESTING
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [fail, setFail] = useState<string | null>(null)
@@ -229,9 +234,16 @@ function Form({ existing }: { existing?: AppDoc }) {
                 <span className="d">Anggota cukup gabung {COMMUNITY_GROUP}, lalu opt-in. Email mereka tetap tersamar.</span></span>
             </label>
             <label className="check">
-              <input type="radio" name="tester-method" value="email_list" checked={method === 'email_list'} onChange={() => setMethod('email_list')} />
+              <input type="radio" name="tester-method" value="email_list" checked={method === 'email_list'} onChange={() => setMethod('email_list')} disabled={emailListLocked} aria-describedby={emailListLocked ? 'f-email-lock' : undefined} />
               <span><span className="t">Daftar email</span>
-                <span className="d">Untuk jalur yang sudah memakai daftar email. Tester meminta ditambahkan dan setuju emailnya terlihat oleh Anda; Anda menempelkannya di Play Console, lalu menandai “Sudah ditambahkan”.</span></span>
+                <span className="d">Untuk jalur yang sudah memakai daftar email. Tester meminta ditambahkan dan setuju emailnya terlihat oleh Anda; Anda menempelkannya di Play Console, lalu menandai “Sudah ditambahkan”.</span>
+                {emailListLocked && (
+                  <span className="d lock" id="f-email-lock">
+                    {creatorStats.data === undefined
+                      ? 'Memeriksa jumlah aplikasi yang Anda tes…'
+                      : <>🔒 Terbuka setelah Anda menguji <span className="num">{EMAIL_LIST_MIN_TESTING}</span> aplikasi anggota lain (sekarang <span className="num">{testingCount}</span>). <Link to="/apps">Cari aplikasi untuk dites</Link></>}
+                  </span>
+                )}</span>
             </label>
             <span className="hint" id="f-method-hint">Play Console → Uji tertutup → Penguji.</span>
           </fieldset>

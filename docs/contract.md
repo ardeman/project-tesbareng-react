@@ -18,6 +18,8 @@ apps                select: everyone where deleted = false; admin sees all · wr
   creator_id → profiles, status 'recruiting' | 'testing' | 'applied' | 'live',
   test_start_date?, feedback_guide? (≤ 500), created_at, updated_at, deleted bool,
   tester_method 'google_group' | 'email_list' (default 'google_group'; ADR-011)
+    switching to 'email_list' (insert, or update from another method) needs the creator's
+    profile_stats.testing_count >= 3, else failed-precondition (trigger apps_email_list_unlock)
 
 testers             select: everyone · write: none (RPC only)
   id uuid pk, app_id → apps, user_id? → profiles (null for manual entries),
@@ -157,8 +159,8 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 | RPC | Args | Returns | Rules |
 |---|---|---|---|
 | `ensure_profile` | — | `uuid` | Upserts the caller's profile from the Google identity (name, photo, masked email). Never touches `role`. A trigger on `auth.users` insert creates the profile on first sign-in. |
-| `create_app` | `p_name, p_description, p_opt_in_url, p_store_url?, p_package_name?, p_test_start_date?, p_feedback_guide?, p_group_confirmed, p_tester_method?` | `uuid` | FR-4 validation; `p_tester_method` `'google_group'` (default) or `'email_list'`, else `invalid-argument`; for Google Group apps `p_group_confirmed` must be true (`invalid-argument`); live duplicate package → `already-exists`; 5 apps per member per rolling 24 h → `resource-exhausted`. Starts `recruiting`. |
-| `update_app` | `p_app_id`, same fields as create, `p_status?`, `p_tester_method?` | — | Creator or admin. Replaces the editable fields; null `p_status` / `p_tester_method` keeps the current value. Package uniqueness checked. |
+| `create_app` | `p_name, p_description, p_opt_in_url, p_store_url?, p_package_name?, p_test_start_date?, p_feedback_guide?, p_group_confirmed, p_tester_method?` | `uuid` | FR-4 validation; `p_tester_method` `'google_group'` (default) or `'email_list'`, else `invalid-argument`; for Google Group apps `p_group_confirmed` must be true (`invalid-argument`); `'email_list'` needs the creator's Testing count ≥ 3 (`failed-precondition`); live duplicate package → `already-exists`; 5 apps per member per rolling 24 h → `resource-exhausted`. Starts `recruiting`. |
+| `update_app` | `p_app_id`, same fields as create, `p_status?`, `p_tester_method?` | — | Creator or admin. Replaces the editable fields; null `p_status` / `p_tester_method` keeps the current value. Switching to `'email_list'` needs the creator's Testing count ≥ 3 (`failed-precondition`); an app already on it keeps it. Package uniqueness checked. |
 | `delete_app` | `p_app_id` | — | Creator or admin. Soft delete (`deleted = true`, `deleted_at = now()`). |
 | `restore_app` | `p_app_id` | — | Admin any time; the creator only within 10 minutes of deleting (the "Urungkan" undo, ADR-009 §7), otherwise `permission-denied`. Refuses if the package name was taken meanwhile (`already-exists`). |
 | `request_email_listing` | `p_app_id, p_consent` | — | ADR-011. `p_consent` must be true (`invalid-argument`). App missing/deleted → `not-found`; Google Group app → `failed-precondition`; own app or Removed entry → `permission-denied`. Idempotent. |

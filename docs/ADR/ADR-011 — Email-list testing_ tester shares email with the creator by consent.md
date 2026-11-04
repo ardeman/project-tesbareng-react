@@ -7,7 +7,7 @@
 | **Date proposed** | 4 November 2026 |
 | **PRD ref** | PRD v2.3 §5.1, §5.2a, FR-14a–FR-14e, §7, §8.2, §9; answers part of §17 Q2 if accepted |
 | **Amends** | ADR-005 §2 and §4 (who may read `auth.users.email`, and "masked for everyone") |
-| **Code** | `supabase/migrations/20261104000100_email_list_testers.sql`, `tests/email-list.test.ts` |
+| **Code** | `supabase/migrations/20261104000100_email_list_testers.sql`, `20261104000200_email_list_unlock.sql`, `tests/email-list.test.ts` |
 
 ---
 
@@ -18,6 +18,7 @@ TesBareng assumes every app adds the community Google Group (`google-tester-indo
 ## Decision
 
 1. **Per-app tester method.** `apps.tester_method` is `'google_group'` (default, unchanged behaviour) or `'email_list'`. The creator picks it on the app form. Google Group apps still confirm the group; email-list apps don't.
+   **Unlocked by testing others:** a creator can choose `email_list` only once their reciprocity Testing count (`profile_stats.testing_count`) is at least 3 (owner request, 4 Nov 2026). A trigger on `apps` enforces it (`20261104000200_email_list_unlock.sql`); an app already on an email list keeps it if the count drops later, and the form shows the option disabled with the current count.
 2. **Consent per app.** On an email-list app, a member asks to be added (`request_email_listing(app, consent = true)`). That consent covers only the creator of that app.
 3. **No new copy of the email.** `email_listings (app_id, user_id, requested_at, listed_at)` has no email column, and the public may read it. The full address is read live from `auth.users` by `app_email_listings(app)`, a `security definer` RPC that:
    - answers only the **creator** of that app. Admins are not included, to keep exposure minimal; they can still mark entries as listed.
