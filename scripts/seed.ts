@@ -5,7 +5,18 @@ import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { DEV_PASSWORD, localSupabase } from "./local";
 
-const { url: SUPABASE_URL, serviceRoleKey } = localSupabase();
+// Opt-in for a disposable cloud dev project: SEED_REMOTE_URL + SEED_REMOTE_SERVICE_ROLE_KEY + SEED_REMOTE_CONFIRM=<same URL>.
+// Without all three, only the local stack is accepted.
+function target() {
+  const url = process.env.SEED_REMOTE_URL;
+  if (!url) return { url: localSupabase().url, serviceRoleKey: localSupabase().serviceRoleKey };
+  const key = process.env.SEED_REMOTE_SERVICE_ROLE_KEY;
+  if (!key || process.env.SEED_REMOTE_CONFIRM !== url) {
+    throw new Error("Remote seeding needs SEED_REMOTE_SERVICE_ROLE_KEY and SEED_REMOTE_CONFIRM set to the exact SEED_REMOTE_URL.");
+  }
+  return { url, serviceRoleKey: key };
+}
+const { url: SUPABASE_URL, serviceRoleKey } = target();
 const db = createClient(SUPABASE_URL, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
 const DAY_MS = 24 * 60 * 60 * 1000;

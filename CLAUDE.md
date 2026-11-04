@@ -71,19 +71,23 @@ Requires Node 22+. Screenshots need Chrome/Edge/Chromium (Playwright's Chromium 
 - Edge Functions: only one, `send-reminders`, for the daily email digest via Gmail SMTP (ADR-006, PRD §11.1), because Postgres cannot speak SMTP. Everything else stays in SQL.
 - Hosting: **Vercel** (ADR-003, accepted 2026-11-02; the site is on Vercel). `web/vercel.json` rewrites all routes to `index.html`. No `web/public/_redirects`.
 - Stack moved from Firebase on 2026-10-31 (ADR-002): Firebase needs the Blaze plan (credit card) to deploy Cloud Functions; Supabase's free plan does not.
-- Development runs against the local Supabase stack (Docker). No hosted project exists yet. Never create remote projects, set secrets or deploy without asking.
+- Development runs against the local Supabase stack (Docker), or against the cloud dev project `tesbareng-dev` (ref `wseoosidbkltxbgzwgsd`, created 2026-11-04 with the owner's approval) when Docker is unavailable. Point the web app at it with `web/.env.local` (gitignored). Never create other remote projects, set secrets, push migrations or deploy without asking.
 
 ## Run it (local Supabase only)
 
 - Install: `npm install && npm --prefix web install`. Needs the Supabase CLI and Docker Desktop running.
 - Database: `npm run db:start` (API 54321, Postgres 54322, Studio 54323). `npm run db:reset` re-applies all migrations to an empty database. `npm run db:stop` stops it.
-- Seed sample data (stack running, clears and re-seeds; refuses non-local URLs): `npm run seed`
+- Seed sample data (stack running, clears and re-seeds; refuses non-local URLs unless `SEED_REMOTE_URL`, `SEED_REMOTE_SERVICE_ROLE_KEY` and `SEED_REMOTE_CONFIRM` (the same URL) are all set, for the cloud dev project only): `npm run seed`
 - Web dev server: `npm --prefix web run dev`. With no env vars it talks to the local stack.
 - Production-like preview against the local stack: `cd web && npx vite build && npx vite preview`. A deployed build needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (template: `web/.env.example`).
 - Tests (stack running; they create and remove their own members, seed data stays): `npm test`
-- Local-only sign-in shortcut for checking screens: append `?devLogin=<seeded email>` to any URL (e.g. `?devLogin=yusuf.hidayat.dev@gmail.com`, the seeded admin). It only works when the Supabase URL is 127.0.0.1/localhost; production has the email provider disabled.
+- Local-only sign-in shortcut for checking screens: append `?devLogin=<seeded email>` to any URL (e.g. `?devLogin=yusuf.hidayat.dev@gmail.com`, the seeded admin). It only works when the Supabase URL is 127.0.0.1/localhost; production has the email provider disabled. Against the cloud dev project, sign in with Google (email sign-in stays off there).
 - Local Google sign-in needs a real OAuth client in `supabase/.env` (see `supabase/.env.example`); otherwise use `?devLogin`.
 - New schema changes go in new migration files; never edit a migration that has already been applied.
+
+## Commits
+
+Every commit uses [Conventional Commits](https://www.conventionalcommits.org): `<type>(<optional scope>)!: <description>`, subject ≤ 100 chars. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`. Scopes are optional, e.g. `web`, `db`, `cohort`, `auth`. Use `!` (and a `BREAKING CHANGE:` footer) for breaking changes. The `.githooks/commit-msg` hook rejects anything else; `npm install` enables it (`core.hooksPath`). Do not bypass it with `--no-verify`.
 
 ## Hard rules (security and data integrity)
 
