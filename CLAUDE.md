@@ -30,6 +30,7 @@ Precedence and conflicts:
 | 008 | Routing: story page at `/`, app list at `/apps` (PRD §17 Q9) | Accepted (option A, 2026-11-02) |
 | 009 | Work surface UX: the "B2B" rules | Accepted (2026-11-02) |
 | 010 | Story surface UX: the "B2C" rules | Accepted (2026-11-02) |
+| 011 | Email-list testing: tester shares email with the creator by consent | **Proposed** (2026-11-04, implemented, merged in #6 on 2026-11-05) |
 | 012 | Tester slots: creator chooses how many testers an app needs (amends 007, builds on 011) | **Proposed** (2026-11-05, not implemented) |
 
 ## UI work
@@ -92,7 +93,7 @@ Every commit uses [Conventional Commits](https://www.conventionalcommits.org): `
 ## Hard rules (security and data integrity)
 
 1. **Never store a full email in a public table** (ADR-005). RLS cannot hide columns. Full emails live only in `auth.users`, which the API does not expose; only `security definer` functions read them, to mask them, plus the `send-reminders` Edge Function (service role) to send the digest. No public table or view has an email column, and check constraints reject anything that is not a masked address.
-2. **Masking format:** first 2 chars of the local part (fewer only if the local part is shorter) + `*****` (always 5) + `@domain`. `budi.santoso@gmail.com` → `bu*****@gmail.com`, `ab@gmail.com` → `ab*****@gmail.com` (PRD §8.1). Masked for everyone, including the creator. Done in SQL by `mask_email()`.
+2. **Masking format:** first 2 chars of the local part (fewer only if the local part is shorter) + `*****` (always 5) + `@domain`. `budi.santoso@gmail.com` → `bu*****@gmail.com`, `ab@gmail.com` → `ab*****@gmail.com` (PRD §8.1). Masked for everyone, including the creator. Done in SQL by `mask_email()`. Only exception (ADR-011, Proposed): on an email-list app, the creator sees full emails of members who consented, through `app_email_listings()`; never stored in a table.
 3. **Counters are computed, never stored** (ADR-004). Tester, feedback, build, reciprocity, badge and cohort-obligation numbers come from views with `security_invoker = true` (`app_stats`, `profile_stats`, `cohort_obligations`). Nobody can write them.
 4. **Testers may change only their own feedback fields (`mark_feedback_sent`) and leave (`leave_testing`).** Only creator/admin set `feedback_verified`, `replied`, status, opt-in date, note (`update_tester`). Admin may also moderate feedback fields.
 5. Enforce the permissions matrix (PRD §7) in the database: RLS for reads, `insert/update/delete` revoked from `anon` and `authenticated` on every table, all writes through `security definer` RPCs with `set search_path = ''` (RPC list: PRD §9.3). Test every rule against the local stack (`tests/permissions.test.ts`, `tests/rpc.test.ts`, `tests/sql.test.ts`).
