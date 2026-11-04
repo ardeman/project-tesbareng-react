@@ -219,8 +219,8 @@ web3 = 30
 # Email/password is enabled LOCALLY ONLY so the ?devLogin=<seed user> shortcut can sign in seeded members.
 # Production must have the Email provider disabled (Dashboard > Authentication > Providers > Email).
 [auth.email]
-# Allow/disallow new user signups via email to your project.
-enable_signup = true
+# Enable email/password authentication locally for the ?devLogin shortcut.
+enabled = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
@@ -257,8 +257,8 @@ otp_expiry = 3600
 # content_path = "./templates/password_changed_notification.html"
 
 [auth.sms]
-# Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+# SMS authentication is not used by this project.
+enabled = false
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
 # Template for sending OTP to users
