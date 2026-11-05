@@ -579,6 +579,33 @@ function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean 
 
 // ---------- tester table: 4 fields per row, details behind a tap, inline edits (ADR-009 §3) ----------
 
+function downloadTestersCsv(appName: string, testers: TesterDoc[]) {
+  const headers = ['Nama', 'Email', 'Hari Aktif', 'Status', 'Feedback Terkirim', 'Feedback Terverifikasi', 'Dibalas Kreator', 'Tanggal Gabung'];
+  const now = Date.now();
+  const rows = testers.map((t) => [
+    '"' + t.displayName.replace(/"/g, '""') + '"',
+    '"' + (t.maskedEmail ?? '') + '"',
+    daysActive(t, now),
+    '"' + testerStatusLabel[t.status] + '"',
+    t.feedbackSent ? 'Ya' : 'Tidak',
+    t.feedbackVerified ? 'Ya' : 'Tidak',
+    t.replied ? 'Ya' : 'Tidak',
+    t.optedInAt ? new Date(t.optedInAt).toISOString().split('T')[0] : '',
+  ]);
+
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const cleanName = appName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  link.href = url;
+  link.setAttribute('download', 'testers-' + cleanName + '-' + new Date().toISOString().split('T')[0] + '.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 type SortKey = 'name' | 'days'
 type Quick = Partial<Pick<TesterDoc, 'feedbackVerified' | 'replied' | 'status'>>
 
@@ -733,9 +760,21 @@ function TesterTable({ app, testers, loading, isCreator, myUid, onEdit }: {
 
   return (
     <section className="panel flush span-12" aria-labelledby="testers-h">
-      <header>
-        <h2 id="testers-h">Daftar tester</h2>
-        <span className="meta num">{active.length} aktif{history.length > 0 ? ` · ${history.length} riwayat` : ''}</span>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 id="testers-h">Daftar tester</h2>
+          <span className="meta num">{active.length} aktif{history.length > 0 ? ` · ${history.length} riwayat` : ''}</span>
+        </div>
+        {testers.length > 0 && (
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => downloadTestersCsv(app.name, testers)}
+            title="Unduh daftar tester dalam format CSV"
+          >
+            Ekspor CSV
+          </button>
+        )}
       </header>
       {/* One sheet on every width (CLAUDE.md, DR-14): it scrolls inside its own box, so the header row
           and the name column both stay put. */}
