@@ -386,9 +386,9 @@ export function About() {
           <div className="ab-privacy">
             <span className="ab-masked">bu*****@gmail.com</span>
             <ul className="ab-bullets">
-              <li>Email selalu tampil disamarkan seperti ini, untuk semua orang, termasuk creator app yang kamu tes.</li>
+              <li>Email tampil disamarkan seperti ini di semua halaman, termasuk tabel tester.</li>
               <li>Profil publik tidak menampilkan email sama sekali.</li>
-              <li>Alamat lengkap hanya dipakai untuk mengirim pengingat.</li>
+              <li>Alamat lengkap dipakai untuk mengirim pengingat. Creator hanya melihatnya kalau app-nya pakai daftar email dan kamu setuju dibagikan. Persetujuan ini berlaku untuk app itu saja dan bisa kamu tarik kapan saja (alamat yang sudah dimasukkan ke Play Console tidak ikut terhapus).</li>
             </ul>
           </div>
         </Section>

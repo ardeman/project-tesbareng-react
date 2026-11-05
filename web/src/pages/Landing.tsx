@@ -653,7 +653,7 @@ function MatrixDemo() {
           <strong>Emailmu tetap rahasia</strong>
           <span className="masked" aria-hidden="true" data-scramble="bu*****@gmail.com">bu*****@gmail.com</span>
           <span className="sr-only">Contoh: bu*****@gmail.com</span>
-          <p>Di halaman mana pun, email hanya tampil disamarkan seperti ini, termasuk untuk creator. Alamat lengkapmu dipakai untuk mengirim pengingat, bukan untuk ditampilkan.</p>
+          <p>Di halaman mana pun, email tampil disamarkan seperti ini. Alamat lengkapmu dipakai untuk pengingat, dan hanya dibagikan ke creator kalau kamu setuju (app dengan daftar email).</p>
         </div>
       </div>
     </div>
