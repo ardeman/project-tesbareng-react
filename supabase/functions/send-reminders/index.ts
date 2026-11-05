@@ -117,7 +117,7 @@ function renderItem(item: ReminderRow): string {
       return `<li><strong>${esc(item.app_name)}</strong>: ${esc(e.count)} tester menunggu emailnya ditambahkan ke daftar tester di Play Console (${names}). Setelah itu, tandai "Sudah ditambahkan" di halaman aplikasi.</li>`;
     }
     case "email_listing_added":
-      return `<li><strong>${esc(item.app_name)}</strong>: kreator sudah menambahkan email Anda ke daftar tester. Sekarang buka link opt-in, pasang aplikasinya, lalu tekan Gabung sebagai tester.</li>`;
+      return `<li><strong>${esc(item.app_name)}</strong>: creator sudah menambahkan email Anda ke daftar tester. Sekarang buka link opt-in, pasang aplikasinya, lalu tekan Gabung sebagai tester.</li>`;
     case "cohort_still_opted_in":
       return `<li>${cohort}, hari ke-13: check-in "Masih opt-in" untuk ${appList(e)}.</li>`;
     default:

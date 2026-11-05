@@ -410,10 +410,10 @@ function Members({ c, creators, pure, badges, myUid }: {
         <span className="meta num">{c.members.length} orang</span>
       </header>
 
-      <h3 className="member-group num">Kreator dan aplikasinya · {creators.length}</h3>
+      <h3 className="member-group num">Creator dan aplikasinya · {creators.length}</h3>
       {creators.length === 0 ? (
-        <Empty title="Belum ada kreator.">
-          <p>Admin menambahkan kreator beserta aplikasinya. Cohort butuh minimal {MIN_APPS} aplikasi untuk mulai.</p>
+        <Empty title="Belum ada creator.">
+          <p>Admin menambahkan creator beserta aplikasinya. Cohort butuh minimal {MIN_APPS} aplikasi untuk mulai.</p>
         </Empty>
       ) : (
         <ul className="member-list">{creators.map((m) => <MemberRow key={m.userId} m={m} c={c} tier={badges.get(m.userId)} mine={m.userId === myUid} />)}</ul>

@@ -176,7 +176,7 @@ function MeSignedIn({ uid }: { uid: string }) {
                         {kind === 'join'
                           ? 'Ditugaskan melalui cohort. Opt-in dalam batas 48 jam.'
                           : kind === 'listed'
-                            ? 'Kreator sudah menambahkan email Anda di Play Console. Sekarang opt-in, lalu daftar sebagai tester.'
+                            ? 'Creator sudah menambahkan email Anda di Play Console. Sekarang opt-in, lalu daftar sebagai tester.'
                           : kind === 'emails'
                             ? `${count} tester menunggu emailnya Anda tambahkan di Play Console.`
                           : kind === 'build'
@@ -204,7 +204,7 @@ function MeSignedIn({ uid }: { uid: string }) {
                     return (
                       <li className="row-line" key={entry.appId}>
                         <span className="grow cell-2"><Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
-                          <span className="creator-nums" style={{ marginTop: 'var(--s-1)' }}><FeedbackChip t={entry} />{entry.replied && <span>dibalas kreator</span>}</span></span>
+                          <span className="creator-nums" style={{ marginTop: 'var(--s-1)' }}><FeedbackChip t={entry} />{entry.replied && <span>dibalas creator</span>}</span></span>
                         <span className="w-meter hide-sm">
                           <Bar value={Math.min(d, TARGET_DAYS)} max={TARGET_DAYS} label={`Hari aktif di ${app.name}`} />
                         </span>

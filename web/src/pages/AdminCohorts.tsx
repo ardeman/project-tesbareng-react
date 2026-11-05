@@ -86,7 +86,7 @@ export function Cohorts() {
         ) : list.data.length === 0 ? (
           <div className="empty-pad">
             <Empty title="Belum ada cohort.">
-              <p>Beri nama di atas untuk membuat cohort pertama. Setelah itu tambahkan minimal {MIN_APPS} kreator dengan aplikasinya.</p>
+              <p>Beri nama di atas untuk membuat cohort pertama. Setelah itu tambahkan minimal {MIN_APPS} creator dengan aplikasinya.</p>
             </Empty>
           </div>
         ) : (
@@ -173,7 +173,7 @@ function CreateCohort({ count, onCreated }: { count: number; onCreated: (id: str
     setBusy(true); setErr(null)
     try {
       const id = await createCohort(v)
-      toast(`${v} dibuat. Tambahkan kreator dan aplikasinya.`)
+      toast(`${v} dibuat. Tambahkan creator dan aplikasinya.`)
       setName(''); setTouched(false)
       onCreated(id)
     } catch (x) {
@@ -267,8 +267,8 @@ function FormingProgress({ c }: { c: CohortDetail }) {
       <Bar value={Math.min(n, MIN_APPS)} max={MIN_APPS} label={`${n} aplikasi, minimal ${MIN_APPS} untuk mulai`} />
       <p className="meta">
         {short > 0
-          ? `Butuh ${short} aplikasi lagi. Dengan minimal ${MIN_APPS} aplikasi, setiap aplikasi bisa mendapat tester sebanyak yang dibutuhkannya (sampai 12) dari sesama kreator.`
-          : `Cukup untuk mulai: setiap aplikasi mendapat ${ringK(n)} tester dari sesama kreator${c.pureTesterCount > 0 ? ', ditambah tester murni' : ''}.`}
+          ? `Butuh ${short} aplikasi lagi. Dengan minimal ${MIN_APPS} aplikasi, setiap aplikasi bisa mendapat tester sebanyak yang dibutuhkannya (sampai 12) dari sesama creator.`
+          : `Cukup untuk mulai: setiap aplikasi mendapat ${ringK(n)} tester dari sesama creator${c.pureTesterCount > 0 ? ', ditambah tester murni' : ''}.`}
       </p>
     </div>
   )
@@ -348,15 +348,15 @@ function StartForm({ c, thin, onClose, onStarted }: { c: CohortDetail; thin: boo
         <h2 ref={title} tabIndex={-1}>Mulai {c.name}?</h2>
         <p className="lede">Saat dimulai, TesBareng langsung:</p>
         <ol className="ch-steps num">
-          <li>Mengacak urutan ring {c.appCount} kreator. Setiap kreator ditugaskan menguji {k} aplikasi lain, jadi setiap aplikasi mendapat {k} tester.</li>
+          <li>Mengacak urutan ring {c.appCount} creator. Setiap creator ditugaskan menguji {k} aplikasi lain, jadi setiap aplikasi mendapat {k} tester.</li>
           {c.pureTesterCount > 0 && <li>Membagikan {Math.min(14, c.appCount)} aplikasi ke masing-masing dari {c.pureTesterCount} tester murni, mulai dari aplikasi dengan tester paling sedikit.</li>}
           <li>Menetapkan Hari 0 = sekarang, sekitar {fmtDateTime(now)}. Semua anggota punya 48 jam untuk opt-in, sampai sekitar {fmtDateTime(now + 2 * DAY)}.</li>
-          <li>Mengunci daftar anggota: kreator tidak bisa ditambah atau dikeluarkan lagi. Tester murni masih bisa gabung sendiri sampai akhir Hari {LAST_JOIN_DAY - 1}, sekitar {fmtWib(now + LAST_JOIN_DAY * DAY)}.</li>
+          <li>Mengunci daftar anggota: creator tidak bisa ditambah atau dikeluarkan lagi. Tester murni masih bisa gabung sendiri sampai akhir Hari {LAST_JOIN_DAY - 1}, sekitar {fmtWib(now + LAST_JOIN_DAY * DAY)}.</li>
         </ol>
         {thin && (
           <p className="notice admin-notice ch-warn" role="note">
             <Chip tone="cabai" glyph="!">Buffer tipis</Chip>
-            <span>Dengan {MIN_APPS} aplikasi dan tanpa tester murni, aplikasi yang butuh 12 tester mendapat tepat 12, tanpa cadangan. Satu kreator yang tidak ikut tes membuat aplikasi itu turun di bawah 12. Pertimbangkan menunggu beberapa tester murni dulu.</span>
+            <span>Dengan {MIN_APPS} aplikasi dan tanpa tester murni, aplikasi yang butuh 12 tester mendapat tepat 12, tanpa cadangan. Satu creator yang tidak ikut tes membuat aplikasi itu turun di bawah 12. Pertimbangkan menunggu beberapa tester murni dulu.</span>
           </p>
         )}
         <p className="notice admin-notice" role="note">
@@ -423,12 +423,12 @@ function Members({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
       </div>
       {c.members.length === 0 ? (
         <Empty title="Belum ada anggota.">
-          <p>Tambahkan kreator beserta aplikasi yang mereka bawa. Tester murni bisa gabung sendiri dari halaman cohort.</p>
+          <p>Tambahkan creator beserta aplikasi yang mereka bawa. Tester murni bisa gabung sendiri dari halaman cohort.</p>
         </Empty>
       ) : (
         <>
-          <MemberList title="Kreator dan aplikasinya" items={creators} forming={forming} busyId={busyId} onRemove={remove}
-            empty={`Belum ada kreator. Cohort butuh minimal ${MIN_APPS} aplikasi.`} />
+          <MemberList title="Creator dan aplikasinya" items={creators} forming={forming} busyId={busyId} onRemove={remove}
+            empty={`Belum ada creator. Cohort butuh minimal ${MIN_APPS} aplikasi.`} />
           <MemberList title="Tester murni" items={pure} forming={forming} busyId={busyId} onRemove={remove}
             empty={forming ? 'Belum ada. Tester murni gabung sendiri dari halaman cohort, atau tambahkan tanpa aplikasi.' : 'Tidak ada tester murni di cohort ini.'} />
         </>
@@ -514,10 +514,10 @@ function RequestsPanel({ c, onChanged }: { c: CohortDetail; onChanged: () => voi
       {list.error ? <ErrorBox text="Permintaan masuk gagal dimuat." onRetry={list.retry} /> : list.loading ? (
         <div aria-busy="true" aria-label="Memuat permintaan">{[0, 1].map((i) => <div className="row-line" key={i} aria-hidden="true"><Skel w={32} h={32} /><span className="grow"><Skel w={160} /><br /><Skel w={120} h={12} /></span></div>)}</div>
       ) : items.length === 0 ? (
-        <p className="meta">Tidak ada permintaan yang menunggu. Kreator mengajukan aplikasinya dari halaman cohort.</p>
+        <p className="meta">Tidak ada permintaan yang menunggu. Creator mengajukan aplikasinya dari halaman cohort.</p>
       ) : (
         <>
-          <p className="meta">Terlama di atas. Setujui untuk menambahkan kreator dan aplikasinya; tolak dengan alasan opsional yang dilihat anggota.</p>
+          <p className="meta">Terlama di atas. Setujui untuk menambahkan creator dan aplikasinya; tolak dengan alasan opsional yang dilihat anggota.</p>
           <ul>
             {items.map((r) => (
               <li className="row-line ch-member ch-req" key={r.id}>
@@ -1003,7 +1003,7 @@ function ReassignForm({ c, slot, onClose, onDone }: {
             : candidates.map((m) => (
               <label key={m.userId} className="ch-opt">
                 <input type="radio" name="ra-new" value={m.userId} checked={newId === m.userId} onChange={() => setNewId(m.userId)} />
-                <span className="cell-2"><b>{nameOf(m)}</b><span>{m.appId ? (m.appName ?? 'Kreator') : 'Tester murni'}</span></span>
+                <span className="cell-2"><b>{nameOf(m)}</b><span>{m.appId ? (m.appName ?? 'Creator') : 'Tester murni'}</span></span>
               </label>
             ))}
         </fieldset>

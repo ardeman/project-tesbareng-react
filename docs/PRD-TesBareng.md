@@ -224,7 +224,7 @@ For members without an app, or between their own apps, who want to help and earn
 ### 6.4 Progress indicators (per app)
 
 - **FR-15** Active testers: `X / slots` with progress bar. No "Kurang N" chip — the count already conveys how many seats remain. A full app still accepts testers, as a buffer against drop-outs; the detail page says "kursi penuh".
-- **FR-16** Eligible testers (Active and ≥14 days): `Y / slots` with progress bar. An app with fewer than 12 slots shows "Target TesBareng: S tester. Sisanya (12 − S) dari luar komunitas, dilaporkan sendiri oleh kreator." on its detail page.
+- **FR-16** Eligible testers (Active and ≥14 days): `Y / slots` with progress bar. An app with fewer than 12 slots shows "Target TesBareng: S tester. Sisanya (12 − S) dari luar komunitas, dilaporkan sendiri oleh creator." on its detail page.
 - **FR-17** Days since test start: `Z / 14` (if test start date is set).
 - **FR-17a** Feedback: active testers with feedback sent / verified, e.g. `9 sent · 7 verified`.
 - **FR-17b** Builds shipped during test: `N / 3` (a guideline, not a Google rule).
