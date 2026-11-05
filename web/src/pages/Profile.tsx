@@ -5,7 +5,7 @@ import { CohortChip, StandingChip } from '../components/cohortBits'
 import { useApps, useAppsBy, useEntriesOf, usePublicProfile } from '../lib/data'
 import { useCohortMembershipsOf } from '../lib/cohorts'
 import { usePageMeta } from '../lib/pageMeta'
-import { daysActive, fmtDate, TARGET_DAYS, TARGET_TESTERS } from '../lib/progress'
+import { daysActive, fmtDate, TARGET_DAYS } from '../lib/progress'
 
 export function Profile() {
   const { uid } = useParams()
@@ -76,7 +76,7 @@ export function Profile() {
               {created.data.map((a) => (
                 <li className="row-line" key={a.id}>
                   <span className="grow cell-2"><Link to={`/apps/${a.id}`}><b>{a.name}</b></Link></span>
-                  <span className="num muted small">{a.activeTesterCount} / {TARGET_TESTERS} tester</span>
+                  <span className="num muted small">{a.activeTesterCount} / {a.testerSlots} tester</span>
                   <StatusPill status={a.status} />
                 </li>
               ))}

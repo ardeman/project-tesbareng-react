@@ -47,7 +47,7 @@ const assignmentsOf = async (cohortId: string) =>
 const countBy = (xs: string[]) => xs.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>());
 
 describe("start_cohort (FR-31–33)", () => {
-  it.each([13, 16])("N = %i apps: full mesh, every creator tests every other app", async (n) => {
+  it.each([13, 15])("N = %i apps: full mesh, every creator tests every other app", async (n) => {
     const { id, creators, apps } = await formingCohort(n);
     await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
     const rows = await assignmentsOf(id);
@@ -59,7 +59,7 @@ describe("start_cohort (FR-31–33)", () => {
     for (const count of countBy(rows.map((r) => r.app_id)).values()) expect(count).toBe(n - 1);
   });
 
-  it.each([17, 20])("N = %i apps: ring of 14, every member tests exactly 14 and every app gets exactly 14", async (n) => {
+  it.each([16, 17, 20])("N = %i apps (all 12 slots, ADR-012 k = 14): ring of 14, every member tests exactly 14 and every app gets exactly 14", async (n) => {
     const { id, apps } = await formingCohort(n);
     await must(admin.db.rpc("start_cohort", { p_cohort_id: id }));
     const rows = await assignmentsOf(id);

@@ -1,6 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
+import { TARGET_TESTERS } from './progress'
 import type { AdminTesterRow, AppDoc, BadgeTier, BuildDoc, EmailListing, EmailListingRow, PublicProfile, TesterDoc, TesterMethod, TesterStatus } from './types'
 
 export interface Live<T> {
@@ -36,6 +37,7 @@ function toApp(r: Row, s: Row | undefined): AppDoc {
     testStartDate: dayMs(r.test_start_date),
     feedbackGuide: r.feedback_guide,
     testerMethod: r.tester_method ?? 'google_group',
+    testerSlots: r.tester_slots ?? TARGET_TESTERS,
     activeTesterCount: s?.active_tester_count ?? 0,
     eligibleCount: s?.eligible_count ?? 0,
     feedbackSentCount: s?.feedback_sent_count ?? 0,
@@ -360,7 +362,7 @@ export interface AppInput {
   feedbackGuide?: string
 }
 
-const appArgs = (input: AppInput & { testerMethod?: TesterMethod }) => ({
+const appArgs = (input: AppInput & { testerMethod?: TesterMethod; testerSlots?: number }) => ({
   p_name: input.name,
   p_description: input.description,
   p_opt_in_url: input.optInUrl,
@@ -369,6 +371,7 @@ const appArgs = (input: AppInput & { testerMethod?: TesterMethod }) => ({
   p_test_start_date: input.testStartDate || null,
   p_feedback_guide: input.feedbackGuide || null,
   p_tester_method: input.testerMethod ?? null,
+  p_tester_slots: input.testerSlots ?? null,
 })
 
 /** A date picked in the form (YYYY-MM-DD) as the start of that day in WIB, whatever the device time zone. */
@@ -381,7 +384,7 @@ const instantFor = (iso: string) => {
 }
 
 export const api = {
-  createApp: async (input: AppInput & { groupConfirmed: boolean; testerMethod: TesterMethod }) =>
+  createApp: async (input: AppInput & { groupConfirmed: boolean; testerMethod: TesterMethod; testerSlots: number }) =>
     ({ appId: await rpc<string>('create_app', { ...appArgs(input), p_group_confirmed: input.groupConfirmed }) }),
   joinAsTester: async (input: { appId: string; checklist: { joinedGroup?: true; optedIn: true; installed: true } }) => {
     await rpc('join_as_tester', { p_app_id: input.appId, p_checklist: input.checklist })
@@ -449,7 +452,7 @@ export const markEmailListed = (appId: string, uid: string, listed: boolean) =>
 
 export const setEmailReminders = (enabled: boolean) => rpc('set_email_reminders', { p_enabled: enabled })
 
-export const updateApp = (appId: string, input: AppInput & { status?: AppDoc['status']; testerMethod?: TesterMethod }) =>
+export const updateApp = (appId: string, input: AppInput & { status?: AppDoc['status']; testerMethod?: TesterMethod; testerSlots?: number }) =>
   rpc('update_app', { p_app_id: appId, ...appArgs(input), p_status: input.status ?? null })
 
 export const softDeleteApp = (appId: string) => rpc('delete_app', { p_app_id: appId })

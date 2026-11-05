@@ -156,7 +156,7 @@ img, svg { display: block; }
 
 /* compact 12-seat strip for list rows */
 .seats {
-  display: inline-grid; grid-template-columns: repeat(12, 8px); gap: var(--bw-row); vertical-align: middle; flex: none;
+  display: inline-grid; grid-template-columns: repeat(var(--n, 12), 8px); gap: var(--bw-row); vertical-align: middle; flex: none;
   background: var(--ink); border: var(--bw) solid var(--ink);
 }
 .seats > i { height: 14px; background: var(--putih); }
@@ -588,7 +588,7 @@ dialog.sheet[open] { animation: rise var(--t-enter) var(--ease); }
 .rh-count small { color: var(--muted); font-size: var(--fs-h2); font-weight: 500; }
 .rh-label { font-size: var(--fs-body); font-weight: 600; color: var(--ink); }
 .rh-sub { color: var(--muted); font-size: var(--fs-small); }
-.seats.wide { grid-template-columns: repeat(12, minmax(10px, 18px)); }
+.seats.wide { grid-template-columns: repeat(var(--n, 12), minmax(10px, 18px)); }
 .seats.wide > i { height: 20px; }
 .rh-actions { grid-column: 2; grid-row: 1 / span 2; display: grid; gap: var(--s-3); justify-items: stretch; align-content: start; min-width: 220px; }
 .rh-actions .btn { justify-content: center; }
@@ -756,6 +756,12 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
 .cell-2 .name-line b { display: inline; overflow-wrap: anywhere; }
 .mrow-cohort { overflow-wrap: anywhere; }
 .app-table .seat-cell { display: flex; flex-wrap: wrap; gap: 0 var(--s-2); }
+/* Tablet and small laptop (sidebar + four columns): the feedback column stacks so Status is not clipped. */
+@media (max-width: 1279px) {
+  .app-table th:nth-last-child(3) { white-space: normal; }
+  .app-table .fb-ver { display: block; white-space: nowrap; }
+  table.data.app-table th, table.data.app-table td { padding-left: var(--s-2); padding-right: var(--s-2); }
+}
 /* "Ditugaskan" chip: the kunyit edge is a fill (like .own-day), not a shadow; the chip stays flat. */
 .chip.assigned { box-shadow: inset var(--s-1) 0 0 var(--kunyit); padding-left: calc(var(--s-2) + var(--s-1)); }
 .chip.assigned .sr-only { text-transform: none; }

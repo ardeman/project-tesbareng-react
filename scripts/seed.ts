@@ -138,6 +138,12 @@ interface TesterSpec {
 }
 
 interface AppSpec {
+  /** ADR-012 tester slots (default 12) */
+  testerSlots?: number;
+  /** ADR-011 tester method (default google_group); email_list is switched on after the testers exist (unlock trigger). */
+  testerMethod?: "email_list";
+  /** ADR-011 listing requests: member keys, with the days ago the creator marked them added (null = still waiting). */
+  emailRequests?: [who: string, requestedDaysAgo: number, listedDaysAgo: number | null][];
   id: string;
   creator: string;
   name: string;
@@ -230,6 +236,10 @@ const APPS: AppSpec[] = [
     id: "kasirku-warung",
     creator: "dewi",
     name: "KasirKu – Kasir Warung",
+    testerSlots: 4,
+    // ADR-011's case: 8 of 12 testers already on the email list, so 4 slots (ADR-012).
+    testerMethod: "email_list",
+    emailRequests: [["rina", 1, null], ["yohanes", 0, null], ["arief", 3, 2]],
     packageName: "id.dewianggraini.kasirwarung",
     description:
       "Aplikasi kasir sederhana untuk warung kelontong: scan barcode pakai kamera, catat utang pelanggan, dan lihat barang yang hampir habis. Data tersimpan di HP, bisa backup ke Google Drive.",
@@ -257,6 +267,7 @@ const APPS: AppSpec[] = [
     id: "trayek-angkot-bandung",
     creator: "hendra",
     name: "Trayek Angkot Bandung",
+    testerSlots: 6,
     packageName: "id.hendragunawan.trayekangkot",
     description:
       "Cari angkot dari titik A ke B di Bandung: nomor trayek, warna angkot, tempat ngetem, dan perkiraan ongkos. Data trayek dikumpulkan dari Dishub dan masukan pengguna.",
@@ -815,6 +826,7 @@ async function main() {
       feedback_guide: app.feedbackGuide,
       creator_id: member(app.creator).uid,
       status: app.status,
+      tester_slots: app.testerSlots ?? 12,
       created_at: iso(createdAt),
       updated_at: iso(Math.max(createdAt, lastBuild)),
       deleted: app.deleted === true,
@@ -867,6 +879,21 @@ async function main() {
   await insertAll("assignments", cohort.assignments);
   await insertAll("cohort_links", cohort.links);
   await insertAll("check_ins", cohort.checkIns);
+
+  // ADR-011: the unlock trigger needs the creator's testing count, so switch to the email list now.
+  for (const app of APPS.filter((a) => a.testerMethod === "email_list")) {
+    const appId = stableUuid(`app:${app.id}`);
+    await must(`email list ${app.id}`, db.from("apps").update({ tester_method: "email_list" }).eq("id", appId));
+    await insertAll(
+      "email_listings",
+      (app.emailRequests ?? []).map(([who, req, listed]) => ({
+        app_id: appId,
+        user_id: member(who).uid,
+        requested_at: iso(daysAgo(req)),
+        listed_at: listed == null ? null : iso(daysAgo(listed)),
+      })),
+    );
+  }
 
   // ---- summary, read back from the computed views
   const visible = APPS.filter((a) => !a.deleted);

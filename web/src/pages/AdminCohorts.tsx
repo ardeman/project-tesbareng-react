@@ -263,7 +263,7 @@ function FormingProgress({ c }: { c: CohortDetail }) {
       <Bar value={Math.min(n, MIN_APPS)} max={MIN_APPS} label={`${n} aplikasi, minimal ${MIN_APPS} untuk mulai`} />
       <p className="meta">
         {short > 0
-          ? `Butuh ${short} aplikasi lagi. Dengan minimal ${MIN_APPS} aplikasi, setiap aplikasi mendapat 12 tester dari sesama kreator.`
+          ? `Butuh ${short} aplikasi lagi. Dengan minimal ${MIN_APPS} aplikasi, setiap aplikasi bisa mendapat tester sebanyak yang dibutuhkannya (sampai 12) dari sesama kreator.`
           : `Cukup untuk mulai: setiap aplikasi mendapat ${ringK(n)} tester dari sesama kreator${c.pureTesterCount > 0 ? ', ditambah tester murni' : ''}.`}
       </p>
     </div>
@@ -352,7 +352,7 @@ function StartForm({ c, thin, onClose, onStarted }: { c: CohortDetail; thin: boo
         {thin && (
           <p className="notice admin-notice ch-warn" role="note">
             <Chip tone="cabai" glyph="!">Buffer tipis</Chip>
-            <span>Dengan {MIN_APPS} aplikasi dan tanpa tester murni, setiap aplikasi mendapat tepat 12 tester. Satu kreator yang tidak ikut tes membuat aplikasi lain turun di bawah 12. Pertimbangkan menunggu beberapa tester murni dulu.</span>
+            <span>Dengan {MIN_APPS} aplikasi dan tanpa tester murni, aplikasi yang butuh 12 tester mendapat tepat 12, tanpa cadangan. Satu kreator yang tidak ikut tes membuat aplikasi itu turun di bawah 12. Pertimbangkan menunggu beberapa tester murni dulu.</span>
           </p>
         )}
         <p className="notice admin-notice" role="note">

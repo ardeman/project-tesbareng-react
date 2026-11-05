@@ -1,5 +1,6 @@
 import type { AppDoc, AppStatus, BuildDoc, TesterDoc, TesterStatus } from './types'
 
+/** Google Play's requirement; also the default and maximum tester slots (ADR-012). */
 export const TARGET_TESTERS = 12
 export const TARGET_DAYS = 14
 export const TARGET_BUILDS = 3
@@ -30,6 +31,8 @@ export interface Progress {
   feedbackVerified: number
   replied: number
   builds: number
+  /** the app's tester slots (ADR-012): the progress target */
+  target: number
   ready: boolean
   lowEngagement: boolean
   /** active testers sorted by days, most first */
@@ -57,7 +60,8 @@ export function computeProgress(app: AppDoc, testers: TesterDoc[], builds?: Buil
     feedbackVerified: active.filter((t) => t.feedbackVerified).length,
     replied: active.filter((t) => t.replied).length,
     builds: builds_,
-    ready: eligible >= TARGET_TESTERS,
+    target: app.testerSlots,
+    ready: eligible >= app.testerSlots,
     lowEngagement: (eligible > 0 && eligibleWithFeedback < eligible / 2) || (active.length > 0 && builds_ === 0),
     seats,
   }
@@ -143,3 +147,8 @@ export const initial = (name: string) => (name.trim()[0] ?? '?').toUpperCase()
 
 /** A future day count in words via Intl: 1 → "besok", 3 → "dalam 3 hari". */
 export const inDays = (n: number) => new Intl.RelativeTimeFormat('id-ID', { numeric: 'auto' }).format(n, 'day')
+
+/** ADR-012 §3: open seats = slots − Active testers; 0 or less means "Kursi penuh" (still joinable). */
+export function openSeats(app: Pick<AppDoc, 'testerSlots' | 'activeTesterCount'>) {
+  return app.testerSlots - app.activeTesterCount
+}

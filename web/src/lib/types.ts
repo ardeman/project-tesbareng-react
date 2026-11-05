@@ -37,6 +37,8 @@ export interface AppDoc {
   feedbackGuide?: string | null
   /** How testers are added to the Play Console closed track (ADR-011). */
   testerMethod: TesterMethod
+  /** How many testers the app needs from TesBareng, 1–12 (ADR-012); its progress target. */
+  testerSlots: number
   // computed by the app_stats view
   activeTesterCount: number
   eligibleCount: number

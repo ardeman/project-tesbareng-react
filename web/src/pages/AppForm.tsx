@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth'
 import { api, errorText, restoreApp, softDeleteApp, updateApp, useApp, useBuilds, usePublicProfile, type AppInput } from '../lib/data'
 import { COMMUNITY_GROUP, EMAIL_LIST_MIN_TESTING } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
-import { appStatusLabel, fmtDate, isoDate } from '../lib/progress'
+import { appStatusLabel, fmtDate, isoDate, TARGET_TESTERS } from '../lib/progress'
 import type { AppDoc, AppStatus, TesterMethod } from '../lib/types'
 import { useValidation } from '../lib/useValidation'
 import { LIMITS, OPT_IN_PREFIX, validateApp } from '../lib/validate'
@@ -58,6 +58,8 @@ function Form({ existing }: { existing?: AppDoc }) {
   const [status, setStatus] = useState<AppStatus>(existing?.status ?? 'recruiting')
   const [group, setGroup] = useState(false)
   const [method, setMethod] = useState<TesterMethod>(existing?.testerMethod ?? 'google_group')
+  const [slots, setSlots] = useState<number>(existing?.testerSlots ?? TARGET_TESTERS)
+  const groupStep = creating && method === 'google_group'
   // Email list unlocks after testing others (the database enforces it too). An app already on it keeps it.
   const { user } = useAuth()
   const creatorStats = usePublicProfile(existing ? existing.creatorUid : user?.uid)
@@ -68,12 +70,12 @@ function Form({ existing }: { existing?: AppDoc }) {
   const [fail, setFail] = useState<string | null>(null)
   const [buildOpen, setBuildOpen] = useState(false)
 
-  const initial = useRef({ v, status, group, method })
+  const initial = useRef({ v, status, group, method, slots })
   const leaving = useRef(false)
   const dirty = useMemo(() => {
     const i = initial.current
-    return status !== i.status || group !== i.group || method !== i.method || (Object.keys(v) as (keyof AppInput)[]).some((k) => (v[k] ?? '') !== (i.v[k] ?? ''))
-  }, [v, status, group, method])
+    return status !== i.status || group !== i.group || method !== i.method || slots !== i.slots || (Object.keys(v) as (keyof AppInput)[]).some((k) => (v[k] ?? '') !== (i.v[k] ?? ''))
+  }, [v, status, group, method, slots])
 
   // ADR-009 §6: warn before leaving with unsaved changes (reload, tab close, and links on this page).
   useEffect(() => {
@@ -106,12 +108,12 @@ function Form({ existing }: { existing?: AppDoc }) {
     }
     try {
       if (creating) {
-        const { appId } = await api.createApp({ ...clean, groupConfirmed: method === 'google_group' && group, testerMethod: method })
+        const { appId } = await api.createApp({ ...clean, groupConfirmed: method === 'google_group' && group, testerMethod: method, testerSlots: slots })
         leaving.current = true
         toast(`${clean.name} terdaftar. Bagikan halamannya ke grup.`)
         navigate(`/apps/${appId}`)
       } else {
-        await updateApp(existing.id, { ...clean, status, testerMethod: method })
+        await updateApp(existing.id, { ...clean, status, testerMethod: method, testerSlots: slots })
         leaving.current = true
         toast('Perubahan disimpan.')
         navigate(`/apps/${existing.id}`)
@@ -222,11 +224,18 @@ function Form({ existing }: { existing?: AppDoc }) {
 
       <section className="form-section">
         <div className="label-col">
-          <h2>Cara tester ditambahkan</h2>
-          <p>Di Play Console, satu jalur uji tertutup memakai Google Groups <i>atau</i> daftar email, tidak bisa keduanya.</p>
+          <h2>Tester</h2>
+          <p>Berapa tester yang Anda butuhkan dari komunitas, dan cara mereka ditambahkan. Di Play Console, satu jalur uji tertutup memakai Google Groups <i>atau</i> daftar email, tidak bisa keduanya.</p>
         </div>
         <div className="form-panel">
-          <fieldset style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }} aria-describedby="f-method-hint">
+          <div className="field">
+            <label htmlFor="f-slots">Butuh berapa tester dari TesBareng?</label>
+            <select id="f-slots" className="input num" style={{ maxWidth: '12rem' }} value={slots} onChange={(e) => setSlots(Number(e.target.value))} aria-describedby="f-slots-hint">
+              {Array.from({ length: TARGET_TESTERS }, (_, i) => TARGET_TESTERS - i).map((n) => <option key={n} value={n}>{n} tester</option>)}
+            </select>
+            <span className="hint" id="f-slots-hint">Google butuh {TARGET_TESTERS} tester total selama 14 hari. Kalau sebagian sudah ada dari grup atau daftar Anda yang lain, isi sisanya saja.{existing && ' Mengubahnya tidak memindahkan penugasan cohort yang sudah berjalan.'}</span>
+          </div>
+          <fieldset style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }} aria-describedby={groupStep ? undefined : 'f-method-hint'}>
             <legend className="sr-only">Cara tester ditambahkan</legend>
             <label className="check">
               <input type="radio" name="tester-method" value="google_group" checked={method === 'google_group'} onChange={() => setMethod('google_group')} />
@@ -241,13 +250,14 @@ function Form({ existing }: { existing?: AppDoc }) {
                   <span className="d lock" id="f-email-lock">
                     {creatorStats.data === undefined
                       ? 'Memeriksa jumlah aplikasi yang Anda tes…'
-                      : <>🔒 Terbuka setelah Anda menguji <span className="num">{EMAIL_LIST_MIN_TESTING}</span> aplikasi anggota lain (sekarang <span className="num">{testingCount}</span>). <Link to="/apps">Cari aplikasi untuk dites</Link></>}
+                      : <>Terkunci. Terbuka setelah Anda menguji <span className="num">{EMAIL_LIST_MIN_TESTING}</span> aplikasi anggota lain (sekarang <span className="num">{testingCount}</span>). <Link to="/apps">Cari aplikasi untuk dites</Link></>}
                   </span>
                 )}</span>
             </label>
-            <span className="hint" id="f-method-hint">Play Console → Uji tertutup → Penguji.</span>
+            {/* The group checkbox below carries the full Play Console path; say it once. */}
+            {!groupStep && <span className="hint" id="f-method-hint">Play Console → Uji tertutup → Penguji.</span>}
           </fieldset>
-          {creating && method === 'google_group' && (
+          {groupStep && (
             <label className="check" style={{ padding: 0 }}>
               <input id="f-groupConfirmed" type="checkbox" checked={group} onChange={(e) => setGroup(e.target.checked)} onBlur={blur('groupConfirmed')} aria-describedby={`f-group-hint${errors.groupConfirmed ? ' f-groupConfirmed-err' : ''}`} aria-invalid={!!errors.groupConfirmed || undefined} />
               <span><span className="t">Saya sudah menambahkan {COMMUNITY_GROUP} sebagai daftar penguji di jalur uji tertutup.</span>

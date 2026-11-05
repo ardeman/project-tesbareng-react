@@ -2,7 +2,7 @@
 
 |  |  |
 | --- | --- |
-| **Status** | Accepted — **not yet implemented** |
+| **Status** | Accepted, implemented (`supabase/functions/send-reminders`, `20261102000100_reminders.sql`, `20261103000700_cohort_reminders.sql`, `tests/reminders.test.ts`). The pg_cron job is created at first deploy (`supabase/snippets/setup_cron.sql`). |
 | **Decider** | Community Admin |
 | **Date** | 2 November 2026 |
 | **PRD ref** | PRD v2.2 §6.11 (FR-44 to FR-48), §11.1, §11.2, §11.4 steps 5–6 |

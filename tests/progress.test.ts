@@ -1,7 +1,7 @@
 // Client-side domain logic (CLAUDE.md "Domain logic"): days active, eligibility,
 // ready / low-engagement flags. Pure functions from web/src/lib/progress.ts.
 import { describe, expect, it } from "vitest";
-import { computeProgress, daysActive, isEligible, isNewBuild, relDay } from "../web/src/lib/progress";
+import { computeProgress, daysActive, isEligible, isNewBuild, openSeats, relDay } from "../web/src/lib/progress";
 import type { AppDoc, BuildDoc, TesterDoc } from "../web/src/lib/types";
 
 const DAY = 86_400_000;
@@ -36,6 +36,7 @@ const app = (over: Partial<AppDoc> = {}): AppDoc => ({
   creatorUid: "c",
   creatorName: "Rina",
   status: "testing",
+  testerSlots: 12,
   activeTesterCount: 0,
   eligibleCount: 0,
   feedbackSentCount: 0,
@@ -78,6 +79,17 @@ describe("computeProgress", () => {
     ];
     const p = computeProgress(app(), list, [build(2)], NOW);
     expect(p).toMatchObject({ active: 12, eligible: 12, feedbackSent: 12, ready: true, lowEngagement: false, builds: 1 });
+  });
+
+  it("uses the app's tester slots as the target (ADR-012)", () => {
+    const list = Array.from({ length: 3 }, () => tester({ optedInAt: daysAgo(15), feedbackSent: true }));
+    expect(computeProgress(app({ testerSlots: 4 }), list, [build(2)], NOW)).toMatchObject({ target: 4, ready: false });
+    expect(computeProgress(app({ testerSlots: 3 }), list, [build(2)], NOW)).toMatchObject({ target: 3, ready: true });
+  });
+
+  it("openSeats: slots minus active testers; full at 0 or less", () => {
+    expect(openSeats(app({ testerSlots: 4, activeTesterCount: 1 }))).toBe(3);
+    expect(openSeats(app({ testerSlots: 4, activeTesterCount: 6 }))).toBe(-2);
   });
 
   it("low engagement: fewer than half of eligible sent feedback, or no build", () => {

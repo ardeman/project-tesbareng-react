@@ -2,7 +2,7 @@
 
 |  |  |
 | --- | --- |
-| **Status** | Accepted — **not yet implemented** |
+| **Status** | Accepted, implemented (`20261103000100`–`20261103000700` migrations, `tests/cohort.test.ts`, `tests/cohort-flow.test.ts`) |
 | **Decider** | Community Admin |
 | **Date** | 2 November 2026 |
 | **PRD ref** | PRD v2.2 §5.6–§5.8, §6.9 (FR-29 to FR-38a), §6.10, §17 Q6–Q7 |
