@@ -5,7 +5,7 @@ import './tokens.css'
 import './styles.css'
 import { NotFound, ToastProvider } from './components/bits'
 import { Shell } from './components/Shell'
-import { AuthProvider } from './lib/auth'
+import { AuthProvider, useAuth } from './lib/auth'
 import { usePageMeta } from './lib/pageMeta'
 // Each screen loads on demand (the landing never pays for work screens) to keep the main chunk under 150 KB gzip (ADR-001 budget).
 const AppList = lazy(() => import('./pages/AppList').then((m) => ({ default: m.AppList })))
@@ -27,7 +27,7 @@ createRoot(document.getElementById('root')!).render(
         <ToastProvider>
           <Routes>
             <Route path="/" element={<Suspense fallback={null}><Landing /></Suspense>} />
-            <Route path="/about" element={<Suspense fallback={null}><About /></Suspense>} />
+            <Route path="/about" element={<AboutRoute />} />
             <Route path="*" element={
               <Shell>
                 <Suspense fallback={null}>
@@ -51,6 +51,15 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+// Signed-in members read the rules without leaving the app menu; visitors get the story page with its own header.
+// Wait for the session check (local, near-instant) so a member never sees the story header flash first.
+function AboutRoute() {
+  const { user, ready } = useAuth()
+  if (!ready) return null
+  const page = <Suspense fallback={null}><About embedded={!!user} /></Suspense>
+  return user ? <Shell>{page}</Shell> : page
+}
 
 // BrowserRouter keeps the old scroll position on a link click; start each new page at the top,
 // or at the #hash target (pages load lazily, so wait up to ~2 s for it to render).

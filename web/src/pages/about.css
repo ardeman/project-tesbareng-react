@@ -241,3 +241,6 @@ html:has(.ab-strip) { scroll-padding-top: calc(var(--hh, 72px) + 60px); }
   .ab-cta-row .ab-btn { flex: 1 1 100%; }
   .ab-toc a { padding: 8px 12px; }
 }
+
+/* Inside the app shell (signed-in members): the page fills the canvas edge to edge, like it does under the story header. */
+.canvas:has(> .ab--embedded) { padding: 0; }

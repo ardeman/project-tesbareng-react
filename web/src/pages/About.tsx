@@ -165,7 +165,25 @@ const RULES: { group: string; items: { t: string; d: string }[] }[] = [
   },
 ]
 
-const readHh = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hh')) || 72
+const readHh = () => {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hh'))
+  return Number.isNaN(v) ? 72 : v
+}
+
+/** Inside the app shell there is no story header: the strip sticks under the mobile top bar, or at 0 on desktop. */
+function useShellHh(on: boolean) {
+  useEffect(() => {
+    if (!on) return
+    const root = document.documentElement
+    const bar = document.querySelector<HTMLElement>('.topbar')
+    const set = () => root.style.setProperty('--hh', `${bar?.offsetHeight ?? 0}px`)
+    set()
+    const ro = bar && 'ResizeObserver' in window ? new ResizeObserver(set) : null
+    if (bar) ro?.observe(bar)
+    window.addEventListener('resize', set)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', set); root.style.removeProperty('--hh') }
+  }, [on])
+}
 
 /** Floating section strip: one scrollable row, shown once the 5x2 grid has scrolled away. Scroll-spy sets the current item. */
 function TocStrip({ gridRef }: { gridRef: React.RefObject<HTMLElement | null> }) {
@@ -233,18 +251,21 @@ function TocStrip({ gridRef }: { gridRef: React.RefObject<HTMLElement | null> })
   )
 }
 
-export function About() {
+/** `embedded`: rendered inside the app shell for signed-in members, so the shell supplies the nav, skip link and <main>. */
+export function About({ embedded = false }: { embedded?: boolean }) {
   usePageMeta(TITLE, DESCRIPTION)
   const signIn = useSignIn()
   const gridRef = useRef<HTMLElement>(null)
+  useShellHh(embedded)
+  const Main = embedded ? 'div' : 'main'
 
   return (
-    <div className="ab surface-story dark-ready">
-      <a className="ab-skip" href="#isi">Langsung ke isi</a>
+    <div className={`ab surface-story dark-ready${embedded ? ' ab--embedded' : ''}`}>
+      {!embedded && <a className="ab-skip" href="#isi">Langsung ke isi</a>}
 
-      <StoryHeader page="about" signIn={signIn} />
+      {!embedded && <StoryHeader page="about" signIn={signIn} />}
 
-      <main id="isi">
+      <Main id="isi">
         <TocStrip gridRef={gridRef} />
         <div className="ab-wrap ab-hero">
           <p className="ab-label"><b>Aturan main</b>TesBareng</p>
@@ -420,9 +441,9 @@ export function About() {
             </div>
           </div>
         </section>
-      </main>
+      </Main>
 
-      <StoryFooter page="about" />
+      {!embedded && <StoryFooter page="about" />}
     </div>
   )
 }
