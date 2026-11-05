@@ -14,7 +14,7 @@ import { usePageMeta } from '../lib/pageMeta'
 import { api, errorCode, markEmailListed, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useEmailListings, useTesters } from '../lib/data'
 import { checkIn, milestones, useCheckIns, type CheckIn, type Milestone } from '../lib/checkins'
 import {
-  computeProgress, daysActive, fmtDate, fmtDateTime, fmtDayHeading, inDays, isNewBuild, isoDate, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
+  computeProgress, daysActive, fmtDate, fmtDateTime, fmtDayHeading, inDays, isNewBuild, isoDate, openSeats, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
   testerStatusLabel, type Progress,
 } from '../lib/progress'
 import type { AppDoc, BuildDoc, TesterDoc, TesterStatus } from '../lib/types'
@@ -237,6 +237,8 @@ function RecordHead({ app, p, loading, actions, assigned }: {
 function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; loading: boolean; description: string }) {
   if (loading) return <div className="finding"><Skel w={420} h={20} /></div>
   const soonest = p.seats.filter((s) => !s.eligible).map((s) => TARGET_DAYS - s.days)[0]
+  // ADR-012 §4: what Google's 12 still needs from outside; community testers beyond the slots count too.
+  const outside = p.target < TARGET_TESTERS ? TARGET_TESTERS - Math.max(p.active, p.target) : 0
   let text: string
   if (app.status === 'live') text = `Sudah rilis produksi. ${p.active} tester masih tercatat aktif.`
   else if (p.ready) text = `Siap ajukan akses produksi: ${p.eligible} tester sudah 14 hari berturut-turut.`
@@ -252,8 +254,10 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
   return (
     <div className="finding">
       <p className="verdict num">{text}</p>
-      {p.target < TARGET_TESTERS && (
-        <p className="muted small num">Target TesBareng: {p.target} tester. Sisanya ({TARGET_TESTERS - p.target}) dari luar komunitas, dilaporkan sendiri oleh kreator.</p>
+      {outside > 0 && (
+        <p className="muted small num">
+          Target TesBareng: {p.target} tester{p.active > p.target && `, sudah ${p.active} aktif`}. Sisanya ({outside}) dari luar komunitas, dilaporkan sendiri oleh kreator.
+        </p>
       )}
       <p className="desc">{description}</p>
       {p.lowEngagement && app.status !== 'live' && (
@@ -893,6 +897,8 @@ function EmailListPanel({ app }: { app: AppDoc }) {
   const list = useEmailListings(app.id)
   const [busy, setBusy] = useState<string | null>(null)
   const pending = list.data.filter((r) => r.listedAt == null)
+  // ADR-012 "Building on ADR-011": full stays joinable, so the creator decides whether to list more; show the seats to decide by.
+  const open = openSeats(app)
   const copy = async (emails: string[]) => {
     try {
       await navigator.clipboard.writeText(emails.join(', '))
@@ -913,6 +919,11 @@ function EmailListPanel({ app }: { app: AppDoc }) {
         {pending.length > 0 && <button type="button" className="btn" onClick={() => copy(pending.map((r) => r.email))}>Salin {pending.length} email</button>}
       </header>
       <p className="muted small">Hanya Anda yang melihat email ini, karena tester menyetujuinya. Tempel di daftar email jalur uji tertutup, lalu tandai “Sudah ditambahkan” agar tester bisa opt-in.</p>
+      <p className="small num">
+        {open > 0
+          ? <>Kurang {open} tester aktif dari {app.testerSlots} kursi. Yang baru meminta belum dihitung sampai mereka opt-in.</>
+          : <>Kursi penuh: {app.activeTesterCount} aktif dari {app.testerSlots}. Menambahkan lagi tetap boleh, sebagai cadangan kalau ada yang berhenti.</>}
+      </p>
       {list.error ? <ErrorBox text="Daftar email gagal dimuat." onRetry={list.retry} />
         : list.loading ? <Skel w="60%" />
         : list.data.length === 0 ? <p className="muted">Belum ada yang meminta ditambahkan.</p>

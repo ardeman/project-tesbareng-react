@@ -756,6 +756,12 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
 .cell-2 .name-line b { display: inline; overflow-wrap: anywhere; }
 .mrow-cohort { overflow-wrap: anywhere; }
 .app-table .seat-cell { display: flex; flex-wrap: wrap; gap: 0 var(--s-2); }
+/* Tablet and small laptop (sidebar + four columns): the feedback column stacks so Status is not clipped. */
+@media (max-width: 1279px) {
+  .app-table th:nth-last-child(3) { white-space: normal; }
+  .app-table .fb-ver { display: block; white-space: nowrap; }
+  table.data.app-table th, table.data.app-table td { padding-left: var(--s-2); padding-right: var(--s-2); }
+}
 /* "Ditugaskan" chip: the kunyit edge is a fill (like .own-day), not a shadow; the chip stays flat. */
 .chip.assigned { box-shadow: inset var(--s-1) 0 0 var(--kunyit); padding-left: calc(var(--s-2) + var(--s-1)); }
 .chip.assigned .sr-only { text-transform: none; }

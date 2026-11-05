@@ -291,13 +291,11 @@ function MineChips({ own, mine }: Pick<Row, 'own' | 'mine'>) {
   return <Chip glyph="●" className="mine">Anda menguji<span className="num"> · {daysActive(mine)} hari</span></Chip>
 }
 
-/** ADR-012 §6: open seats against the app's slots. Full stays joinable, so the chip only informs. */
+/** ADR-012 §6: open seats against the app's slots. Only an app still short gets a chip; the count beside it already says "full". */
 function SlotChip({ app }: { app: AppDoc }) {
   if (!STILL_TESTING.includes(app.status)) return null
   const open = openSeats(app)
-  return open > 0
-    ? <Chip glyph="○" className="num">Kurang {open}</Chip>
-    : <Chip glyph="✓" className="num">Kursi penuh</Chip>
+  return open > 0 ? <Chip glyph="○" className="num">Kurang {open}</Chip> : null
 }
 
 function SeatCell({ app, eligible }: Row) {
@@ -335,7 +333,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
       <td className="cell-2"><SeatCell app={app} eligible={eligible} /><span className="md-show">{eligible} lewat 14 hari</span></td>
       <td className="num md-hide"><b>{eligible}</b><span className="of"> / {app.testerSlots}</span></td>
       <td className="num">
-        {app.feedbackSentCount === 0 ? <span className="dash">0</span> : <><b>{app.feedbackSentCount}</b><span className="muted"> · {app.feedbackVerifiedCount} terverifikasi</span></>}
+        {app.feedbackSentCount === 0 ? <span className="dash">0</span> : <><b>{app.feedbackSentCount}</b><span className="muted fb-ver"> · {app.feedbackVerifiedCount} terverifikasi</span></>}
       </td>
       <td className="muted md-hide">
         <span className="creator-nums">
