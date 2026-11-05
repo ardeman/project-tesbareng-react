@@ -60,7 +60,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <NavLink to="/cohorts" className="nav-item"><IconCohort /><span className="label">Cohort</span></NavLink>
           <NavLink to="/me" className="nav-item"><IconTodo /><span className="label">Tugas saya</span>{owed > 0 && <span className="count num">{owed > 99 ? '99+' : owed}<span className="sr-only"> feedback belum dikirim</span></span>}</NavLink>
           {user && <NavLink to={`/u/${user.uid}`} className="nav-item"><IconUser /><span className="label">Profil saya</span></NavLink>}
-          <NavLink to="/about" className="nav-item"><IconBook /><span className="label">Cara kerja</span></NavLink>
+          <NavLink to="/about" className="nav-item"><IconBook /><span className="label">Aturan main</span></NavLink>
           {isAdmin && <NavLink to="/admin" className="nav-item"><IconAdmin /><span className="label">Admin</span></NavLink>}
         </nav>
 
