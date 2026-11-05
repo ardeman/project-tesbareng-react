@@ -1,6 +1,6 @@
-import { lazy, StrictMode, Suspense } from 'react'
+import { lazy, StrictMode, Suspense, useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useLocation, useNavigationType } from 'react-router-dom'
 import './tokens.css'
 import './styles.css'
 import { NotFound, ToastProvider } from './components/bits'
@@ -22,6 +22,7 @@ const Landing = lazy(() => import('./pages/Landing').then((m) => ({ default: m.L
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <ToastProvider>
           <Routes>
@@ -50,6 +51,29 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+// BrowserRouter keeps the old scroll position on a link click; start each new page at the top,
+// or at the #hash target (pages load lazily, so wait up to ~2 s for it to render).
+// Back/forward (POP) keeps the browser's own behaviour.
+function ScrollToTop() {
+  const { pathname, hash } = useLocation()
+  const navType = useNavigationType()
+  useLayoutEffect(() => {
+    if (navType === 'POP') return
+    if (!hash) { window.scrollTo(0, 0); return }
+    const id = decodeURIComponent(hash.slice(1))
+    let frame = 0
+    let tries = 0
+    const find = () => {
+      const el = document.getElementById(id)
+      if (el) el.scrollIntoView()
+      else if (++tries < 120) frame = requestAnimationFrame(find)
+    }
+    find()
+    return () => cancelAnimationFrame(frame)
+  }, [pathname, hash, navType])
+  return null
+}
 
 function NotFoundPage() {
   usePageMeta('Halaman tidak ditemukan')
