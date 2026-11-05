@@ -124,7 +124,7 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
             <Link className={`nl${page === 'about' ? ' active' : ''}`} to="/about" {...aboutProps}>Aturan main</Link>
             <Link className="nl" to="/apps">Daftar app</Link>
             <div className="nav-tools">
-              <button type="button" className="lp-sq theme-btn" aria-pressed={dark} aria-label="Mode gelap" onClick={toggle}><MoonSun /></button>
+              {!user && <button type="button" className="lp-sq theme-btn" aria-pressed={dark} aria-label="Mode gelap" onClick={toggle}><MoonSun /></button>}
               {signInBtn}
               <button type="button" className="lp-sq menu-btn" ref={menuBtnRef} aria-expanded={menuOpen} aria-controls="lp-menu" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}><span /><span /><span /></button>
             </div>
@@ -138,9 +138,9 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
           ))}
           <Link className={page === 'about' ? 'active' : undefined} to="/about" {...aboutProps}>Aturan main</Link>
           <Link to="/apps">Daftar app</Link>
-          <button type="button" className="sheet-theme" aria-pressed={dark} onClick={toggle}>
+          {!user && <button type="button" className="sheet-theme" aria-pressed={dark} onClick={toggle}>
             <span>Mode gelap <small className="mono">{dark ? 'Nyala' : 'Mati'}</small></span><MoonSun />
-          </button>
+          </button>}
         </nav>
         {home && <div className="lp-scrollbar" aria-hidden="true"><i ref={fillRef} /></div>}
         {signInError && (
