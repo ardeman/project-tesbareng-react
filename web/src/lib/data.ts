@@ -164,7 +164,7 @@ interface FetchOptions {
 }
 
 /**
- * Loads once, then refetches on window focus (and on Realtime changes for the detail page).
+ * Loads once, then refetches on window focus, after any write RPC (and on Realtime changes for the detail page).
  * `loading` is true only until the first result, so refetches never flash skeletons.
  */
 export function useFetch<T>(load: (() => Promise<T>) | null, initial: T, deps: unknown[], opts: FetchOptions = {}): Live<T> {
@@ -191,6 +191,7 @@ export function useFetch<T>(load: (() => Promise<T>) | null, initial: T, deps: u
     quietRef.current = refetch
     const onFocus = () => { if (document.visibilityState === 'visible') refetch() }
     window.addEventListener('focus', refetch)
+    window.addEventListener(DATA_CHANGED, refetch)
     document.addEventListener('visibilitychange', onFocus)
     const off = opts.liveApp
       ? onAppChange(opts.liveApp, (t) => { if (!opts.liveTables || opts.liveTables.includes(t)) refetch() })
@@ -198,6 +199,7 @@ export function useFetch<T>(load: (() => Promise<T>) | null, initial: T, deps: u
     return () => {
       alive = false
       window.removeEventListener('focus', refetch)
+      window.removeEventListener(DATA_CHANGED, refetch)
       document.removeEventListener('visibilitychange', onFocus)
       off?.()
     }
@@ -346,9 +348,15 @@ export const useTesterSearch = (query: string, enabled: boolean) => {
 
 // ---------- writes (all through RPC) ----------
 
+/** Read-only RPCs: they change nothing, so they must not trigger a refetch (that would loop). */
+const READ_RPCS = new Set(['app_email_listings', 'get_cohort_link'])
+const DATA_CHANGED = 'tb:data-changed'
+
 export async function rpc<T = null>(fn: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args)
   if (error) throw error
+  // A write succeeded: every mounted read hook (e.g. the Tugas saya badge in the nav) refetches quietly.
+  if (!READ_RPCS.has(fn)) window.dispatchEvent(new Event(DATA_CHANGED))
   return data as T
 }
 
