@@ -54,12 +54,13 @@ createRoot(document.getElementById('root')!).render(
 
 // BrowserRouter keeps the old scroll position on a link click; start each new page at the top,
 // or at the #hash target (pages load lazily, so wait up to ~2 s for it to render).
-// Back/forward (POP) keeps the browser's own behaviour.
+// Back/forward (POP) without a #hash keeps the browser's own behaviour.
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
   const navType = useNavigationType()
   useLayoutEffect(() => {
-    if (navType === 'POP') return
+    // A first load counts as POP too; with a #hash the browser cannot find a lazy page's target, so scroll to it here.
+    if (navType === 'POP' && !hash) return
     if (!hash) { window.scrollTo(0, 0); return }
     const id = decodeURIComponent(hash.slice(1))
     let frame = 0
