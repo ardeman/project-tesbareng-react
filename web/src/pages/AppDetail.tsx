@@ -11,7 +11,7 @@ import { AssignedChip } from '../components/cohortBits'
 import { useAuth } from '../lib/auth'
 import { useMyAssignedApps } from '../lib/cohorts'
 import { usePageMeta } from '../lib/pageMeta'
-import { api, errorCode, markEmailListed, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useEmailListings, useTesters } from '../lib/data'
+import { api, errorCode, markEmailListed, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useEmailListings, useMyEmailListing, useTesters } from '../lib/data'
 import { checkIn, milestones, useCheckIns, type CheckIn, type Milestone } from '../lib/checkins'
 import {
   computeProgress, daysActive, fmtDate, fmtDateTime, fmtDayHeading, inDays, isNewBuild, isoDate, openSeats, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
@@ -43,6 +43,9 @@ export function AppDetail() {
   )
   // Called before the early returns (hook order); only loads for the member's own Active entry.
   const ownActive = user ? testers.data.find((t) => t.uid === user.uid && t.status === 'active') : undefined
+  // Email-list apps (ADR-011): the header follows the member's own request (ask → wait → opt in).
+  const emailFlow = !!app.data && app.data.testerMethod === 'email_list' && !!user && app.data.creatorUid !== user.uid && !isAdmin
+  const myListing = useMyEmailListing(emailFlow ? id : undefined, user?.uid)
   const flow = useCheckInFlow(id, user && app.data && !app.data.deleted && app.data.creatorUid !== user.uid && !isAdmin ? ownActive : undefined, builds.data.map((b) => b.id).join(','))
 
   if (app.error) return <ErrorBox text="Aplikasi gagal dimuat. Periksa koneksi, lalu coba lagi." onRetry={app.retry} />
@@ -98,6 +101,34 @@ export function AppDetail() {
     const optInAction: Action = { label: 'Buka link opt-in', icon: <IconExternal />, href: a.optInUrl }
     const storeOverflow: MenuItem[] = a.storeUrl ? [{ label: 'Halaman Play Store', href: a.storeUrl }] : []
     if (mine?.status === 'removed') return { secondary: [optInAction], overflow: storeOverflow }
+    if (a.testerMethod === 'email_list') {
+      // The opt-in link only works once the creator has added this member's email in Play Console.
+      const l = myListing.data
+      if (user && myListing.loading) return { secondary: [], overflow: storeOverflow }
+      if (!l) {
+        return {
+          primary: { label: 'Minta ditambahkan', onClick: () => needLogin('join') },
+          secondary: [],
+          overflow: storeOverflow,
+          note: user
+            ? 'Link opt-in bisa dibuka setelah creator menambahkan email Anda di Play Console.'
+            : 'Anda diminta masuk dengan Google dulu. Link opt-in bisa dibuka setelah creator menambahkan email Anda.',
+        }
+      }
+      if (l.listedAt == null) {
+        return {
+          secondary: [{ label: 'Lihat permintaan', onClick: () => setDialog('join') }],
+          overflow: storeOverflow,
+          note: `Menunggu creator menambahkan email Anda · diminta ${fmtDate(l.requestedAt)}.`,
+        }
+      }
+      return {
+        primary: { label: 'Gabung sebagai tester', onClick: () => setDialog('join') },
+        secondary: [optInAction],
+        overflow: storeOverflow,
+        note: 'Email Anda sudah ditambahkan. Opt-in dengan akun Google yang sama.',
+      }
+    }
     return {
       primary: { label: 'Gabung sebagai tester', onClick: () => needLogin('join') },
       secondary: [optInAction],
@@ -343,7 +374,7 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
       {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi memulai hitungan 14 hari dari awal.</p>}
       {guide}
       {app.testerMethod === 'email_list'
-        ? <p className="muted small">Aplikasi ini memakai daftar email: minta ditambahkan, tunggu creator menambahkan email Anda, lalu opt-in dan pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>
+        ? <p className="muted small">Aplikasi ini memakai daftar email: minta ditambahkan, tunggu creator menambahkan email Anda, lalu opt-in dan pasang aplikasinya. Mulai dari tombol di atas.</p>
         : <p className="muted small">Butuh 3 langkah: gabung grup, buka link opt-in, pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>}
     </section>
   )
