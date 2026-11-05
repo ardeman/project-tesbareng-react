@@ -977,7 +977,18 @@ function FeedbackList({ testers, loading }: { testers: TesterDoc[]; loading: boo
                   <b>{t.displayName}</b>
                   <span className="creator-nums">{t.feedbackSentAt && <RelTime t={t.feedbackSentAt} />}{t.feedbackVerified && <FeedbackChip t={t} />}</span>
                 </span>
-                <span className="fb-text">{t.feedbackSummary}</span>
+                {(() => {
+                  const m = t.feedbackSummary?.match(/^\[([^\]]+)\]\s*(.*)$/s);
+                  if (m) {
+                    return (
+                      <span className="fb-text">
+                        <span className="chip sm" style={{ marginRight: 'var(--s-2)', display: 'inline-block' }}>{m[1]}</span>
+                        {m[2]}
+                      </span>
+                    );
+                  }
+                  return <span className="fb-text">{t.feedbackSummary}</span>;
+                })()}
               </span>
             </li>
           ))}
