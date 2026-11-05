@@ -535,7 +535,29 @@ export const usePendingRequestCounts = () =>
     return m
   }, new Map<string, number>(), [])
 
-export const requestCohortSlot = (cohortId: string, appId: string) =>
+/** Admin: Forming cohorts with requests still to decide, oldest request first (Tugas saya). Skipped when not admin. */
+export interface RequestTodo { cohortId: string; cohortName: string; count: number }
+export const useAdminRequestTodos = (isAdmin: boolean) =>
+  useFetch<RequestTodo[]>(
+    isAdmin
+      ? async () => {
+          const r = await rows<Row[]>(supabase.from('cohort_requests').select('cohort_id, cohorts!inner(name, status)')
+            .eq('status', 'pending').eq('cohorts.status', 'forming').order('created_at'))
+          const m = new Map<string, RequestTodo>()
+          for (const x of r) {
+            const id = x.cohort_id as string
+            const c = x.cohorts as { name: string }
+            const t = m.get(id) ?? { cohortId: id, cohortName: c.name, count: 0 }
+            t.count++
+            m.set(id, t)
+          }
+          return [...m.values()]
+        }
+      : null,
+    [] as RequestTodo[], [isAdmin],
+  )
+
+export const requestCohortSlot =(cohortId: string, appId: string) =>
   rpc<string>('request_cohort_slot', { p_cohort_id: cohortId, p_app_id: appId })
 export const withdrawCohortRequest = (requestId: string) => rpc('withdraw_cohort_request', { p_request_id: requestId })
 export const approveCohortRequest = (requestId: string) => rpc('approve_cohort_request', { p_request_id: requestId })

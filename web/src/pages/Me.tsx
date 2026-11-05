@@ -6,14 +6,14 @@ import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, setEmailReminders, useApps, useAppsBy, useEmailListingTodos, useEntriesOf, usePublicProfile } from '../lib/data'
-import { useMyAssignedApps, useMyObligations } from '../lib/cohorts'
+import { useAdminRequestTodos, useMyAssignedApps, useMyObligations } from '../lib/cohorts'
 import { daysActive, isNewBuild, relDay, openSeats, TARGET_DAYS } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 
 interface Todo { entry?: TesterDoc; app: AppDoc; kind: 'join' | 'listed' | 'emails' | 'build' | 'feedback'; count?: number }
 
 export function Me() {
-  const { user, ready, signIn } = useAuth()
+  const { user, isAdmin, ready, signIn } = useAuth()
   const toast = useToast()
   usePageMeta('Tugas saya', 'Aplikasi yang sedang Anda uji, feedback yang belum dikirim, dan build baru yang menunggu diuji ulang.')
   if (!ready) return <Skel w={200} h={32} />
@@ -26,10 +26,10 @@ export function Me() {
       </div>
     )
   }
-  return <MeSignedIn uid={user.uid} />
+  return <MeSignedIn uid={user.uid} isAdmin={isAdmin} />
 }
 
-function MeSignedIn({ uid }: { uid: string }) {
+function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
   const entries = useEntriesOf(uid)
   const apps = useApps()
   const myApps = useAppsBy(uid)
@@ -38,6 +38,8 @@ function MeSignedIn({ uid }: { uid: string }) {
   const obligations = useMyObligations(uid)
   const myEmailAppIds = useMemo(() => myApps.data.filter((a) => a.testerMethod === 'email_list').map((a) => a.id), [myApps.data])
   const listings = useEmailListingTodos(uid, myEmailAppIds)
+  // ADR-013: admins decide creators' requests to bring an app into a Forming cohort.
+  const requests = useAdminRequestTodos(isAdmin)
   const byId = useMemo(() => new Map(apps.data.map((a) => [a.id, a])), [apps.data])
   const loading = entries.loading || apps.loading
 
@@ -110,6 +112,8 @@ function MeSignedIn({ uid }: { uid: string }) {
   const emailWait = todos.filter((t) => t.kind === 'emails').reduce((n, t) => n + (t.count ?? 0), 0)
   const owe = todos.filter((t) => t.kind === 'feedback').length
   const builds = todos.filter((t) => t.kind === 'build').length
+  const asks = requests.data.reduce((n, r) => n + r.count, 0)
+  const total = todos.length + requests.data.length
   const p = profile.data
   const listed = myApps.data.length
   const nudge = p && listed > 0 && p.testingCount < listed
@@ -120,9 +124,9 @@ function MeSignedIn({ uid }: { uid: string }) {
         <div>
           <h1>Tugas saya</h1>
           <p className="sub">
-            {loading ? <Skel w={340} h={16} /> : todos.length === 0
+            {loading ? <Skel w={340} h={16} /> : total === 0
               ? testing.length === 0 ? 'Anda belum menguji aplikasi apa pun.' : 'Tidak ada tugas tertunda. Semua aplikasi yang Anda uji sudah dapat feedback.'
-              : <><b>{[unjoined > 0 && `${unjoined} belum opt-in`, owe > 0 && `${owe} feedback belum dikirim`, builds > 0 && `${builds} build baru menunggu diuji ulang`, emailWait > 0 && `${emailWait} email tester menunggu ditambahkan`].filter(Boolean).join(', ')}</b>.</>}
+              : <><b>{[unjoined > 0 && `${unjoined} belum opt-in`, owe > 0 && `${owe} feedback belum dikirim`, builds > 0 && `${builds} build baru menunggu diuji ulang`, emailWait > 0 && `${emailWait} email tester menunggu ditambahkan`, asks > 0 && `${asks} permintaan cohort menunggu keputusan`].filter(Boolean).join(', ')}</b>.</>}
           </p>
         </div>
         <div className="actions"><Link className="btn" to="/apps">Cari aplikasi yang butuh tester</Link></div>
@@ -153,8 +157,8 @@ function MeSignedIn({ uid }: { uid: string }) {
       <div className="grid">
         <div className="span-7 col-fill stretch">
           <section className="panel" aria-labelledby="todo-h">
-            <header><h2 id="todo-h">Perlu dikerjakan</h2><span className="meta num">{loading ? '' : `${todos.length} tugas`}</span></header>
-            {loading ? <RowsSkeleton /> : todos.length === 0 ? (
+            <header><h2 id="todo-h">Perlu dikerjakan</h2><span className="meta num">{loading ? '' : `${total} tugas`}</span></header>
+            {loading ? <RowsSkeleton /> : total === 0 ? (
               // ADR-001 §2.6: spot illustration for the empty Tugas saya state goes in Empty's `art` slot.
               testing.length === 0
                 ? (
@@ -168,6 +172,15 @@ function MeSignedIn({ uid }: { uid: string }) {
                 : <Empty title="Beres, tidak ada tugas tertunda."><p>Cek lagi besok, atau bantu aplikasi lain yang masih butuh tester.</p></Empty>
             ) : (
               <ul>
+                {requests.data.map((r, i) => (
+                  <li className="row-line" key={`requests:${r.cohortId}`}>
+                    <span className="grow cell-2">
+                      <Link to={`/cohorts/${r.cohortId}`}><b>{r.cohortName}</b></Link>
+                      <span className="num">{r.count} permintaan masuk menunggu disetujui atau ditolak.</span>
+                    </span>
+                    <Link className={`btn sm${i === 0 ? ' primary' : ''}`} to={`/admin?bagian=cohort&cohort=${r.cohortId}`}>Tinjau permintaan</Link>
+                  </li>
+                ))}
                 {todos.slice(0, 4).map(({ entry, app, kind, count }, i) => (
                   <li className="row-line" key={`${kind}:${app.id}`}>
                     <span className="grow cell-2">
@@ -184,7 +197,7 @@ function MeSignedIn({ uid }: { uid: string }) {
                             : `Hari ke-${daysActive(entry!)}. Feedback di Play belum Anda tandai terkirim.`}
                       </span>
                     </span>
-                    <Link className={`btn sm${i === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
+                    <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
                       {kind === 'join' || kind === 'listed' ? 'Daftar sebagai tester' : kind === 'emails' ? 'Tambahkan email' : kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}
                     </Link>
                   </li>
