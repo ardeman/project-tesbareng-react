@@ -291,11 +291,9 @@ function MineChips({ own, mine }: Pick<Row, 'own' | 'mine'>) {
   return <Chip glyph="●" className="mine">Anda menguji<span className="num"> · {daysActive(mine)} hari</span></Chip>
 }
 
-/** ADR-012 §6: open seats against the app's slots. Only an app still short gets a chip; the count beside it already says "full". */
-function SlotChip({ app }: { app: AppDoc }) {
-  if (!STILL_TESTING.includes(app.status)) return null
-  const open = openSeats(app)
-  return open > 0 ? <Chip glyph="○" className="num">Kurang {open}</Chip> : null
+/** ADR-012 §6: open seats against the app's slots. Chip removed — the X/slots count already conveys this. */
+function SlotChip(_: { app: AppDoc }) {
+  return null
 }
 
 function SeatCell({ app, eligible }: Row) {
