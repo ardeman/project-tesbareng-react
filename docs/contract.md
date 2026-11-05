@@ -208,13 +208,14 @@ Only the admin may act on a soft-deleted app (edit, manage testers, add builds, 
 
 ## Service-role functions (reminders, ADR-006)
 
-Never callable by `anon` or `authenticated`: they return full email addresses (ADR-005). The `send-reminders` Edge Function calls all three and sends one digest per member.
+Never callable by `anon` or `authenticated`: they return full email addresses (ADR-005). The `send-reminders` Edge Function calls all four and sends one digest per member.
 
 | Function | Kinds |
 |---|---|
 | `due_reminders()` | `new_build` (build logged in the last 24 h, to the app's active testers), `unreplied_feedback` (verified, unreplied > 3 days, to the creator), `app_eligible` (`eligible_count ≥ tester_slots`, once per app) |
 | `due_cohort_reminders()` | One row per member, kind and cohort (`ref_id` = cohort id, `extra.apps` = the app names, `extra.day`, `extra.due_at`), counted from each assignment's `assigned_at`: `cohort_opt_in` (Day 1 and 2, not opted in), `cohort_feedback` (Day 5, feedback not sent), `cohort_used_app` (Day 7, used-app check-in or feedback missing), `cohort_still_opted_in` (Day 13). Active cohorts, open assignments, live apps only. |
 | `due_admin_reminders()` | `cohort_requests`: one row per admin and Forming cohort with pending requests (`ref_id` = cohort id, `extra.count`, `extra.apps` oldest first). Daily until decided. |
+| `due_listing_reminders()` | ADR-011, `ref_id` = app id. `email_listing_pending`: to the creator, members whose listing has no `listed_at` (Left/Removed entries skipped; `extra.count`, `extra.names` oldest first), daily until marked. `email_listing_added`: to the member, `listed_at` in the last 24 h and no tester entry yet. |
 
 All skip members with `email_reminders = false` and anything already in `reminder_log` for that member, kind and ref today (`app_eligible`: ever).
 

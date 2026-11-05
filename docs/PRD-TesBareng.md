@@ -17,6 +17,7 @@
 **v2.5 — 5 November 2026** — ADR-013 accepted 5 November 2026
 
 - **Cohort app requests** (§5.6, FR-30a, FR-30b, FR-45, §7, §9, §9.3): a creator asks to bring one of their apps into a Forming cohort; an admin approves or rejects (reason optional). One pending request per member at a time. The admin can still add a creator directly. Admins get pending requests in the daily digest.
+- **Email-list digest** (FR-45, ADR-011): the creator gets members still waiting to be added to the Play Console email list, daily until marked added; a member gets one item when the creator marks them added, telling them to opt in.
 
 **v2.4 — 5 November 2026** — ADR-012 accepted 5 November 2026
 
@@ -331,7 +332,7 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
   | Day 13 | Still-opted-in check-in |
   | Any day | New builds logged in the last 24 hours on apps the member tests |
 
-  Creators also get: unreplied verified feedback older than 3 days, and "Your app reached 12 eligible testers". Admins also get: pending cohort app requests, per Forming cohort, every day until decided (FR-30a).
+  Creators also get: unreplied verified feedback older than 3 days, and "Your app reached 12 eligible testers". Admins also get: pending cohort app requests, per Forming cohort, every day until decided (FR-30a). On email-list apps (ADR-011), creators get members still waiting to be added to the Play Console list, every day until marked added; the member gets one item when they are marked added and have not joined yet.
 - **FR-46** Members can turn digest emails off in Tugas saya (on by default). Every email links to that setting.
 - **FR-47** Each sent reminder is logged; the same reminder is never sent twice to the same member on the same day.
 - **FR-48** **WhatsApp reminder panel (admin):** for each active cohort, lists Behind members by display name and milestone, with a ready-to-copy Indonesian message mentioning them, e.g. "Halo @Budi @Sari, deadline opt-in Cohort #3 hari ini jam 19.00. Cek tugasmu di TesBareng: ". The admin pastes it into the cohort group manually.
