@@ -123,9 +123,10 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
       )
     } else {
       primary = <button type="button" className="btn primary" onClick={join}>Gabung sebagai tester</button>
-      note = user
-        ? (c.status === 'active' && deadline != null ? `Pendaftaran tester murni dibuka sampai akhir Hari ${LAST_JOIN_DAY - 1}: ${fmtWib(deadline)}.` : null)
-        : 'Anda diminta masuk dengan Google dulu.'
+      // Creators ask, the admin decides (FR-30a/b, ADR-013): say so to everyone viewing a Forming cohort.
+      const creators = c.status === 'forming' ? 'Punya aplikasi? Ajukan untuk ikut sebagai creator, lalu admin menyetujui atau menolak. Tanpa aplikasi, Anda bisa gabung sendiri sebagai tester murni.' : null
+      const timing = c.status === 'active' && deadline != null ? `Pendaftaran tester murni dibuka sampai akhir Hari ${LAST_JOIN_DAY - 1}: ${fmtWib(deadline)}.` : null
+      note = [creators, timing, user ? null : 'Anda diminta masuk dengan Google dulu.'].filter(Boolean).join(' ') || null
     }
   } else if (c.status === 'active') {
     note = `Pendaftaran tester murni sudah ditutup${deadline != null ? ` ${fmtWib(deadline)}` : ''} (akhir Hari ${LAST_JOIN_DAY - 1}). Anda tetap bisa menguji aplikasi mana pun dari daftar aplikasi.`

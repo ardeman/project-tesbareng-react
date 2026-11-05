@@ -115,7 +115,7 @@ const STEPS: { t: string; d: ReactNode }[] = [
 ]
 
 const COHORT_FACTS: { t: string; d: ReactNode }[] = [
-  { t: 'Minimal 13 app', d: 'Setiap creator membawa satu app. Dengan 13 app, setiap app sudah bisa dapat 12 tester dari sesama creator saja.' },
+  { t: 'Minimal 13 app', d: 'Setiap creator membawa satu app. Selama cohort masih Forming, creator mengajukan app-nya, lalu admin menyetujui atau menolak. Admin juga bisa langsung menambahkan app. Dengan 13 app, setiap app sudah bisa dapat 12 tester dari sesama creator saja.' },
   { t: 'Opt-in dalam 48 jam', d: <>Hitungan mulai Hari 0. Lewat 48 jam, yang belum opt-in tercatat Behind, dan app miliknya mendapat label <span className="ab-chip c-cabai">! Belum tes</span> sampai tugasnya terpenuhi. Admin bisa memindahkan slot yang kosong ke anggota lain.</> },
   { t: 'Tutup di hari 21', d: 'Cohort ditutup saat semua app siap ajukan production, atau paling lambat hari ke-21.' },
   { t: 'Good, Owing, Settled', d: 'Saat cohort tutup, anggota yang semua tugasnya selesai berstatus Good. Yang belum berstatus Owing dan tidak bisa ikut cohort berikutnya sampai admin menandainya Settled.' },

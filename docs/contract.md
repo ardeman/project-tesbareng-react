@@ -68,6 +68,14 @@ assignments         select: everyone · write: none (RPC only)
 cohort_links        select: members of that cohort + admin (RLS) · write: none (RPC only)
   cohort_id pk → cohorts, whatsapp_group_url (prefix https://chat.whatsapp.com/), updated_at
 
+cohort_requests     select: own rows + admin (RLS) · write: none (RPC only)   (ADR-013)
+  id uuid pk, cohort_id → cohorts, user_id → profiles, app_id → apps,
+  status 'pending' | 'approved' | 'rejected' | 'withdrawn' | 'expired', reason? (1–280, rejected only),
+  created_at, decided_at? (null iff pending), decided_by? → profiles
+  unique (user_id) where status = 'pending'
+  Triggers close a pending row: cohort leaves forming → 'expired'; member inserted into that cohort →
+  'approved' (with an app) or 'withdrawn' (pure tester); app soft-deleted → 'withdrawn'.
+
 reminder_log        no client access (service role only)
   id uuid pk, user_id, kind, ref_id?, sent_on date, created_at
   unique (user_id, kind, ref_id, sent_on)
@@ -183,6 +191,10 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 | `add_cohort_member` | `p_cohort_id, p_user_id, p_app_id?` | — | Admin. Cohort missing → `not-found`; not `forming` → `failed-precondition`. Profile missing → `not-found`. Already a member → `already-exists`. Member has `standing = 'owing'` in any cohort → `failed-precondition`. App missing or soft-deleted → `not-found`; not owned by `p_user_id` → `invalid-argument`; already in this or another non-closed cohort → `already-exists`. Null `p_app_id` adds a pure tester. |
 | `remove_cohort_member` | `p_cohort_id, p_user_id` | — | Admin. Not `forming` → `failed-precondition`; not a member → `not-found`. |
 | `join_cohort_as_tester` | `p_cohort_id` | — | Member, as a pure tester (FR-33a). Cohort missing → `not-found`; closed, or Active after `day0_at + 7 d` → `failed-precondition`. Already a member → `already-exists`; Owing → `failed-precondition`. If Active: assigns 14 apps (all if fewer), fewest open assignments first, ties random, never the caller's own app; `assigned_at = now()`. |
+| `request_cohort_slot` | `p_cohort_id, p_app_id` | `uuid` | ADR-013. Cohort missing → `not-found`; not `forming` → `failed-precondition`. Already a member → `already-exists`; Owing → `failed-precondition`; another pending request → `already-exists`. App missing/deleted → `not-found`; not the caller's → `permission-denied`; in a non-closed cohort → `already-exists`. |
+| `withdraw_cohort_request` | `p_request_id` | — | Own request only, else `not-found`; not pending → `failed-precondition`. |
+| `approve_cohort_request` | `p_request_id` | — | Admin. Missing → `not-found`; not pending → `failed-precondition`; then calls `add_cohort_member` with the requested app (its errors apply). |
+| `reject_cohort_request` | `p_request_id, p_reason?` | — | Admin. Reason trimmed, empty → null, > 280 → `invalid-argument`. Missing → `not-found`; not pending → `failed-precondition`. |
 | `leave_cohort` | `p_cohort_id` | — | The caller, pure testers only, while `forming` (owner decision 2026-11-03). Not a member → `not-found`; has an app in the cohort → `permission-denied` (the admin removes creators); not `forming` → `failed-precondition`. |
 | `start_cohort` | `p_cohort_id` | — | Admin. Not `forming` → `failed-precondition`. Fewer than 13 members with an app, or any of their apps soft-deleted → `failed-precondition`. Shuffles members with an app into `ring_position` 0 … N−1. Each gets demand kᵢ = min(`tester_slots` + 2, N − 1) (ADR-012). When every kᵢ is equal (k), the member at position i is assigned the apps at positions i+1 … i+k (mod N). Otherwise a Kleitman–Wang greedy builds the assignment; if no assignment exists for those kᵢ, the smallest kᵢ is raised by one (never above N − 1) until one does. Either way every creator tests exactly kᵢ apps and their app gets exactly kᵢ creator testers, never their own app, never twice; the final kᵢ is stored in `cohort_members.demand`. Then pure testers, one by one in random order, get 14 apps each (all if fewer), lowest open assignments ÷ `demand` first, ties random (FR-33, ADR-012). Sets `status = 'active'`, `day0_at = now()`, and `assigned_at = now()` on members and assignments. |
 | `reassign_slot` | `p_assignment_id, p_to_user_id` | `uuid` | Admin (FR-36). Assignment missing → `not-found`; not `open`, already fulfilled, or cohort not `active` → `failed-precondition`. Target not a member of the cohort → `not-found`; the same member, or the app's creator → `invalid-argument`; target not `all_fulfilled` → `failed-precondition`; target already assigned that app → `already-exists`. Inserts the new assignment (`assigned_at = now()`), sets the original to `reassigned` with `reassigned_to`. Returns the new id. |
@@ -196,14 +208,15 @@ Only the admin may act on a soft-deleted app (edit, manage testers, add builds, 
 
 ## Service-role functions (reminders, ADR-006)
 
-Never callable by `anon` or `authenticated`: they return full email addresses (ADR-005). The `send-reminders` Edge Function calls both and sends one digest per member.
+Never callable by `anon` or `authenticated`: they return full email addresses (ADR-005). The `send-reminders` Edge Function calls all three and sends one digest per member.
 
 | Function | Kinds |
 |---|---|
 | `due_reminders()` | `new_build` (build logged in the last 24 h, to the app's active testers), `unreplied_feedback` (verified, unreplied > 3 days, to the creator), `app_eligible` (`eligible_count ≥ tester_slots`, once per app) |
 | `due_cohort_reminders()` | One row per member, kind and cohort (`ref_id` = cohort id, `extra.apps` = the app names, `extra.day`, `extra.due_at`), counted from each assignment's `assigned_at`: `cohort_opt_in` (Day 1 and 2, not opted in), `cohort_feedback` (Day 5, feedback not sent), `cohort_used_app` (Day 7, used-app check-in or feedback missing), `cohort_still_opted_in` (Day 13). Active cohorts, open assignments, live apps only. |
+| `due_admin_reminders()` | `cohort_requests`: one row per admin and Forming cohort with pending requests (`ref_id` = cohort id, `extra.count`, `extra.apps` oldest first). Daily until decided. |
 
-Both skip members with `email_reminders = false` and anything already in `reminder_log` for that member, kind and ref today (`app_eligible`: ever).
+All skip members with `email_reminders = false` and anything already in `reminder_log` for that member, kind and ref today (`app_eligible`: ever).
 
 ## Errors
 

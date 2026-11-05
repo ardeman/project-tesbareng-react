@@ -933,7 +933,7 @@ export function Landing() {
               <li>
                 <span className="n" aria-hidden="true">3</span>
                 <h3>Ikut cohort berikutnya</h3>
-                <p>Sebagai creator atau tester murni. Link grup WhatsApp cohort dibagikan setelah kamu masuk.</p>
+                <p>Sebagai creator, ajukan app-mu lalu tunggu persetujuan admin, atau sebagai tester murni. Link grup WhatsApp cohort dibagikan setelah kamu masuk.</p>
               </li>
             </ol>
             <div className="cta-row join-cta">
