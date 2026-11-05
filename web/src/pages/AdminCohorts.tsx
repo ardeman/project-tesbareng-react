@@ -4,7 +4,7 @@ import { Avatar, Bar, Chip, Dialog, Empty, ErrorBox, failToast, Field, fieldAria
 import { IconExternal, IconPlus, IconSearch } from '../components/icons'
 import { errorText, rows, useFetch, type Row } from '../lib/data'
 import {
-  addCohortMember, closeCohort, CLOSE_DAY, cohortDay, createCohort, fmtWib, LAST_JOIN_DAY, MIN_APPS, pinnedMessage,
+  addCohortMember, approveCohortRequest, closeCohort, REQUEST_REASON_MAX, rejectCohortRequest, usePendingRequestCounts, usePendingRequests, type CohortRequest, CLOSE_DAY, cohortDay, createCohort, fmtWib, LAST_JOIN_DAY, MIN_APPS, pinnedMessage,
   reassignSlot, removeCohortMember, setCohortLink, settleMember, startCohort,
   useAssignmentStatus, useCohort, useCohortLink, useCohorts, useMemberCandidates, useObligations,
   type Candidate, type CohortDetail, type CohortDoc, type CohortMember, type CohortStatus,
@@ -50,6 +50,7 @@ const STATUS_ORDER: Record<CohortStatus, number> = { forming: 0, active: 1, clos
 export function Cohorts() {
   const list = useCohorts()
   const owing = useOwingCounts()
+  const pending = usePendingRequestCounts()
   const [params, setParams] = useSearchParams()
   const [focusDetail, setFocusDetail] = useState(false)
 
@@ -71,7 +72,7 @@ export function Cohorts() {
     setFocusDetail(true)
     setParams((p) => { const n = new URLSearchParams(p); n.set('cohort', id); return n })
   }
-  const reloadList = () => { list.refresh(); owing.refresh() }
+  const reloadList = () => { list.refresh(); owing.refresh(); pending.refresh() }
 
   return (
     <div className="grid ch-layout">
@@ -85,15 +86,15 @@ export function Cohorts() {
         ) : list.data.length === 0 ? (
           <div className="empty-pad">
             <Empty title="Belum ada cohort.">
-              <p>Beri nama di atas untuk membuat cohort pertama. Setelah itu tambahkan minimal {MIN_APPS} kreator dengan aplikasinya.</p>
+              <p>Beri nama di atas untuk membuat cohort pertama. Setelah itu tambahkan minimal {MIN_APPS} creator dengan aplikasinya.</p>
             </Empty>
           </div>
         ) : (
           <>
-            <CohortGroup id="ch-g-now" title="Perlu tindakan" items={attention} owing={owing.data} selectedId={selectedId} hrefFor={hrefFor} onPick={() => setFocusDetail(true)}
+            <CohortGroup id="ch-g-now" title="Perlu tindakan" items={attention} owing={owing.data} pending={pending.data} selectedId={selectedId} hrefFor={hrefFor} onPick={() => setFocusDetail(true)}
               empty="Tidak ada cohort yang berjalan. Buat cohort baru di atas." />
             {done.length > 0 && (
-              <CohortGroup id="ch-g-done" title="Selesai" items={done} owing={owing.data} selectedId={selectedId} hrefFor={hrefFor} onPick={() => setFocusDetail(true)} limit={DONE_PREVIEW} />
+              <CohortGroup id="ch-g-done" title="Selesai" items={done} owing={owing.data} pending={pending.data} selectedId={selectedId} hrefFor={hrefFor} onPick={() => setFocusDetail(true)} limit={DONE_PREVIEW} />
             )}
           </>
         )}
@@ -116,8 +117,8 @@ export function Cohorts() {
 
 // ---------- list ----------
 
-function CohortGroup({ id, title, items, owing, selectedId, hrefFor, onPick, limit, empty }: {
-  id: string; title: string; items: CohortDoc[]; owing: Map<string, number>; selectedId: string | null
+function CohortGroup({ id, title, items, owing, pending, selectedId, hrefFor, onPick, limit, empty }: {
+  id: string; title: string; items: CohortDoc[]; owing: Map<string, number>; pending: Map<string, number>; selectedId: string | null
   hrefFor: (id: string) => string; onPick: () => void; limit?: number; empty?: string
 }) {
   const [all, setAll] = useState(false)
@@ -129,6 +130,7 @@ function CohortGroup({ id, title, items, owing, selectedId, hrefFor, onPick, lim
         <ul id={id} aria-labelledby={`${id}-h`}>
           {shown.map((c) => {
             const owe = owing.get(c.id) ?? 0
+            const ask = c.status === 'forming' ? pending.get(c.id) ?? 0 : 0
             return (
               <li key={c.id}>
                 <Link to={hrefFor(c.id)} className="ch-row" aria-current={c.id === selectedId ? 'true' : undefined} onClick={onPick}>
@@ -139,6 +141,7 @@ function CohortGroup({ id, title, items, owing, selectedId, hrefFor, onPick, lim
                     {c.status === 'active' && (cohortDay(c) ?? 0) > CLOSE_DAY && <Chip tone="cabai" glyph="!">Lewat Hari {CLOSE_DAY}</Chip>}
                     {c.status === 'closed' && <>Selesai {fmtDate(c.closedAt)}</>}
                     {owe > 0 && <Chip tone="cabai" glyph="!">{owe} berutang</Chip>}
+                    {ask > 0 && <Chip tone="langit" glyph="◷">{ask} permintaan</Chip>}
                   </span>
                 </Link>
               </li>
@@ -170,7 +173,7 @@ function CreateCohort({ count, onCreated }: { count: number; onCreated: (id: str
     setBusy(true); setErr(null)
     try {
       const id = await createCohort(v)
-      toast(`${v} dibuat. Tambahkan kreator dan aplikasinya.`)
+      toast(`${v} dibuat. Tambahkan creator dan aplikasinya.`)
       setName(''); setTouched(false)
       onCreated(id)
     } catch (x) {
@@ -249,6 +252,7 @@ function CohortPanel({ c, heading, onChanged }: { c: CohortDetail; heading: RefO
       {c.status === 'forming' && <FormingProgress c={c} />}
       {c.status === 'active' && <ActiveSummary c={c} />}
       {c.status === 'closed' && <Standings c={c} onChanged={onChanged} />}
+      {c.status === 'forming' && <RequestsPanel c={c} onChanged={onChanged} />}
       {c.status !== 'closed' && <Members c={c} onChanged={onChanged} />}
     </section>
   )
@@ -263,8 +267,8 @@ function FormingProgress({ c }: { c: CohortDetail }) {
       <Bar value={Math.min(n, MIN_APPS)} max={MIN_APPS} label={`${n} aplikasi, minimal ${MIN_APPS} untuk mulai`} />
       <p className="meta">
         {short > 0
-          ? `Butuh ${short} aplikasi lagi. Dengan minimal ${MIN_APPS} aplikasi, setiap aplikasi bisa mendapat tester sebanyak yang dibutuhkannya (sampai 12) dari sesama kreator.`
-          : `Cukup untuk mulai: setiap aplikasi mendapat ${ringK(n)} tester dari sesama kreator${c.pureTesterCount > 0 ? ', ditambah tester murni' : ''}.`}
+          ? `Butuh ${short} aplikasi lagi. Dengan minimal ${MIN_APPS} aplikasi, setiap aplikasi bisa mendapat tester sebanyak yang dibutuhkannya (sampai 12) dari sesama creator.`
+          : `Cukup untuk mulai: setiap aplikasi mendapat ${ringK(n)} tester dari sesama creator${c.pureTesterCount > 0 ? ', ditambah tester murni' : ''}.`}
       </p>
     </div>
   )
@@ -344,15 +348,15 @@ function StartForm({ c, thin, onClose, onStarted }: { c: CohortDetail; thin: boo
         <h2 ref={title} tabIndex={-1}>Mulai {c.name}?</h2>
         <p className="lede">Saat dimulai, TesBareng langsung:</p>
         <ol className="ch-steps num">
-          <li>Mengacak urutan ring {c.appCount} kreator. Setiap kreator ditugaskan menguji {k} aplikasi lain, jadi setiap aplikasi mendapat {k} tester.</li>
+          <li>Mengacak urutan ring {c.appCount} creator. Setiap creator ditugaskan menguji {k} aplikasi lain, jadi setiap aplikasi mendapat {k} tester.</li>
           {c.pureTesterCount > 0 && <li>Membagikan {Math.min(14, c.appCount)} aplikasi ke masing-masing dari {c.pureTesterCount} tester murni, mulai dari aplikasi dengan tester paling sedikit.</li>}
           <li>Menetapkan Hari 0 = sekarang, sekitar {fmtDateTime(now)}. Semua anggota punya 48 jam untuk opt-in, sampai sekitar {fmtDateTime(now + 2 * DAY)}.</li>
-          <li>Mengunci daftar anggota: kreator tidak bisa ditambah atau dikeluarkan lagi. Tester murni masih bisa gabung sendiri sampai akhir Hari {LAST_JOIN_DAY - 1}, sekitar {fmtWib(now + LAST_JOIN_DAY * DAY)}.</li>
+          <li>Mengunci daftar anggota: creator tidak bisa ditambah atau dikeluarkan lagi. Tester murni masih bisa gabung sendiri sampai akhir Hari {LAST_JOIN_DAY - 1}, sekitar {fmtWib(now + LAST_JOIN_DAY * DAY)}.</li>
         </ol>
         {thin && (
           <p className="notice admin-notice ch-warn" role="note">
             <Chip tone="cabai" glyph="!">Buffer tipis</Chip>
-            <span>Dengan {MIN_APPS} aplikasi dan tanpa tester murni, aplikasi yang butuh 12 tester mendapat tepat 12, tanpa cadangan. Satu kreator yang tidak ikut tes membuat aplikasi itu turun di bawah 12. Pertimbangkan menunggu beberapa tester murni dulu.</span>
+            <span>Dengan {MIN_APPS} aplikasi dan tanpa tester murni, aplikasi yang butuh 12 tester mendapat tepat 12, tanpa cadangan. Satu creator yang tidak ikut tes membuat aplikasi itu turun di bawah 12. Pertimbangkan menunggu beberapa tester murni dulu.</span>
           </p>
         )}
         <p className="notice admin-notice" role="note">
@@ -419,12 +423,12 @@ function Members({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
       </div>
       {c.members.length === 0 ? (
         <Empty title="Belum ada anggota.">
-          <p>Tambahkan kreator beserta aplikasi yang mereka bawa. Tester murni bisa gabung sendiri dari halaman cohort.</p>
+          <p>Tambahkan creator beserta aplikasi yang mereka bawa. Tester murni bisa gabung sendiri dari halaman cohort.</p>
         </Empty>
       ) : (
         <>
-          <MemberList title="Kreator dan aplikasinya" items={creators} forming={forming} busyId={busyId} onRemove={remove}
-            empty={`Belum ada kreator. Cohort butuh minimal ${MIN_APPS} aplikasi.`} />
+          <MemberList title="Creator dan aplikasinya" items={creators} forming={forming} busyId={busyId} onRemove={remove}
+            empty={`Belum ada creator. Cohort butuh minimal ${MIN_APPS} aplikasi.`} />
           <MemberList title="Tester murni" items={pure} forming={forming} busyId={busyId} onRemove={remove}
             empty={forming ? 'Belum ada. Tester murni gabung sendiri dari halaman cohort, atau tambahkan tanpa aplikasi.' : 'Tidak ada tester murni di cohort ini.'} />
         </>
@@ -470,6 +474,122 @@ function MemberList({ title, items, forming, busyId, onRemove, empty }: {
         </ul>
       )}
     </div>
+  )
+}
+
+// ---------- ADR-013: requests to bring an app, oldest first ----------
+
+const reqFmt = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
+
+function RequestsPanel({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
+  const toast = useToast()
+  const list = usePendingRequests(c.id)
+  const heading = useRef<HTMLHeadingElement>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [rejecting, setRejecting] = useState<CohortRequest | null>(null)
+  const items = list.data
+
+  const approve = async (r: CohortRequest) => {
+    if (busyId) return
+    setBusyId(r.id)
+    try {
+      await approveCohortRequest(r.id)
+      // The row and its button are gone after the refresh: keep focus in the section.
+      heading.current?.focus()
+      toast(`${nameOf(r)} dan ${r.appName} masuk ke ${c.name}.`)
+      list.refresh(); onChanged()
+    } catch (x) {
+      toast(failToast(x))
+      list.refresh()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="ch-members ch-requests">
+      <div className="ch-members-head">
+        <h3 ref={heading} tabIndex={-1}>Permintaan masuk <span className="num muted">({items.length})</span></h3>
+      </div>
+      {list.error ? <ErrorBox text="Permintaan masuk gagal dimuat." onRetry={list.retry} /> : list.loading ? (
+        <div aria-busy="true" aria-label="Memuat permintaan">{[0, 1].map((i) => <div className="row-line" key={i} aria-hidden="true"><Skel w={32} h={32} /><span className="grow"><Skel w={160} /><br /><Skel w={120} h={12} /></span></div>)}</div>
+      ) : items.length === 0 ? (
+        <p className="meta">Tidak ada permintaan yang menunggu. Creator mengajukan aplikasinya dari halaman cohort.</p>
+      ) : (
+        <>
+          <p className="meta">Terlama di atas. Setujui untuk menambahkan creator dan aplikasinya; tolak dengan alasan opsional yang dilihat anggota.</p>
+          <ul>
+            {items.map((r) => (
+              <li className="row-line ch-member ch-req" key={r.id}>
+                <Avatar name={nameOf(r)} photo={r.photoURL} />
+                <span className="grow cell-2">
+                  <Link className="hit ch-name" to={`/u/${r.userId}`}><b>{nameOf(r)}</b></Link>
+                  <span className="num">{r.maskedEmail}</span>
+                  <span className="ch-app"><Link className="hit" to={`/apps/${r.appId}`}>{r.appName || 'Aplikasi'}</Link></span>
+                  <span className="num">Diajukan {reqFmt.format(r.createdAt)} WIB</span>
+                </span>
+                <span className="ch-req-acts">
+                  <button type="button" className="btn sm primary" aria-busy={busyId === r.id || undefined} onClick={() => { void approve(r) }}>
+                    {busyId === r.id ? 'Menyetujui…' : 'Setujui'}<span className="sr-only"> {nameOf(r)}</span>
+                  </button>
+                  <button type="button" className="btn sm" onClick={() => setRejecting(r)}>Tolak<span className="sr-only"> {nameOf(r)}</span></button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <Dialog open={rejecting != null} onClose={() => setRejecting(null)} label="Tolak permintaan">
+        {rejecting && (
+          <RejectForm r={rejecting} c={c} onClose={() => setRejecting(null)}
+            onDone={() => { heading.current?.focus(); list.refresh(); onChanged() }} />
+        )}
+      </Dialog>
+    </div>
+  )
+}
+
+function RejectForm({ r, c, onClose, onDone }: { r: CohortRequest; c: CohortDetail; onClose: () => void; onDone: () => void }) {
+  const toast = useToast()
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const over = reason.trim().length > REQUEST_REASON_MAX
+  const fieldErr = over ? `Alasan paling panjang ${REQUEST_REASON_MAX} karakter.` : undefined
+  const area = useRef<HTMLTextAreaElement>(null)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy) return
+    if (fieldErr) { area.current?.focus(); return }
+    setBusy(true); setErr(null)
+    try {
+      await rejectCohortRequest(r.id, reason)
+      toast(`Permintaan ${nameOf(r)} untuk ${r.appName} ditolak.`)
+      onClose(); onDone()
+    } catch (x) {
+      setErr(errorText(x))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form onSubmit={submit} noValidate>
+      <div className="sheet-body">
+        <div>
+          <h2>Tolak permintaan?</h2>
+          <p className="lede"><b>{nameOf(r)}</b> dengan <b>{r.appName}</b> untuk {c.name}. Anggota melihat penolakan dan alasannya, lalu bisa mengajukan lagi.</p>
+        </div>
+        <Field id="rj-reason" label="Alasan" optional hint="Singkat dan jelas, misalnya “Cohort ini sudah penuh, coba cohort berikutnya.”" error={fieldErr} count={`${reason.trim().length}/${REQUEST_REASON_MAX}`}>
+          <textarea ref={area} className="input" rows={3} autoComplete="off" value={reason}
+            onChange={(e) => { setReason(e.target.value); setErr(null) }} {...fieldAria('rj-reason', { hint: true, error: fieldErr })} />
+        </Field>
+        {err && <ErrorBox text={err} />}
+      </div>
+      <div className="sheet-foot">
+        <button type="button" className="btn" onClick={onClose}>Batal</button>
+        <button className="btn danger" aria-busy={busy || undefined}>{busy ? 'Menolak…' : 'Tolak permintaan'}</button>
+      </div>
+    </form>
   )
 }
 
@@ -883,7 +1003,7 @@ function ReassignForm({ c, slot, onClose, onDone }: {
             : candidates.map((m) => (
               <label key={m.userId} className="ch-opt">
                 <input type="radio" name="ra-new" value={m.userId} checked={newId === m.userId} onChange={() => setNewId(m.userId)} />
-                <span className="cell-2"><b>{nameOf(m)}</b><span>{m.appId ? (m.appName ?? 'Kreator') : 'Tester murni'}</span></span>
+                <span className="cell-2"><b>{nameOf(m)}</b><span>{m.appId ? (m.appName ?? 'Creator') : 'Tester murni'}</span></span>
               </label>
             ))}
         </fieldset>

@@ -217,7 +217,7 @@ export function AppList() {
           <select id="sort" className="input" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
             <option value="need">Paling butuh tester</option>
             <option value="full">Hampir penuh</option>
-            <option value="creator">Kreator paling aktif</option>
+            <option value="creator">Creator paling aktif</option>
             <option value="new">Terbaru</option>
           </select>
         </span>
@@ -234,7 +234,7 @@ export function AppList() {
                 <th>Tester aktif</th>
                 <th className="num md-hide">Lewat 14 hari</th>
                 <th className="num">Feedback di Play</th>
-                <th className="md-hide">Kreatornya menguji</th>
+                <th className="md-hide">Creator-nya menguji</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -270,7 +270,7 @@ export function AppList() {
             ) : (
               <Empty title={`Tidak ada aplikasi ${filterWords.join(' ')}.`}>
                 {pickedCohort && cohortFilter === pickedCohort.id && filterWords.length === 1 && (
-                  <p>Aplikasi muncul di sini setelah kreatornya bergabung ke {pickedCohort.name} dengan aplikasinya.</p>
+                  <p>Aplikasi muncul di sini setelah creator-nya bergabung ke {pickedCohort.name} dengan aplikasinya.</p>
                 )}
                 <button className="text-action" onClick={resetAll}>Hapus semua saringan</button>
               </Empty>
@@ -326,7 +326,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
           {belumTes && <Chip tone="cabai" glyph="!">Belum tes</Chip>}
         </div>
         <span>{app.creatorName} · didaftarkan {relDay(app.createdAt)}{cohort && <> · {cohort.name}</>}</span>
-        <span className="md-show">Kreatornya menguji {c.t} aplikasi <Badge tier={app.creatorBadgeTier} size="sm" /></span>
+        <span className="md-show">Creator-nya menguji {c.t} aplikasi <Badge tier={app.creatorBadgeTier} size="sm" /></span>
       </td>
       <td className="cell-2"><SeatCell app={app} eligible={eligible} /><span className="md-show">{eligible} lewat 14 hari</span></td>
       <td className="num md-hide"><b>{eligible}</b><span className="of"> / {app.testerSlots}</span></td>

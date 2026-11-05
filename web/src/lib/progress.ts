@@ -26,7 +26,8 @@ export function isEligible(t: TesterDoc, now = Date.now()) {
 export interface Progress {
   active: number
   eligible: number
-  testDay: number | null
+  /** the 14-day clock: days the slot-th tester has been active; 0 while seats are open */
+  testDay: number
   feedbackSent: number
   feedbackVerified: number
   replied: number
@@ -55,7 +56,7 @@ export function computeProgress(app: AppDoc, testers: TesterDoc[], builds?: Buil
   return {
     active: active.length,
     eligible,
-    testDay: start == null ? null : daysBetween(start, now),
+    testDay: seats.length >= app.testerSlots ? seats[app.testerSlots - 1].days : 0,
     feedbackSent: active.filter((t) => t.feedbackSent).length,
     feedbackVerified: active.filter((t) => t.feedbackVerified).length,
     replied: active.filter((t) => t.replied).length,

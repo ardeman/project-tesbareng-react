@@ -3,7 +3,7 @@
 |  |  |
 | --- | --- |
 | **Product** | TesBareng ("test together") |
-| **Version** | 2.4 |
+| **Version** | 2.5 |
 | **Status** | Draft |
 | **Last updated** | 5 November 2026 |
 | **Owner** | Community Admin |
@@ -13,6 +13,11 @@
 ---
 
 ## Changelog
+
+**v2.5 — 5 November 2026** — ADR-013 accepted 5 November 2026
+
+- **Cohort app requests** (§5.6, FR-30a, FR-30b, FR-45, §7, §9, §9.3): a creator asks to bring one of their apps into a Forming cohort; an admin approves or rejects (reason optional). One pending request per member at a time. The admin can still add a creator directly. Admins get pending requests in the daily digest.
+- **Email-list digest** (FR-45, ADR-011): the creator gets members still waiting to be added to the Play Console email list, daily until marked added; a member gets one item when the creator marks them added, telling them to opt in.
 
 **v2.4 — 5 November 2026** — ADR-012 accepted 5 November 2026
 
@@ -143,7 +148,7 @@ On their own app only, the creator can:
 
 ### 5.6 Run a cohort (Admin)
 
-1. **Form:** create a cohort (e.g. "Cohort #3") and add creators, each with the app they bring. Pure testers join on their own (§5.8). A cohort needs at least **13 apps**, so even an app that needs all 12 testers can receive them from creators alone; pure testers add buffer on top. Each creator tests as many apps as their own app receives (FR-32).
+1. **Form:** create a cohort (e.g. "Cohort #3") and add creators, each with the app they bring. Creators may also ask to join with an app; the admin approves or rejects each request (FR-30a/FR-30b). Pure testers join on their own (§5.8). A cohort needs at least **13 apps**, so even an app that needs all 12 testers can receive them from creators alone; pure testers add buffer on top. Each creator tests as many apps as their own app receives (FR-32).
 2. **Link:** paste the cohort's WhatsApp sub-group link (§6.12).
 3. **Start (Day 0):** all closed tracks must be live. Starting the cohort generates assignments (§6.9) and opens the 48-hour opt-in window.
 4. **Run:** members complete milestones (§6.10). The daily digest email and the admin's WhatsApp reminders keep people on schedule (§6.11).
@@ -219,7 +224,7 @@ For members without an app, or between their own apps, who want to help and earn
 ### 6.4 Progress indicators (per app)
 
 - **FR-15** Active testers: `X / slots` with progress bar. No "Kurang N" chip — the count already conveys how many seats remain. A full app still accepts testers, as a buffer against drop-outs; the detail page says "kursi penuh".
-- **FR-16** Eligible testers (Active and ≥14 days): `Y / slots` with progress bar. An app with fewer than 12 slots shows "Target TesBareng: S tester. Sisanya (12 − S) dari luar komunitas, dilaporkan sendiri oleh kreator." on its detail page.
+- **FR-16** Eligible testers (Active and ≥14 days): `Y / slots` with progress bar. An app with fewer than 12 slots shows "Target TesBareng: S tester. Sisanya (12 − S) dari luar komunitas, dilaporkan sendiri oleh creator." on its detail page.
 - **FR-17** Days since test start: `Z / 14` (if test start date is set).
 - **FR-17a** Feedback: active testers with feedback sent / verified, e.g. `9 sent · 7 verified`.
 - **FR-17b** Builds shipped during test: `N / 3` (a guideline, not a Google rule).
@@ -278,6 +283,8 @@ Feedback itself lives in Google Play. TesBareng tracks engagement around it.
 
 - **FR-29** Admin creates a cohort with a name. Cohort status: **Forming → Active → Closed**.
 - **FR-30** While Forming, the admin adds creators, each with one app they own (one app per member per cohort). An app can be in only one non-closed cohort at a time. Pure testers add themselves (FR-33a).
+- **FR-30a** While a cohort is Forming, a member who is not in it and not Owing may request to bring one of their own apps (not deleted, not in another non-closed cohort). A member has at most one pending request at a time and may withdraw it. A pending request closes on its own when the cohort leaves Forming (expired), when the member joins that cohort by any route, or when the app is deleted.
+- **FR-30b** The admin approves a request (same checks as FR-30; the creator is added with that app) or rejects it with an optional reason (max 280 chars) that the member sees. The admin can still add a creator directly without a request.
 - **FR-31** Starting a cohort requires at least 13 apps and sets Day 0 to the start time.
 - **FR-32** **Assignment rule (give what you take, ADR-012 amending ADR-007).** Members with apps are shuffled into a random order. With N apps, app *i* gets a cohort demand **kᵢ = min(slotsᵢ + 2, N − 1)**, fixed at Day 0. Its creator tests exactly kᵢ apps, and the app receives exactly kᵢ assigned creator testers; never their own app, never twice.
   - **All kᵢ equal → ring:** the member at position *i* tests the apps at positions *i+1 … i+k* (wrapping around). With every app at 12 slots this is k = 14, or N − 1 when N ≤ 15.
@@ -325,7 +332,7 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
   | Day 13 | Still-opted-in check-in |
   | Any day | New builds logged in the last 24 hours on apps the member tests |
 
-  Creators also get: unreplied verified feedback older than 3 days, and "Your app reached 12 eligible testers".
+  Creators also get: unreplied verified feedback older than 3 days, and "Your app reached 12 eligible testers". Admins also get: pending cohort app requests, per Forming cohort, every day until decided (FR-30a). On email-list apps (ADR-011), creators get members still waiting to be added to the Play Console list, every day until marked added; the member gets one item when they are marked added and have not joined yet.
 - **FR-46** Members can turn digest emails off in Tugas saya (on by default). Every email links to that setting.
 - **FR-47** Each sent reminder is logged; the same reminder is never sent twice to the same member on the same day.
 - **FR-48** **WhatsApp reminder panel (admin):** for each active cohort, lists Behind members by display name and milestone, with a ready-to-copy Indonesian message mentioning them, e.g. "Halo @Budi @Sari, deadline opt-in Cohort #3 hari ini jam 19.00. Cek tugasmu di TesBareng: ". The admin pastes it into the cohort group manually.
@@ -369,6 +376,8 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 | Tick "Feedback sent" + summary (own entry) | ❌ | ❌ | ✅ | ❌ | ✅ (moderation) |
 | Join a cohort as pure tester (Forming, or Active ≤ Day 7) | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Leave a cohort as pure tester (Forming only) | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Request / withdraw bringing own app into a Forming cohort | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Approve / reject a cohort app request | ❌ | ❌ | ❌ | ❌ | ✅ |
 | Check in (own entry) | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Set Verified / Replied | ❌ | ❌ | ❌ | ✅ | ✅ |
 | Edit feedback guide, add build log | ❌ | ❌ | ❌ | ✅ | ✅ |
@@ -462,6 +471,12 @@ assignments                   -- public read
 cohort_links                  -- RLS: select only by cohort members + admin
   cohort_id pk → cohorts, whatsapp_group_url
 
+cohort_requests               -- RLS: select own + admin (ADR-013)
+  id uuid pk, cohort_id → cohorts, user_id → profiles, app_id → apps,
+  status ('pending' | 'approved' | 'rejected' | 'withdrawn' | 'expired'),
+  reason text null (≤ 280, rejected only), created_at, decided_at, decided_by → profiles
+  unique (user_id) where status = 'pending'
+
 reminder_log                  -- no client access (service role only)
   id uuid pk, user_id, kind, ref_id uuid null, sent_on date, created_at
   unique (user_id, kind, ref_id, sent_on)
@@ -507,6 +522,10 @@ Days active per tester stays a client calculation.
 | `join_cohort_as_tester(cohort_id)` | Member | Cohort Forming, or Active and ≤ Day 7; not already a member; not Owing; if Active, assign 14 apps by lowest coverage and set `assigned_at` |
 | `add_cohort_member(cohort_id, user_id, app_id?)` | Admin | Cohort Forming; app owned by user and not in another open cohort; user not Owing |
 | `remove_cohort_member(cohort_id, user_id)` | Admin | Cohort Forming only |
+| `request_cohort_slot(cohort_id, app_id)` | Creator | Cohort Forming; own app, not deleted, not in an open cohort; not a member; not Owing; no other pending request |
+| `withdraw_cohort_request(request_id)` | Creator | Own pending request |
+| `approve_cohort_request(request_id)` | Admin | Pending; then as `add_cohort_member` |
+| `reject_cohort_request(request_id, reason?)` | Admin | Pending; reason trimmed, ≤ 280, empty → null |
 | `leave_cohort(cohort_id)` | Pure tester | Own membership, no app in the cohort; cohort Forming only |
 | `start_cohort(cohort_id)` | Admin | ≥ 13 apps; shuffle; set each `demand`; generate assignments per FR-32/33; set `day0_at` |
 | `reassign_slot(assignment_id, to_user_id)` | Admin | Target is a cohort member with all assignments fulfilled |

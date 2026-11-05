@@ -8,27 +8,8 @@
 .lp .theme-light { --rule: var(--bw) solid var(--ink); --rule-in: 2px solid var(--ink); color: var(--ink); }
 .lp h2 { font-size: var(--t-h1); text-wrap: balance; }
 .lp h3 { font-size: var(--t-h2); line-height: 1.1; }
-.lp .dim { color: var(--muted); }
 html.lp-smooth { scroll-behavior: smooth; }
-html:has(.lp) { scroll-padding-top: calc(var(--hh, 72px) + 12px); }
 
-/* ---------- Mobile menu sheet ---------- */
-.lp .nav-sheet { position: absolute; left: 0; right: 0; top: 100%; display: grid; max-height: calc(100svh - var(--hh, 72px)); overflow: auto; background: var(--kertas); border-block: var(--rule); box-shadow: 0 var(--sh) 0 0 var(--ink); }
-.lp .nav-sheet[hidden] { display: none; }
-.lp .nav-sheet a { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 16px var(--gutter); font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-h2); line-height: 1; text-decoration: none; border-bottom: 2px solid var(--ink); }
-.lp .nav-sheet a:last-of-type { border-bottom: 0; }
-.lp .nav-sheet a::after { content: "→"; content: "→" / ""; font-family: var(--font-mono); font-size: var(--t-small); }
-.lp .nav-sheet a.active, .lp .nav-sheet a:active { background: var(--kunyit); color: var(--on-fill); }
-@media (hover: hover) and (pointer: fine) { .lp .nav-sheet a:hover { background: var(--kunyit); color: var(--on-fill); } }
-.lp .sheet-theme { display: none; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 56px; padding: 16px var(--gutter); font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: var(--t-h2); line-height: 1; color: inherit; text-align: left; background: none; border: 0; border-top: 2px solid var(--ink); cursor: pointer; }
-.lp .sheet-theme small { margin-left: 8px; font-size: var(--t-label); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-stretch: 100%; }
-.lp .sheet-theme svg { width: 22px; height: 22px; flex: none; }
-@media (max-width: 520px) { .lp .sheet-theme { display: flex; } }
-@media (min-width: 1101px) { .lp .nav-sheet { display: none !important; } }
-.lp.fx .nav-sheet:not([hidden]) { animation: lp-sheet 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.lp.fx .theme-btn svg { animation: lp-spin-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1); }
-@keyframes lp-sheet { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 -16px 0); } }
-@keyframes lp-spin-in { from { transform: rotate(-90deg) scale(0.6); opacity: 0; } }
 html.theme-anim .lp, html.theme-anim .lp * { transition: background-color 260ms ease, color 260ms ease, border-color 260ms ease !important; }
 
 /* ---------- Ring (the signature moment) ---------- */
@@ -238,14 +219,7 @@ html.theme-anim .lp, html.theme-anim .lp * { transition: background-color 260ms 
 .lp .faq .ans { max-width: 62ch; padding: 0 22px 22px calc(22px + 3.4em + 16px); font-size: var(--t-small); color: var(--muted); }
 .lp .faq-more { margin-top: 24px; font-size: var(--t-small); font-weight: 700; }
 
-/* ---------- Footer, back to top, toast ---------- */
-.lp-foot { padding-block: 40px 28px; }
-.lp .foot-word { margin: 0 0 28px; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 900; font-size: clamp(40px, 10vw, 144px); line-height: 0.8; letter-spacing: -0.03em; white-space: nowrap; transition: color 200ms var(--ease); }
-@media (hover: hover) and (pointer: fine) { .lp .foot-word:hover { color: var(--kunyit); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; } }
-.lp .foot-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-top: 16px; font-size: var(--t-caption); border-top: var(--rule); }
-.lp .foot-row > span { align-self: center; }
-.lp .foot-row nav { display: flex; flex-wrap: wrap; gap: 0 20px; font-weight: 700; }
-.lp .foot-row nav a { display: inline-flex; align-items: center; min-height: var(--target); text-decoration: underline; text-underline-offset: 4px; }
+/* ---------- Back to top, toast ---------- */
 
 .lp .totop { position: fixed; right: clamp(16px, 3vw, 28px); bottom: calc(clamp(16px, 3vw, 28px) + env(safe-area-inset-bottom, 0px)); z-index: 40; display: grid; place-items: center; width: 48px; height: 48px; font: 800 20px/1 var(--font-mono); color: var(--on-fill); background: var(--kunyit); border: var(--rule); border-radius: var(--r-sm); box-shadow: 4px 4px 0 var(--ink); cursor: pointer; opacity: 0; visibility: hidden; transform: translateY(12px); transition: opacity 180ms var(--ease), transform 180ms var(--ease), visibility 0s linear 180ms; }
 .lp .totop.show { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }

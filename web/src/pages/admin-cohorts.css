@@ -38,7 +38,7 @@
   display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 6px; vertical-align: -4px;
   border: var(--bw) solid var(--ink); background: var(--putih); color: var(--ink); font-size: var(--fs-caption); line-height: 1; font-weight: 800;
 }
-#ch-start-thin .ch-glyph { background: var(--cabai); }
+#ch-start-thin .ch-glyph { background: var(--cabai); color: var(--on-fill); }
 .ch-cand-why .ch-glyph { width: 18px; height: 18px; }
 
 .ch-progress { display: grid; gap: var(--s-2); margin-top: var(--s-4); padding-top: var(--s-3); border-top: var(--bw) solid var(--ink); }
@@ -107,7 +107,7 @@
 }
 .ch-opt input::after { content: ""; width: 10px; height: 10px; background: var(--ink); opacity: 0; }
 .ch-opt input:checked { background: var(--kunyit); }
-.ch-opt input:checked::after { opacity: 1; }
+.ch-opt input:checked::after { background: var(--on-fill); opacity: 1; }
 .ch-opt input:disabled { background: var(--surface-soft); border-color: var(--muted); }
 .ch-opts .hint.err { padding-top: var(--s-2); }
 
@@ -149,4 +149,12 @@
   .ch-member > .chip { margin-left: 44px; }
   .ch-member > .btn.sm { margin-left: 44px; }
   .ch-member > .chip + .btn.sm { margin-left: auto; }
+}
+
+/* ---------- ADR-013: pending requests ---------- */
+.ch-req-acts { display: flex; gap: var(--s-2); flex-wrap: wrap; justify-content: flex-end; }
+.ch-req .cell-2 > span { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .ch-req .ch-req-acts { margin-left: 44px; flex: 1 1 100%; justify-content: flex-start; }
+  .ch-req .ch-req-acts .btn { flex: 1 1 0; justify-content: center; }
 }

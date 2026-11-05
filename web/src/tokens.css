@@ -81,8 +81,8 @@
 }
 
 /* Dark mode (owner, 3 Nov 2026). Fills keep their hex and always carry --on-fill text.
-   Scoped with :has(.dark-ready): only surfaces that opt in go dark. The work surface sets ink text on colour
-   fills (e.g. .btn.primary), which would turn cream-on-turmeric in dark, so it does not opt in yet. */
+   Scoped with :has(.dark-ready): a surface opts in by rendering .dark-ready (story pages and the app shell).
+   Text, glyphs and ticks sitting ON a colour fill use --on-fill, never --ink, or they turn cream-on-colour in dark. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):has(.dark-ready) {
     --ink: #fff6e3;

@@ -12,7 +12,8 @@ import { usePageMeta } from '../lib/pageMeta'
 import { fmtDate, fmtDateTime } from '../lib/progress'
 import {
   CLOSE_DAY, cohortDay, fmtWib, joinCohortAsTester, joinDeadline, joinOpen, LAST_JOIN_DAY, leaveCohort, MIN_APPS, ownDay, schedule,
-  useCohort, useCohortLink, useOwingCohorts, useAssignmentStatus,
+  requestCohortSlot, useCohort, useCohortLink, useMyCohortRequest, useMyRequestableApps, useOwingCohorts, useAssignmentStatus, withdrawCohortRequest,
+  type CohortRequest,
   type CohortDetail as Cohort, type CohortMember, type CellState,
 } from '../lib/cohorts'
 import type { BadgeTier } from '../lib/types'
@@ -27,7 +28,7 @@ const isLate = (c: Cohort, m: CohortMember | undefined) =>
 const dueFmt = new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
 const longDay = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Jakarta' })
 
-type DialogKind = null | 'join' | 'whatsapp'
+type DialogKind = null | 'join' | 'whatsapp' | 'request'
 
 export function CohortDetail() {
   const { id } = useParams()
@@ -54,7 +55,39 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
   // Join and leave remove their own trigger: land on the page title (after the join dialog has closed).
   const title = useRef<HTMLHeadingElement>(null)
   const focusTitle = useFocusAfterClose(dialog !== null, title)
-  const done = () => { focusTitle(); refresh() }
+  // ADR-013: a member who is not in this Forming cohort may ask to bring one of their apps; the admin decides.
+  const forming = c.status === 'forming'
+  const reqUid = user && !me && forming ? user.uid : null
+  const myReq = useMyCohortRequest(c.id, reqUid)
+  const myApps = useMyRequestableApps(reqUid)
+  const pendingHere = myReq.data.pending?.cohortId === c.id ? myReq.data.pending : null
+  const pendingElsewhere = myReq.data.pending && !pendingHere ? myReq.data.pending : null
+  const rejected = !pendingHere && myReq.data.latestHere?.status === 'rejected' ? myReq.data.latestHere : null
+  const hasFreeApp = myApps.data.some((a) => a.inCohort == null)
+  const done = () => { focusTitle(); refresh(); myReq.refresh(); myApps.refresh() }
+
+  // Withdrawing is reversible (a new request is one tap), so like leaving it acts at once with "Urungkan" (ADR-009 §7).
+  const withdrawing = useRef(false)
+  const withdraw = async (r: CohortRequest) => {
+    if (withdrawing.current) return
+    withdrawing.current = true
+    try {
+      await withdrawCohortRequest(r.id)
+      title.current?.focus()
+      refresh(); myReq.refresh()
+      toast({
+        text: `Pengajuan ${r.appName} ke ${c.name} dibatalkan.`, duration: 8000,
+        action: {
+          label: 'Urungkan',
+          onClick: () => { requestCohortSlot(c.id, r.appId).then(() => { toast(`Pengajuan ${r.appName} diajukan kembali.`); refresh(); myReq.refresh() }, (e) => toast(failToast(e))) },
+        },
+      })
+    } catch (e) {
+      toast(failToast(e))
+    } finally {
+      withdrawing.current = false
+    }
+  }
 
   // ADR-009 §7 (owner decision 2026-11-03): leaving while Forming is reversible, so it acts at once and offers
   // "Urungkan" for 8 s instead of a confirm dialog. Undo re-joins through join_cohort_as_tester.
@@ -95,6 +128,12 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
       setDialog('join')
     } catch (e) { toast(failToast(e)) }
   }
+  const ask = async () => {
+    try {
+      if (!user) await signIn()
+      setDialog('request')
+    } catch (e) { toast(failToast(e)) }
+  }
 
   // ---------- actions (ADR-009 §1: one primary, up to two secondary, the rest behind "…") ----------
   const wa = link.data
@@ -121,14 +160,53 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
           <span>Anda masih Berutang di {owedIn.map((o, i) => <span key={o.cohortId}>{i > 0 && ', '}<Link className="link" to={`/cohorts/${o.cohortId}`}>{o.name}</Link></span>)}. Selesaikan kewajiban di sana, lalu minta admin menandai Lunas.</span>
         </span>
       )
+    } else if (forming && pendingHere) {
+      // Joining as a pure tester would close the request (database trigger), so offer the one next step only.
+      note = 'Admin akan menyetujui atau menolak. Mau gabung sebagai tester murni? Batalkan pengajuan dulu.'
     } else {
-      primary = <button type="button" className="btn primary" onClick={join}>Gabung sebagai tester</button>
-      note = user
-        ? (c.status === 'active' && deadline != null ? `Pendaftaran tester murni dibuka sampai akhir Hari ${LAST_JOIN_DAY - 1}: ${fmtWib(deadline)}.` : null)
-        : 'Anda diminta masuk dengan Google dulu.'
+      // Members with a free app lead with "Ajukan app"; everyone else leads with joining as a tester (ADR-009 §1: one primary).
+      const askFirst = forming && hasFreeApp && !pendingElsewhere
+      const joinBtn = <button type="button" className={`btn${askFirst ? '' : ' primary'}`} onClick={join}>Gabung sebagai tester</button>
+      const askBtn = !forming ? null : pendingElsewhere ? (
+        <button type="button" className="btn" aria-disabled="true" aria-describedby="ask-why" onClick={(e) => e.preventDefault()}>Ajukan app</button>
+      ) : <button type="button" className={`btn${askFirst ? ' primary' : ''}`} onClick={ask}>Ajukan app</button>
+      primary = askFirst ? <>{askBtn}{joinBtn}</> : <>{joinBtn}{askBtn}</>
+      const creators = forming
+        ? (pendingElsewhere ? null : 'Punya aplikasi? Ajukan untuk ikut sebagai creator, lalu admin menyetujui atau menolak. Tanpa aplikasi, Anda bisa gabung sendiri sebagai tester murni.')
+        : null
+      const timing = c.status === 'active' && deadline != null ? `Pendaftaran tester murni dibuka sampai akhir Hari ${LAST_JOIN_DAY - 1}: ${fmtWib(deadline)}.` : null
+      const text = [creators, timing, user ? null : 'Anda diminta masuk dengan Google dulu.'].filter(Boolean).join(' ')
+      note = !text && !pendingElsewhere ? null : (
+        <>
+          {text}
+          {pendingElsewhere && (
+            <span id="ask-why">{text && <br />}Anda masih punya pengajuan yang menunggu di <Link className="link" to={`/cohorts/${pendingElsewhere.cohortId}`}>{pendingElsewhere.cohortName}</Link>. Satu pengajuan sekali waktu: batalkan di sana dulu untuk mengajukan ke cohort ini.</span>
+          )}
+        </>
+      )
     }
   } else if (c.status === 'active') {
     note = `Pendaftaran tester murni sudah ditutup${deadline != null ? ` ${fmtWib(deadline)}` : ''} (akhir Hari ${LAST_JOIN_DAY - 1}). Anda tetap bisa menguji aplikasi mana pun dari daftar aplikasi.`
+  }
+
+  // Request status: glyph + text, never colour alone. A rejection keeps the admin's reason and the way to ask again.
+  let reqBlock: React.ReactNode = null
+  if (pendingHere) {
+    reqBlock = (
+      <div className="rq-status" role="status">
+        <Chip tone="langit" glyph="◷">Menunggu admin</Chip>
+        <p className="rq-line"><b><Link className="link" to={`/apps/${pendingHere.appId}`}>{pendingHere.appName}</Link></b> <span className="num">diajukan {fmtDateTime(pendingHere.createdAt)}</span></p>
+        <button type="button" className="btn" onClick={() => { void withdraw(pendingHere) }}>Batalkan pengajuan<span className="sr-only"> {pendingHere.appName}</span></button>
+      </div>
+    )
+  } else if (rejected && !me && forming) {
+    reqBlock = (
+      <div className="rq-status" role="status">
+        <Chip glyph="×">Ditolak</Chip>
+        <p className="rq-line"><b><Link className="link" to={`/apps/${rejected.appId}`}>{rejected.appName}</Link></b> <span className="num">{fmtDateTime(rejected.decidedAt ?? rejected.createdAt)}</span></p>
+        <p className="rq-reason">{rejected.reason ? <>Alasan admin: {rejected.reason}</> : 'Admin menolak tanpa alasan.'} Anda bisa mengajukan lagi.</p>
+      </div>
+    )
   }
 
   return (
@@ -170,8 +248,9 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
           {c.status === 'closed' && <ClosedSummary c={c} day={day} />}
         </div>
 
-        {(primary || note || waButton || overflow.length > 0) && (
+        {(primary || note || reqBlock || waButton || overflow.length > 0) && (
           <div className="rh-actions">
+            {reqBlock}
             {primary}
             {(waButton || overflow.length > 0) && (
               <div className="rh-more">
@@ -192,6 +271,7 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
       </div>
 
       <JoinDialog open={dialog === 'join'} onClose={() => setDialog(null)} c={c} onDone={done} />
+      <RequestDialog open={dialog === 'request'} onClose={() => setDialog(null)} c={c} apps={myApps.data} loading={myApps.loading} onDone={done} />
       {wa && (
         <WhatsAppNotice
           open={dialog === 'whatsapp'} onClose={() => setDialog(null)} url={wa}
@@ -330,10 +410,10 @@ function Members({ c, creators, pure, badges, myUid }: {
         <span className="meta num">{c.members.length} orang</span>
       </header>
 
-      <h3 className="member-group num">Kreator dan aplikasinya · {creators.length}</h3>
+      <h3 className="member-group num">Creator dan aplikasinya · {creators.length}</h3>
       {creators.length === 0 ? (
-        <Empty title="Belum ada kreator.">
-          <p>Admin menambahkan kreator beserta aplikasinya. Cohort butuh minimal {MIN_APPS} aplikasi untuk mulai.</p>
+        <Empty title="Belum ada creator.">
+          <p>Admin menambahkan creator beserta aplikasinya. Cohort butuh minimal {MIN_APPS} aplikasi untuk mulai.</p>
         </Empty>
       ) : (
         <ul className="member-list">{creators.map((m) => <MemberRow key={m.userId} m={m} c={c} tier={badges.get(m.userId)} mine={m.userId === myUid} />)}</ul>
@@ -514,6 +594,75 @@ function JoinDialog({ open, onClose, c, onDone }: { open: boolean; onClose: () =
         <button type="button" className="btn" onClick={close}>Batal</button>
         <button type="button" className="btn primary" onClick={confirm} aria-busy={busy || undefined}>{busy ? 'Menyimpan…' : 'Gabung sebagai tester'}</button>
       </div>
+    </Dialog>
+  )
+}
+
+/** ADR-013: pick one live app, then ask. The server re-checks every rule; its error shows in the dialog. */
+function RequestDialog({ open, onClose, c, apps, loading, onDone }: {
+  open: boolean; onClose: () => void; c: Cohort; apps: { id: string; name: string; inCohort: string | null }[]; loading: boolean; onDone: () => void
+}) {
+  const toast = useToast()
+  const { busy, err, run, reset } = useBusy()
+  const free = apps.filter((a) => a.inCohort == null)
+  const [picked, setPicked] = useState('')
+  const [showErr, setShowErr] = useState(false)
+  const choice = picked || (free.length === 1 ? free[0].id : '')
+  const title = useRef<HTMLHeadingElement>(null)
+  const first = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const t = window.setTimeout(() => title.current?.focus(), 0)
+    return () => window.clearTimeout(t)
+  }, [open])
+  const close = () => { reset(); setShowErr(false); onClose() }
+  const choiceErr = !choice ? 'Pilih satu aplikasi yang Anda bawa.' : undefined
+  const firstFree = free[0]?.id
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (busy) return
+    if (choiceErr) { setShowErr(true); first.current?.focus(); return }
+    const app = apps.find((a) => a.id === choice)
+    run(() => requestCohortSlot(c.id, choice), () => {
+      toast(`${app?.name ?? 'Aplikasi'} diajukan ke ${c.name}. Admin akan menyetujui atau menolak.`)
+      setPicked(''); onClose(); onDone()
+    })
+  }
+  return (
+    <Dialog open={open} onClose={close} label={`Ajukan app ke ${c.name}`}>
+      <form onSubmit={submit} noValidate>
+        <div className="sheet-body">
+          <h2 ref={title} tabIndex={-1}>Ajukan app ke {c.name}</h2>
+          <p className="lede">Pilih satu aplikasi yang ingin Anda bawa. Admin menyetujui atau menolak; Anda melihat hasilnya di halaman ini. Hanya satu pengajuan yang bisa menunggu sekali waktu.</p>
+          {loading ? <Skel w={220} h={44} /> : apps.length === 0 ? (
+            <Empty title="Anda belum punya aplikasi.">
+              <p>Tambahkan aplikasi dulu, lalu ajukan. Tanpa aplikasi, Anda tetap bisa gabung sebagai tester murni.</p>
+              <Link className="btn" to="/apps/new">Tambah aplikasi</Link>
+            </Empty>
+          ) : (
+            <fieldset className="fieldset rq-opts" aria-describedby={showErr && choiceErr ? 'rq-err' : undefined}>
+              <legend>Aplikasi yang dibawa</legend>
+              {apps.map((a) => (
+                <label key={a.id} className={`rq-opt${a.inCohort != null ? ' off' : ''}`}>
+                  <input ref={a.id === firstFree ? first : undefined} type="radio" name="rq-app" value={a.id} checked={choice === a.id} disabled={a.inCohort != null}
+                    onChange={() => { setPicked(a.id); setShowErr(false) }} aria-describedby={a.inCohort != null ? `rq-${a.id}` : undefined} />
+                  <span className="cell-2">
+                    <b>{a.name}</b>
+                    {a.inCohort != null && <span id={`rq-${a.id}`}>Sudah di {a.inCohort || 'cohort lain yang belum ditutup'}.</span>}
+                  </span>
+                </label>
+              ))}
+              <span className={showErr && choiceErr ? 'hint err' : 'sr-only'} id="rq-err" aria-live="polite">{showErr ? choiceErr : ''}</span>
+              {free.length === 0 && <p className="small muted">Semua aplikasi Anda sudah ada di cohort yang belum ditutup. <Link className="link" to="/apps/new">Tambah aplikasi lain</Link>.</p>}
+            </fieldset>
+          )}
+          {err && <ErrorBox text={err} />}
+        </div>
+        <div className="sheet-foot">
+          <button type="button" className="btn" onClick={close}>Batal</button>
+          {free.length > 0 && <button className="btn primary" aria-busy={busy || undefined}>{busy ? 'Mengajukan…' : 'Ajukan ke admin'}</button>}
+        </div>
+      </form>
     </Dialog>
   )
 }

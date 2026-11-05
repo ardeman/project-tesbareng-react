@@ -1,11 +1,11 @@
-import { lazy, StrictMode, Suspense } from 'react'
+import { lazy, StrictMode, Suspense, useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useLocation, useNavigationType } from 'react-router-dom'
 import './tokens.css'
 import './styles.css'
 import { NotFound, ToastProvider } from './components/bits'
 import { Shell } from './components/Shell'
-import { AuthProvider } from './lib/auth'
+import { AuthProvider, useAuth } from './lib/auth'
 import { usePageMeta } from './lib/pageMeta'
 // Each screen loads on demand (the landing never pays for work screens) to keep the main chunk under 150 KB gzip (ADR-001 budget).
 const AppList = lazy(() => import('./pages/AppList').then((m) => ({ default: m.AppList })))
@@ -22,11 +22,12 @@ const Landing = lazy(() => import('./pages/Landing').then((m) => ({ default: m.L
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <ToastProvider>
           <Routes>
             <Route path="/" element={<Suspense fallback={null}><Landing /></Suspense>} />
-            <Route path="/about" element={<Suspense fallback={null}><About /></Suspense>} />
+            <Route path="/about" element={<AboutRoute />} />
             <Route path="*" element={
               <Shell>
                 <Suspense fallback={null}>
@@ -50,6 +51,39 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+// Signed-in members read the rules without leaving the app menu; visitors get the story page with its own header.
+// Wait for the session check (local, near-instant) so a member never sees the story header flash first.
+function AboutRoute() {
+  const { user, ready } = useAuth()
+  if (!ready) return null
+  const page = <Suspense fallback={null}><About embedded={!!user} /></Suspense>
+  return user ? <Shell>{page}</Shell> : page
+}
+
+// BrowserRouter keeps the old scroll position on a link click; start each new page at the top,
+// or at the #hash target (pages load lazily, so wait up to ~2 s for it to render).
+// Back/forward (POP) without a #hash keeps the browser's own behaviour.
+function ScrollToTop() {
+  const { pathname, hash } = useLocation()
+  const navType = useNavigationType()
+  useLayoutEffect(() => {
+    // A first load counts as POP too; with a #hash the browser cannot find a lazy page's target, so scroll to it here.
+    if (navType === 'POP' && !hash) return
+    if (!hash) { window.scrollTo(0, 0); return }
+    const id = decodeURIComponent(hash.slice(1))
+    let frame = 0
+    let tries = 0
+    const find = () => {
+      const el = document.getElementById(id)
+      if (el) el.scrollIntoView()
+      else if (++tries < 120) frame = requestAnimationFrame(find)
+    }
+    find()
+    return () => cancelAnimationFrame(frame)
+  }, [pathname, hash, navType])
+  return null
+}
 
 function NotFoundPage() {
   usePageMeta('Halaman tidak ditemukan')
