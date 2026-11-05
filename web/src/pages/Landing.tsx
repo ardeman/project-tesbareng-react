@@ -833,7 +833,7 @@ export function Landing() {
       <a className="lp-skip" href="#isi">Langsung ke isi</a>
 
       {/* Header: shared with /about (components/StoryChrome). Keep it in step with the static copy in web/index.html (same classes and text). */}
-      <StoryHeader page="home" signIn={signIn} active={active} headerRef={headerRef} fillRef={fillRef} brandRef={brandRef} onAnchor={(id) => goTo(id, true)} />
+      <StoryHeader page="home" signIn={signIn} active={active ?? undefined} headerRef={headerRef} fillRef={fillRef} brandRef={brandRef} onAnchor={(id) => goTo(id, true)} />
 
       <main id="isi">
         <section className="lp-wrap hero" aria-labelledby="hero-h">
