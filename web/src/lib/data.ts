@@ -507,6 +507,7 @@ export function updateTesterAsAdmin(t: TesterDoc, p: ModerationPatch) {
 /** ADR-009 §2: does this member have an open to-do (the same rules as Tugas saya)? Used once, right after sign-in. */
 export async function hasOpenTodos(uid: string, now = Date.now()): Promise<boolean> {
   const entries = (await rows<Row[]>(supabase.from('testers').select('*').eq('user_id', uid).eq('status', 'active'))).map(toTester)
+  if (await hasEmailListingTodo(uid)) return true
   if (entries.length === 0) return false
   const ids = entries.map((e) => e.appId)
   const [apps, stats] = await Promise.all([
@@ -521,4 +522,58 @@ export async function hasOpenTodos(uid: string, now = Date.now()): Promise<boole
     const b = lastBuild.get(e.appId)
     return b != null && now - b < 3 * 86_400_000 && b > (e.feedbackSentAt ?? e.optedInAt)
   })
+}
+
+/** ADR-011 part of hasOpenTodos: the same rules as useEmailListingTodos, as a yes/no. */
+async function hasEmailListingTodo(uid: string): Promise<boolean> {
+  const mineApps = await rows<Row[]>(supabase.from('apps').select('id').eq('creator_id', uid).eq('deleted', false).eq('tester_method', 'email_list'))
+  const appIds = mineApps.map((a) => a.id as string)
+  const [pend, mine] = await Promise.all([
+    appIds.length ? rows<Row[]>(supabase.from('email_listings').select('app_id, user_id').in('app_id', appIds).is('listed_at', null)) : Promise.resolve([] as Row[]),
+    rows<Row[]>(supabase.from('email_listings').select('app_id').eq('user_id', uid).not('listed_at', 'is', null)),
+  ])
+  const ids = [...new Set([...pend.map((r) => r.app_id as string), ...mine.map((r) => r.app_id as string)])]
+  if (ids.length === 0) return false
+  const entries = await rows<Row[]>(supabase.from('testers').select('app_id, user_id, status').in('app_id', ids))
+  const statusOf = new Map(entries.map((t) => [`${t.app_id as string}:${t.user_id as string}`, t.status as string]))
+  if (pend.some((r) => !['left', 'removed'].includes(statusOf.get(`${r.app_id as string}:${r.user_id as string}`) ?? ''))) return true
+  return mine.some((r) => !statusOf.has(`${r.app_id as string}:${uid}`))
+}
+
+/**
+ * ADR-011 items for Tugas saya, same rules as the digest (due_listing_reminders):
+ * `pending`: per creator app (email-list, live), requests not yet marked added; Left/Removed entries skipped.
+ * `listed`: the member's own requests marked added on apps they have not joined as tester yet (time to opt in).
+ * email_listings holds no addresses, so a plain select is fine (ADR-005).
+ */
+export const useEmailListingTodos = (uid: string | null | undefined, myEmailAppIds: string[]) => {
+  const key = [...myEmailAppIds].sort().join(',')
+  return useFetch(
+    uid
+      ? async () => {
+          const [pend, mine] = await Promise.all([
+            myEmailAppIds.length
+              ? rows<Row[]>(supabase.from('email_listings').select('app_id, user_id').in('app_id', myEmailAppIds).is('listed_at', null))
+              : Promise.resolve([] as Row[]),
+            rows<Row[]>(supabase.from('email_listings').select('app_id, listed_at').eq('user_id', uid).not('listed_at', 'is', null)),
+          ])
+          const appIds = [...new Set([...pend.map((r) => r.app_id as string), ...mine.map((r) => r.app_id as string)])]
+          const entries = appIds.length
+            ? await rows<Row[]>(supabase.from('testers').select('app_id, user_id, status').in('app_id', appIds))
+            : []
+          const statusOf = new Map(entries.map((t) => [`${t.app_id as string}:${t.user_id as string}`, t.status as string]))
+          const pending = new Map<string, number>()
+          for (const r of pend) {
+            const s = statusOf.get(`${r.app_id as string}:${r.user_id as string}`)
+            if (s === 'left' || s === 'removed') continue
+            pending.set(r.app_id, (pending.get(r.app_id) ?? 0) + 1)
+          }
+          const listed = mine
+            .filter((r) => !statusOf.has(`${r.app_id as string}:${uid}`))
+            .map((r) => ({ appId: r.app_id as string, listedAt: ms(r.listed_at)! }))
+          return { pending, listed }
+        }
+      : null,
+    { pending: new Map<string, number>(), listed: [] as { appId: string; listedAt: number }[] }, [uid, key],
+  )
 }

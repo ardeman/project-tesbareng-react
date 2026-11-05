@@ -5,12 +5,12 @@ import { IconPlus } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
-import { errorText, setEmailReminders, useApps, useAppsBy, useEntriesOf, usePublicProfile } from '../lib/data'
+import { errorText, setEmailReminders, useApps, useAppsBy, useEmailListingTodos, useEntriesOf, usePublicProfile } from '../lib/data'
 import { useMyAssignedApps, useMyObligations } from '../lib/cohorts'
 import { daysActive, isNewBuild, relDay, openSeats, TARGET_DAYS } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 
-interface Todo { entry?: TesterDoc; app: AppDoc; kind: 'join' | 'build' | 'feedback' }
+interface Todo { entry?: TesterDoc; app: AppDoc; kind: 'join' | 'listed' | 'emails' | 'build' | 'feedback'; count?: number }
 
 export function Me() {
   const { user, ready, signIn } = useAuth()
@@ -36,6 +36,8 @@ function MeSignedIn({ uid }: { uid: string }) {
   const profile = usePublicProfile(uid)
   const assignedApps = useMyAssignedApps(uid)
   const obligations = useMyObligations(uid)
+  const myEmailAppIds = useMemo(() => myApps.data.filter((a) => a.testerMethod === 'email_list').map((a) => a.id), [myApps.data])
+  const listings = useEmailListingTodos(uid, myEmailAppIds)
   const byId = useMemo(() => new Map(apps.data.map((a) => [a.id, a])), [apps.data])
   const loading = entries.loading || apps.loading
 
@@ -56,19 +58,28 @@ function MeSignedIn({ uid }: { uid: string }) {
         if (app) out.push({ app, kind: 'join' })
       }
     }
+    // ADR-011: the creator added my email, so I can opt in now; and creators' requests still to paste.
+    for (const { appId } of listings.data.listed) {
+      const app = byId.get(appId)
+      if (app && !out.some((t) => t.app.id === appId)) out.push({ app, kind: 'listed' })
+    }
+    for (const [appId, count] of listings.data.pending) {
+      const app = byId.get(appId)
+      if (app) out.push({ app, kind: 'emails', count })
+    }
     for (const { entry, app } of testing) {
       const since = entry.feedbackSentAt ?? entry.optedInAt
       if (isNewBuild(app) && app.lastBuildAt && app.lastBuildAt > since) out.push({ entry, app, kind: 'build' })
       else if (!entry.feedbackSent) out.push({ entry, app, kind: 'feedback' })
     }
-    const PRIORITY = { join: 0, build: 1, feedback: 2 } as const
+    const PRIORITY = { join: 0, listed: 0, emails: 1, build: 2, feedback: 3 } as const
     return out.sort((a, b) => {
       const pd = PRIORITY[a.kind] - PRIORITY[b.kind]
       if (pd !== 0) return pd
       if (a.entry && b.entry) return daysActive(b.entry) - daysActive(a.entry)
       return 0
     })
-  }, [testing, assignedApps.data, byId, entries.data])
+  }, [testing, assignedApps.data, byId, entries.data, listings.data])
 
   const suggestions = useMemo(() => {
     const mineIds = new Set(entries.data.map((e) => e.appId))
@@ -95,7 +106,8 @@ function MeSignedIn({ uid }: { uid: string }) {
   
     </>
   )
-  const unjoined = todos.filter((t) => t.kind === 'join').length
+  const unjoined = todos.filter((t) => t.kind === 'join' || t.kind === 'listed').length
+  const emailWait = todos.filter((t) => t.kind === 'emails').reduce((n, t) => n + (t.count ?? 0), 0)
   const owe = todos.filter((t) => t.kind === 'feedback').length
   const builds = todos.filter((t) => t.kind === 'build').length
   const p = profile.data
@@ -110,7 +122,7 @@ function MeSignedIn({ uid }: { uid: string }) {
           <p className="sub">
             {loading ? <Skel w={340} h={16} /> : todos.length === 0
               ? testing.length === 0 ? 'Anda belum menguji aplikasi apa pun.' : 'Tidak ada tugas tertunda. Semua aplikasi yang Anda uji sudah dapat feedback.'
-              : <><b>{[unjoined > 0 && `${unjoined} belum opt-in`, owe > 0 && `${owe} feedback belum dikirim`, builds > 0 && `${builds} build baru menunggu diuji ulang`].filter(Boolean).join(', ')}</b>.</>}
+              : <><b>{[unjoined > 0 && `${unjoined} belum opt-in`, owe > 0 && `${owe} feedback belum dikirim`, builds > 0 && `${builds} build baru menunggu diuji ulang`, emailWait > 0 && `${emailWait} email tester menunggu ditambahkan`].filter(Boolean).join(', ')}</b>.</>}
           </p>
         </div>
         <div className="actions"><Link className="btn" to="/apps">Cari aplikasi yang butuh tester</Link></div>
@@ -156,20 +168,24 @@ function MeSignedIn({ uid }: { uid: string }) {
                 : <Empty title="Beres, tidak ada tugas tertunda."><p>Cek lagi besok, atau bantu aplikasi lain yang masih butuh tester.</p></Empty>
             ) : (
               <ul>
-                {todos.slice(0, 4).map(({ entry, app, kind }, i) => (
-                  <li className="row-line" key={app.id}>
+                {todos.slice(0, 4).map(({ entry, app, kind, count }, i) => (
+                  <li className="row-line" key={`${kind}:${app.id}`}>
                     <span className="grow cell-2">
                       <Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
                       <span>
                         {kind === 'join'
                           ? 'Ditugaskan melalui cohort. Opt-in dalam batas 48 jam.'
+                          : kind === 'listed'
+                            ? 'Kreator sudah menambahkan email Anda di Play Console. Sekarang opt-in, lalu daftar sebagai tester.'
+                          : kind === 'emails'
+                            ? `${count} tester menunggu emailnya Anda tambahkan di Play Console.`
                           : kind === 'build'
                             ? `Build baru dirilis ${relDay(app.lastBuildAt)}. Perbarui dari Play Store lalu uji lagi.`
                             : `Hari ke-${daysActive(entry!)}. Feedback di Play belum Anda tandai terkirim.`}
                       </span>
                     </span>
                     <Link className={`btn sm${i === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
-                      {kind === 'join' ? 'Daftar sebagai tester' : kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}
+                      {kind === 'join' || kind === 'listed' ? 'Daftar sebagai tester' : kind === 'emails' ? 'Tambahkan email' : kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}
                     </Link>
                   </li>
                 ))}
