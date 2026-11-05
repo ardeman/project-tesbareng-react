@@ -103,7 +103,7 @@ Every commit uses [Conventional Commits](https://www.conventionalcommits.org): `
 
 - **Days active** = days from `opted_in_at` to today, or to `left_at` if Left. Computed on the client.
 - **Eligible** = status Active AND days active ≥ 14.
-- **Ready to apply** badge: eligible ≥ 12. **Low engagement** hint: fewer than half of eligible testers sent feedback, or no build logged.
+- **Ready to apply** badge: eligible ≥ the app's `tester_slots` (1–12, default 12; ADR-012). **Low engagement** hint: fewer than half of eligible testers sent feedback, or no build logged.
 - **Reciprocity Testing count:** Active entries + entries Left after 14+ days. Removed, Left before 14 days, and entries on deleted apps do not count.
 - **Badges** (PRD §6.7): based on apps tested to 14+ days active (Active with 14+ days, or Left after 14+ days; never Removed or deleted apps). Bronze ≥ 3, Silver ≥ 7, Gold ≥ 14, Platinum ≥ 25. Computed by a view, never stored. Badge names in Indonesian or English: PRD §17 Q11, open.
 - **Cohorts** (PRD §5.6–5.8, §6.9, ADR-007): members are Creators (bring one app) or Pure testers (no app; join themselves from Forming until Day 7). Testers are assigned by ring. Opt-in deadline 48 h after Day 0, then Behind / "Belum tes". Close when every app is Ready to apply or at Day 21; unmet obligations → Owing, blocked from the next cohort until admin settles.

@@ -49,7 +49,7 @@ Today every app is treated as needing 12. The list sorts it among apps that need
 - Cohorts already exist in the migrations (`start_cohort`, `join_cohort_as_tester` in `20261103000300_cohort_start_join.sql`), so a new migration (dated after ADR-011's `20261104000200`) replaces `start_cohort`. `close_cohort` (`20261103000600`) and `due_reminders` (`20261102000100`) hard-code `eligible_count >= 12` for "ready"; both switch to `>= tester_slots`. Tests must cover: every app receives exactly kᵢ, every creator tests exactly kᵢ, no self-assignment or duplicates, all-12 slots matching ADR-007 for N = 13–15 and N > 16, mixed slots (e.g. one app at 12, the rest at 1) at N = 13, and pure-tester balancing against kᵢ.
 - Reciprocity, badges and the Testing count are unchanged: they count apps a member tests, not slots.
 - `docs/contract.md`: `create_app` and `update_app` gain `p_tester_slots` (see Building on ADR-011); `apps` rows expose `tester_slots`.
-- PRD updates if accepted: FR-4 (new field), FR-18 (Ready to apply uses slots), §5.6–§5.8 and FR-31 (cohort demand kᵢ), §9 (column), §9.3 (RPC args).
+- PRD updates (done in PRD v2.4): FR-4 (new field), FR-18 (Ready to apply uses slots), §5.6–§5.8 and FR-31 (cohort demand kᵢ), §9 (column), §9.3 (RPC args).
 - Public numbers become less uniform: "9 / 12" on one app and "2 / 3" on another. The list shows the slot count on every row so this stays readable.
 
 ## Building on ADR-011 (email-list testing)

@@ -3,9 +3,9 @@
 |  |  |
 | --- | --- |
 | **Product** | TesBareng ("test together") |
-| **Version** | 2.3 |
+| **Version** | 2.4 |
 | **Status** | Draft |
-| **Last updated** | 4 November 2026 |
+| **Last updated** | 5 November 2026 |
 | **Owner** | Community Admin |
 | **Community group** | `google-tester-indonesia@googlegroups.com` |
 | **Stack** | Supabase (free plan) + Vercel |
@@ -13,6 +13,11 @@
 ---
 
 ## Changelog
+
+**v2.4 — 5 November 2026** — ADR-012 accepted 5 November 2026
+
+- **Tester slots** (§5.1, FR-4, FR-15–FR-18, FR-26): the creator says how many testers (1–12, default 12) the app needs from TesBareng; the rest come from their other Google Groups or lists, self-reported. Progress and Ready to apply use that number. A full app stays joinable.
+- **Cohorts: give what you take** (§5.6, FR-32, FR-33): each app's cohort demand is kᵢ = min(slots + 2, N − 1); its creator tests exactly kᵢ apps and the app receives exactly kᵢ creator testers. All-12 cohorts keep the ADR-007 ring.
 
 **v2.3 — 4 November 2026** — ADR-011 accepted 5 November 2026
 
@@ -89,7 +94,7 @@ A single user can be a Creator of their own app(s), a Tester of other apps and a
 
 1. Log in with Google.
 2. Click **Add App**.
-3. Fill in: app name, short description, Play Store opt-in link, optional Play Store listing link, optional package name, and a **feedback guide** (§6.5).
+3. Fill in: app name, short description, Play Store opt-in link, optional Play Store listing link, optional package name, a **feedback guide** (§6.5), and how many testers the app needs from TesBareng (1–12, default 12; FR-4).
 4. Choose how testers are added in Play Console (a closed track takes Google Groups **or** email lists, not both):
    - **Google Group** (default): confirm "I have added `google-tester-indonesia@googlegroups.com` as the tester list in my closed testing track."
    - **Email list**: no confirmation; testers ask to be added (§5.2a).
@@ -138,7 +143,7 @@ On their own app only, the creator can:
 
 ### 5.6 Run a cohort (Admin)
 
-1. **Form:** create a cohort (e.g. "Cohort #3") and add creators, each with the app they bring. Pure testers join on their own (§5.8). A cohort needs at least **13 apps**, so each app can receive at least 12 testers from creators alone; pure testers add buffer on top.
+1. **Form:** create a cohort (e.g. "Cohort #3") and add creators, each with the app they bring. Pure testers join on their own (§5.8). A cohort needs at least **13 apps**, so even an app that needs all 12 testers can receive them from creators alone; pure testers add buffer on top. Each creator tests as many apps as their own app receives (FR-32).
 2. **Link:** paste the cohort's WhatsApp sub-group link (§6.12).
 3. **Start (Day 0):** all closed tracks must be live. Starting the cohort generates assignments (§6.9) and opens the 48-hour opt-in window.
 4. **Run:** members complete milestones (§6.10). The daily digest email and the admin's WhatsApp reminders keep people on schedule (§6.11).
@@ -183,6 +188,7 @@ For members without an app, or between their own apps, who want to help and earn
   - Test start date (optional, set by creator when the closed track goes live)
   - Status: Recruiting → Testing → Applied for Production → Live (Production)
   - Feedback guide (optional, max 500 chars): focus areas written as prompts or questions, e.g. "Try level 3 on a small screen — is the jump button easy to hit?"
+  - Tester slots (required, 1–12, default 12): how many testers the app needs from TesBareng ("Butuh berapa tester dari TesBareng?"). Google needs 12 in total; the rest come from the creator's other groups or lists. Self-reported, not checked. Editable at any time (ADR-012).
 - **FR-5** Only the creator (and Admin) can edit or delete an app.
 - **FR-6** A member may create multiple apps, max 5 per rolling 24 hours.
 - **FR-7** Deleting an app soft-deletes it (hidden from lists, data retained). Only the admin can restore.
@@ -212,13 +218,13 @@ For members without an app, or between their own apps, who want to help and earn
 
 ### 6.4 Progress indicators (per app)
 
-- **FR-15** Active testers: `X / 12` with progress bar.
-- **FR-16** Eligible testers (Active and ≥14 days): `Y / 12` with progress bar.
+- **FR-15** Active testers: `X / slots` with progress bar, plus a "Kurang N" or "Kursi penuh" chip. A full app still accepts testers, as a buffer against drop-outs.
+- **FR-16** Eligible testers (Active and ≥14 days): `Y / slots` with progress bar. An app with fewer than 12 slots shows "Target TesBareng: S tester. Sisanya (12 − S) dari luar komunitas, dilaporkan sendiri oleh kreator." on its detail page.
 - **FR-17** Days since test start: `Z / 14` (if test start date is set).
 - **FR-17a** Feedback: active testers with feedback sent / verified, e.g. `9 sent · 7 verified`.
 - **FR-17b** Builds shipped during test: `N / 3` (a guideline, not a Google rule).
 - **FR-17c** Replies: testers replied to / testers with feedback.
-- **FR-18** A "Ready to apply" badge when eligible testers ≥ 12. A softer "Low engagement" hint shows if fewer than half of eligible testers have sent feedback, or no build has been logged.
+- **FR-18** A "Ready to apply" badge ("Siap ajukan") when eligible testers ≥ the app's tester slots (ADR-012). A softer "Low engagement" hint shows if fewer than half of eligible testers have sent feedback, or no build has been logged.
 - **FR-19** App list cards show active, eligible and feedback counts, status, cohort badge, and the "Belum tes" label when applicable.
 
 ### 6.5 Engagement tracking
@@ -234,7 +240,7 @@ Feedback itself lives in Google Play. TesBareng tracks engagement around it.
 ### 6.6 App discovery
 
 - **FR-25** Home page lists all apps with search by name and filter by status and cohort.
-- **FR-26** Default sort: apps needing testers most (lowest active count first).
+- **FR-26** Default sort: apps needing testers most (most open seats first, open seats = slots − active). A "Hampir penuh" sort shows the fewest open seats first, full apps last.
 
 ### 6.7 Reciprocity score
 
@@ -273,10 +279,11 @@ Feedback itself lives in Google Play. TesBareng tracks engagement around it.
 - **FR-29** Admin creates a cohort with a name. Cohort status: **Forming → Active → Closed**.
 - **FR-30** While Forming, the admin adds creators, each with one app they own (one app per member per cohort). An app can be in only one non-closed cohort at a time. Pure testers add themselves (FR-33a).
 - **FR-31** Starting a cohort requires at least 13 apps and sets Day 0 to the start time.
-- **FR-32** **Assignment rule.** Members with apps are shuffled into a random ring order. With N apps:
-  - **N = 13–16 → full mesh:** every member tests every other app (k = N − 1).
-  - **N > 16 → ring:** the member at position *i* tests the apps at positions *i+1 … i+14* (wrapping around), so k = 14. Every member tests exactly 14 apps and every app receives exactly 14 assigned testers.
-- **FR-33** Pure testers are each assigned 14 apps (or all apps if fewer), chosen to even out coverage: apps with the fewest assigned testers first. Pure testers present at Day 0 are assigned when the cohort starts; later joiners are assigned at the moment they join.
+- **FR-32** **Assignment rule (give what you take, ADR-012 amending ADR-007).** Members with apps are shuffled into a random order. With N apps, app *i* gets a cohort demand **kᵢ = min(slotsᵢ + 2, N − 1)**, fixed at Day 0. Its creator tests exactly kᵢ apps, and the app receives exactly kᵢ assigned creator testers; never their own app, never twice.
+  - **All kᵢ equal → ring:** the member at position *i* tests the apps at positions *i+1 … i+k* (wrapping around). With every app at 12 slots this is k = 14, or N − 1 when N ≤ 15.
+  - **Mixed kᵢ:** a degree-balanced assignment (ADR-012 §5). If no assignment exists for the given kᵢ, the smallest kᵢ is raised by one, repeatedly, until one does; every app still gets at least its demand.
+  - Changing an app's slots after Day 0 does not move assignments; it changes only its progress target and Ready-to-apply state.
+- **FR-33** Pure testers are each assigned 14 apps (or all apps if fewer), chosen to even out coverage: apps with the lowest coverage relative to their demand kᵢ first. Pure testers present at Day 0 are assigned when the cohort starts; later joiners are assigned at the moment they join.
 - **FR-33a** A member can join a cohort as a pure tester while it is Forming or Active up to Day 7, if they are not already in it and not Owing. Day 7 is the last join day so a pure tester can still reach 14 days before the Day 21 close. A pure tester may leave the cohort themselves only while it is Forming (owner decision 3 Nov 2026); after Day 0 only the admin moves their slots (FR-36).
 - **FR-33b** A pure tester's opt-in deadline is 48 hours from their own assignment time, not from Day 0. All later milestones (FR-42) use the same offset.
 - **FR-34** An assignment is **fulfilled** when the assigned member has an Active tester entry on that app. Joining uses the normal flow (§5.2).
@@ -408,6 +415,7 @@ profiles                      -- public read; never holds the full email
 apps                          -- public read where deleted = false; admin sees all
   id uuid pk, creator_id → profiles, name, description, opt_in_url,
   store_url?, package_name?, test_start_date?, feedback_guide?,
+  tester_slots smallint default 12 (1–12),
   status ('recruiting' | 'testing' | 'applied' | 'live'),
   group_confirmed bool, tester_method ('google_group' | 'email_list'),
   deleted bool default false, created_at, updated_at
@@ -441,7 +449,8 @@ cohorts                       -- public read
 cohort_members                -- public read
   cohort_id → cohorts, user_id → profiles, app_id uuid null → apps (null = pure tester),
   assigned_at?,                -- when this member's assignments were generated (FR-33b)
-  ring_position int?, standing ('good' | 'owing' | 'settled')?, settled_at?, joined_at
+  ring_position int?, demand smallint?,  -- kᵢ fixed at Day 0 (ADR-012); null for pure testers
+  standing ('good' | 'owing' | 'settled')?, settled_at?, joined_at
   pk (cohort_id, user_id)
 
 assignments                   -- public read
@@ -480,8 +489,8 @@ Days active per tester stays a client calculation.
 | RPC | Who | Must keep |
 | --- | --- | --- |
 | `ensure_profile()` | Signed-in user | Refresh name/photo from Google identity; mask email server-side |
-| `create_app(...)` | Member | FR-4 validation; `group_confirmed` true; unique non-deleted package name; 5 per rolling 24 h |
-| `update_app(app_id, ...)` | Creator, admin | Editable fields only; package uniqueness |
+| `create_app(..., p_tester_slots)` | Member | FR-4 validation; slots 1–12; `group_confirmed` true; unique non-deleted package name; 5 per rolling 24 h |
+| `update_app(app_id, ..., p_tester_slots)` | Creator, admin | Editable fields only; slots 1–12; package uniqueness |
 | `delete_app(app_id)` / `restore_app(app_id)` | Creator, admin / admin, or creator within 10 min | Soft delete; creator undo window 10 min (ADR-009 §7), then admin only |
 | `request_email_listing(app_id, consent)` / `cancel_email_listing(app_id)` | Member | Consent true; email-list app; not own app; not Removed |
 | `app_email_listings(app_id)` | Creator only | Full emails of members who asked and did not withdraw, leave or get removed |
@@ -499,9 +508,9 @@ Days active per tester stays a client calculation.
 | `add_cohort_member(cohort_id, user_id, app_id?)` | Admin | Cohort Forming; app owned by user and not in another open cohort; user not Owing |
 | `remove_cohort_member(cohort_id, user_id)` | Admin | Cohort Forming only |
 | `leave_cohort(cohort_id)` | Pure tester | Own membership, no app in the cohort; cohort Forming only |
-| `start_cohort(cohort_id)` | Admin | ≥ 13 apps; shuffle ring; generate assignments per FR-32/33; set `day0_at` |
+| `start_cohort(cohort_id)` | Admin | ≥ 13 apps; shuffle; set each `demand`; generate assignments per FR-32/33; set `day0_at` |
 | `reassign_slot(assignment_id, to_user_id)` | Admin | Target is a cohort member with all assignments fulfilled |
-| `close_cohort(cohort_id)` | Admin | Set standings from `cohort_obligations` |
+| `close_cohort(cohort_id)` | Admin | Ready = eligible ≥ `tester_slots`; set standings from `cohort_obligations` |
 | `settle_member(cohort_id, user_id)` | Admin | Owing → Settled |
 | `set_cohort_link(cohort_id, url)` | Admin | WhatsApp URL format |
 | `get_cohort_link(cohort_id)` | Cohort member, admin | Returns the link or `permission-denied` |
