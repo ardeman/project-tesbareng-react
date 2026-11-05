@@ -2,7 +2,7 @@
 
 |  |  |
 | --- | --- |
-| **Status** | **Proposed** (implemented on branch `feat/email-list-testers`, waiting for the owner's decision) |
+| **Status** | **Accepted** (5 November 2026; implemented and merged to `main` in PR #6) |
 | **Decider** | Community Admin |
 | **Date proposed** | 4 November 2026 |
 | **PRD ref** | PRD v2.3 §5.1, §5.2a, FR-14a–FR-14e, §7, §8.2, §9; answers part of §17 Q2 if accepted |

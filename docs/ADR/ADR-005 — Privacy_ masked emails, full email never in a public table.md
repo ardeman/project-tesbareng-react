@@ -6,7 +6,7 @@
 | **Decider** | Community Admin |
 | **Date decided** | 31 October 2026 (masking format); recorded as an ADR 2 November 2026 |
 | **PRD ref** | PRD v2.2 §8, §17 Q2. Also `CLAUDE.md` hard rules 1–2 |
-| **Amended by** | ADR-011 (Proposed): consent-based exception for email-list apps |
+| **Amended by** | ADR-011 (Accepted): consent-based exception for email-list apps |
 | **Code** | `public.mask_email()` and the `masked_email` check constraints in `supabase/migrations/20261101000000_schema.sql` |
 
 ---

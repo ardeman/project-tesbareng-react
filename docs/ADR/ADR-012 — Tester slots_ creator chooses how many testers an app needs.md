@@ -2,12 +2,12 @@
 
 |  |  |
 | --- | --- |
-| **Status** | **Proposed** (5 November 2026, waiting for the owner's decision; implemented on `feat/tester-slots` on 5 November 2026, migration `20261105000100_tester_slots.sql`) |
+| **Status** | **Accepted** (5 November 2026; implemented on `feat/tester-slots`, PR #8, migration `20261105000100_tester_slots.sql`) |
 | **Decider** | Community Admin |
 | **Date proposed** | 5 November 2026 |
 | **PRD ref** | PRD v2.3 (as amended by ADR-011) FR-4 (app fields), FR-18 (Ready to apply), §5.6–§5.8 and FR-29–FR-38a (cohorts), §9 (data model), §9.3 (`create_app` / `update_app` args) |
 | **Amends** | ADR-007 §1–§3 (every app gets the same k testers) |
-| **Builds on** | ADR-011 (Proposed). This ADR continues from ADR-011's schema and is implemented after it; see "Building on ADR-011" |
+| **Builds on** | ADR-011 (Accepted). This ADR continues from ADR-011's schema and is implemented after it; see "Building on ADR-011" |
 
 ---
 
@@ -54,7 +54,7 @@ Today every app is treated as needing 12. The list sorts it among apps that need
 
 ## Building on ADR-011 (email-list testing)
 
-ADR-011 is Proposed and implemented on branch `feat/email-list-testers`. This ADR continues from it: ADR-011 is reviewed and merged first, and this ADR is implemented on top of its schema and web changes.
+ADR-011 is Accepted and merged to `main` (PR #6). This ADR is implemented on top of its schema and web changes.
 
 - **Shared signatures.** ADR-011 recreates `create_app` (9 args, last `p_tester_method text default 'google_group'`) and `update_app` (10 args, last `p_tester_method text default null`). This ADR's migration drops exactly those signatures and recreates them with one more argument: `p_tester_slots smallint default 12` on `create_app`, `p_tester_slots smallint default null` (unchanged) on `update_app`. Out of 1–12 → `invalid-argument` (also enforced by the column check). All of ADR-011's logic in both functions (tester method, group confirmation, the unlock trigger) stays as is. The add-app and Edit app forms save both fields in one call.
 - **Other database objects do not overlap.** ADR-011 replaces `join_as_tester`, `cohort_assignment_status` and `due_cohort_reminders`. This ADR replaces `start_cohort`, `close_cohort` and `due_reminders`, and adds a column to `apps`. Its migration is dated after `20261104000200`.

@@ -3,7 +3,7 @@
 |  |  |
 | --- | --- |
 | **Product** | TesBareng ("test together") |
-| **Version** | 2.3 (draft) |
+| **Version** | 2.3 |
 | **Status** | Draft |
 | **Last updated** | 4 November 2026 |
 | **Owner** | Community Admin |
@@ -14,7 +14,7 @@
 
 ## Changelog
 
-**v2.3 (draft) — 4 November 2026** — pending the owner's decision on ADR-011 (Proposed)
+**v2.3 — 4 November 2026** — ADR-011 accepted 5 November 2026
 
 - **Email-list testing** (§5.1, §5.2a, FR-14a–FR-14e): an app whose closed track uses a Play Console email list (which cannot be combined with Google Groups) can take community testers. The tester consents to share their Google-account email with that app's creator only; the creator pastes it into Play Console and marks it added. Cohort deadlines for these apps start when the creator marks the tester added.
 
@@ -202,7 +202,7 @@ For members without an app, or between their own apps, who want to help and earn
 - **FR-13** A creator cannot register as a tester on their own app.
 - **FR-14** The table is sortable by name, opt-in date and days active.
 
-**Email-list apps** (ADR-011, Proposed):
+**Email-list apps** (ADR-011):
 
 - **FR-14a** Each app has a tester method, **Google Group** (default) or **Email list**, chosen on the app form and editable later.
 - **FR-14b** On an email-list app, a member asks to be added with explicit consent that the app's creator sees their full Google-account email. Not on own app; not when Removed. Asking twice is harmless.
@@ -387,7 +387,7 @@ Daily attendance on 14 apps would mean 14 taps per person per day and invites ca
 - The full email is read from `auth.users` only inside `security definer` functions (for masking) and by the reminder Edge Function using the service role (for sending).
 - Manually added testers: the email is masked inside the RPC and the original is discarded.
 - Creators don't need full emails because testers are managed through the shared Google Group in Play Console.
-- **Exception (ADR-011, Proposed):** on an email-list app, the creator sees the full Google-account email of members who consented, read live from `auth.users` by `app_email_listings()`. No table stores it; withdrawing, leaving or being removed hides it again.
+- **Exception (ADR-011):** on an email-list app, the creator sees the full Google-account email of members who consented, read live from `auth.users` by `app_email_listings()`. No table stores it; withdrawing, leaving or being removed hides it again.
 
 ### 8.3 Other personal data
 
@@ -721,7 +721,7 @@ The app style is already dealt (`.taste-skill/app`, accent ladder) and the About
 ## 17. Open Questions
 
 1. Should there be a cap on apps per creator overall? (Within a cohort it is one app per member.)
-2. Should creators see full emails of their own testers to cross-check with Play Console, or is masked-only acceptable? *(ADR-011, Proposed, covers only email-list apps with the tester's consent; the general question stays open.)*
+2. Should creators see full emails of their own testers to cross-check with Play Console, or is masked-only acceptable? *(ADR-011, accepted, covers only email-list apps with the tester's consent; the general question stays open.)*
 3. Should Left/Removed testers stay visible in the public table or collapse into a history section?
 4. Should the 3-build target be a community rule, or just a guideline shown in progress?
 5. Should creators who leave verified feedback unreplied for a long time be flagged publicly?
