@@ -244,7 +244,10 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
     const need = p.target - p.active
     text = `Butuh ${need} tester aktif lagi.` + (soonest != null ? ` Tester terlama lulus 14 hari ${inDays(soonest)}.` : ' Belum ada yang mendaftar.')
   } else {
-    text = `Kursi sudah terisi; tinggal ${p.target - p.eligible} tester lagi lulus 14 hari` + (soonest != null ? `, paling cepat ${inDays(soonest)}.` : '.')
+    // Ready only when the target-th most senior tester reaches 14 days, not the next one to pass.
+    const last = p.seats[p.target - 1]
+    text = `Kursi sudah terisi; tinggal ${p.target - p.eligible} tester lagi lulus 14 hari.` +
+      (last ? ` Siap ajukan paling cepat ${inDays(TARGET_DAYS - last.days)}, jika ${p.target} tester teratas tetap aktif.` : '')
   }
   return (
     <div className="finding">
