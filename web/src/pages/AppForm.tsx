@@ -59,6 +59,7 @@ function Form({ existing }: { existing?: AppDoc }) {
   const [group, setGroup] = useState(false)
   const [method, setMethod] = useState<TesterMethod>(existing?.testerMethod ?? 'google_group')
   const [slots, setSlots] = useState<number>(existing?.testerSlots ?? TARGET_TESTERS)
+  const groupStep = creating && method === 'google_group'
   // Email list unlocks after testing others (the database enforces it too). An app already on it keeps it.
   const { user } = useAuth()
   const creatorStats = usePublicProfile(existing ? existing.creatorUid : user?.uid)
@@ -234,7 +235,7 @@ function Form({ existing }: { existing?: AppDoc }) {
             </select>
             <span className="hint" id="f-slots-hint">Google butuh {TARGET_TESTERS} tester total selama 14 hari. Kalau sebagian sudah ada dari grup atau daftar Anda yang lain, isi sisanya saja.{existing && ' Mengubahnya tidak memindahkan penugasan cohort yang sudah berjalan.'}</span>
           </div>
-          <fieldset style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }} aria-describedby="f-method-hint">
+          <fieldset style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }} aria-describedby={groupStep ? undefined : 'f-method-hint'}>
             <legend className="sr-only">Cara tester ditambahkan</legend>
             <label className="check">
               <input type="radio" name="tester-method" value="google_group" checked={method === 'google_group'} onChange={() => setMethod('google_group')} />
@@ -249,13 +250,14 @@ function Form({ existing }: { existing?: AppDoc }) {
                   <span className="d lock" id="f-email-lock">
                     {creatorStats.data === undefined
                       ? 'Memeriksa jumlah aplikasi yang Anda tes…'
-                      : <>🔒 Terbuka setelah Anda menguji <span className="num">{EMAIL_LIST_MIN_TESTING}</span> aplikasi anggota lain (sekarang <span className="num">{testingCount}</span>). <Link to="/apps">Cari aplikasi untuk dites</Link></>}
+                      : <>Terkunci. Terbuka setelah Anda menguji <span className="num">{EMAIL_LIST_MIN_TESTING}</span> aplikasi anggota lain (sekarang <span className="num">{testingCount}</span>). <Link to="/apps">Cari aplikasi untuk dites</Link></>}
                   </span>
                 )}</span>
             </label>
-            <span className="hint" id="f-method-hint">Play Console → Uji tertutup → Penguji.</span>
+            {/* The group checkbox below carries the full Play Console path; say it once. */}
+            {!groupStep && <span className="hint" id="f-method-hint">Play Console → Uji tertutup → Penguji.</span>}
           </fieldset>
-          {creating && method === 'google_group' && (
+          {groupStep && (
             <label className="check" style={{ padding: 0 }}>
               <input id="f-groupConfirmed" type="checkbox" checked={group} onChange={(e) => setGroup(e.target.checked)} onBlur={blur('groupConfirmed')} aria-describedby={`f-group-hint${errors.groupConfirmed ? ' f-groupConfirmed-err' : ''}`} aria-invalid={!!errors.groupConfirmed || undefined} />
               <span><span className="t">Saya sudah menambahkan {COMMUNITY_GROUP} sebagai daftar penguji di jalur uji tertutup.</span>
