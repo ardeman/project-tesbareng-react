@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { usePageMeta } from '../lib/pageMeta'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../lib/auth'
+import { StoryHeader, StoryFooter, useSignIn } from '../components/StoryChrome'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import './about.css'
 
@@ -165,25 +165,87 @@ const RULES: { group: string; items: { t: string; d: string }[] }[] = [
   },
 ]
 
-export function About() {
-  usePageMeta(TITLE, DESCRIPTION)
-  const { user } = useAuth()
+const readHh = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hh')) || 72
+
+/** Floating section strip: one scrollable row, shown once the 5x2 grid has scrolled away. Scroll-spy sets the current item. */
+function TocStrip({ gridRef }: { gridRef: React.RefObject<HTMLElement | null> }) {
+  const [shown, setShown] = useState(false)
+  const [active, setActive] = useState<string | null>(null)
+  const listRef = useRef<HTMLOListElement>(null)
+  // Header height (--hh) changes when the header wraps or the viewport rotates; re-create the observers when it does.
+  const [hh, setHh] = useState(readHh)
+  useEffect(() => {
+    let frame = 0
+    const onResize = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => setHh(readHh())) }
+    window.addEventListener('resize', onResize)
+    return () => { window.removeEventListener('resize', onResize); cancelAnimationFrame(frame) }
+  }, [])
+
+  useEffect(() => {
+    const grid = gridRef.current
+    if (!grid || !('IntersectionObserver' in window)) return
+    const io = new IntersectionObserver(
+      ([e]) => setShown(!e.isIntersecting && e.boundingClientRect.bottom < hh + 1),
+      { rootMargin: `-${hh}px 0px 0px 0px` },
+    )
+    io.observe(grid)
+    return () => io.disconnect()
+  }, [gridRef, hh])
+
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) return
+    const seen = new Set<string>()
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) e.isIntersecting ? seen.add(e.target.id) : seen.delete(e.target.id)
+        const cur = TOC.find((x) => seen.has(x.id))
+        if (cur) setActive(cur.id)
+      },
+      { rootMargin: `-${hh + 48 + 8}px 0px -60% 0px` },
+    )
+    TOC.forEach((x) => { const el = document.getElementById(x.id); if (el) io.observe(el) })
+    return () => io.disconnect()
+  }, [hh])
+
+  // Keep the current item visible inside the strip by moving the strip only, never the page.
+  // Setting scrollLeft is instant, so it needs no reduced-motion branch.
+  useEffect(() => {
+    const list = listRef.current
+    const el = active ? list?.querySelector<HTMLElement>(`[aria-current]`) : null
+    if (!list || !el) return
+    const l = el.offsetLeft, r = l + el.offsetWidth
+    if (l < list.scrollLeft) list.scrollLeft = l - 8
+    else if (r > list.scrollLeft + list.clientWidth) list.scrollLeft = r - list.clientWidth + 8
+  }, [active, shown])
 
   return (
-    <div className="ab surface-story">
+    <nav className="ab-strip" aria-label="Bagian halaman" hidden={!shown ? true : undefined}>
+      <ol ref={listRef}>
+        {TOC.map((x, i) => (
+          <li key={x.id}>
+            <a href={`#${x.id}`} aria-current={active === x.id ? 'location' : undefined}>
+              <span className="ab-toc-n num">{String(i + 1).padStart(2, '0')}</span>{x.label}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  )
+}
+
+export function About() {
+  usePageMeta(TITLE, DESCRIPTION)
+  const signIn = useSignIn()
+  const gridRef = useRef<HTMLElement>(null)
+
+  return (
+    <div className="ab surface-story dark-ready">
       <a className="ab-skip" href="#isi">Langsung ke isi</a>
 
-      <header className="ab-top">
-        <div className="ab-wrap ab-top-row">
-          <Link to="/" className="ab-brand" aria-label="TesBareng, beranda"><span className="ab-brand-box" aria-hidden="true" />TesBareng</Link>
-          <nav className="ab-nav" aria-label="Utama">
-            {user ? <Link to="/apps">Daftar app</Link> : <Link to="/">Beranda</Link>}
-            <Link className="ab-btn ab-btn--sm" to={user ? '/me' : '/apps'}>{user ? 'Tugas saya' : 'Daftar app'}</Link>
-          </nav>
-        </div>
-      </header>
+      <StoryHeader page="about" signIn={signIn} />
 
       <main id="isi">
+        <TocStrip gridRef={gridRef} />
         <div className="ab-wrap ab-hero">
           <p className="ab-label"><b>Aturan main</b>TesBareng</p>
           <h1>Cara kerja, tanpa basa‑basi.</h1>
@@ -191,7 +253,7 @@ export function About() {
             Semua aturan komunitas di satu halaman: syarat dari Google, cara ngetes, cohort, titik cek, badge dan privasi.
             Melihat-lihat tidak perlu masuk; ikut ngetes perlu akun Google.
           </p>
-          <nav className="ab-toc" aria-label="Di halaman ini">
+          <nav className="ab-toc" aria-label="Di halaman ini" ref={gridRef}>
             <ol>
               {TOC.map((x, i) => (
                 <li key={x.id}><a href={`#${x.id}`}><span className="ab-toc-n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>{x.label}</a></li>
@@ -360,14 +422,7 @@ export function About() {
         </section>
       </main>
 
-      <footer className="ab-wrap ab-foot">
-        <span>Komunitas creator Android Indonesia. Bukan layanan resmi Google.</span>
-        <nav aria-label="Kaki halaman">
-          <Link to="/">Beranda</Link>
-          <Link to="/apps">Daftar app</Link>
-          <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Google Group<span className="sr-only"> (tab baru)</span></a>
-        </nav>
-      </footer>
+      <StoryFooter page="about" />
     </div>
   )
 }
