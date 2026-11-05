@@ -2,7 +2,7 @@
 
 |  |  |
 | --- | --- |
-| **Status** | **Accepted** (5 November 2026, owner decision; database and digest on `feat/cohort-app-requests`, migration `20261105000200_cohort_requests.sql`; UI pending) |
+| **Status** | **Accepted** (5 November 2026, owner decision; implemented on `feat/cohort-app-requests`: migration `20261105000200_cohort_requests.sql`, digest, cohort page, admin panel and Tugas saya) |
 | **Decider** | Community Admin |
 | **Date proposed** | 5 November 2026 |
 | **PRD ref** | PRD v2.5 §5.6, FR-30, FR-30a, FR-30b, FR-45 (digest), §7 (permissions), §9 (data model), §9.3 (RPCs) |
@@ -27,4 +27,4 @@ Until now only the admin could put a creator and their app into a cohort (`add_c
 
 - The cohort page needs a "bring my app" action for a signed-in member with an app, showing the status of their request (pending / rejected with reason). The admin cohort panel needs a pending-requests list with approve and reject.
 - The status values `approved`, `rejected`, `withdrawn` and `expired` remain as history; nothing else reads them yet.
-- Admins with digests on get one more kind of item; with digests off they see requests only in the admin panel.
+- Admins with digests on get one more kind of item; with digests off they see requests in the admin panel and on Tugas saya.
