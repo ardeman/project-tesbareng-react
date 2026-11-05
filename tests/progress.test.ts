@@ -99,10 +99,15 @@ describe("computeProgress", () => {
     expect(computeProgress(app(), [], [], NOW).lowEngagement).toBe(false);
   });
 
-  it("counts builds from the test start date (one day of slack) and the test day", () => {
+  it("counts builds from the test start date (one day of slack)", () => {
     const p = computeProgress(app({ testStartDate: daysAgo(5) }), [], [build(1), build(5), build(6), build(9)], NOW);
     expect(p.builds).toBe(3);
-    expect(p.testDay).toBe(5);
+  });
+
+  it("test day: 0 until every slot is filled, then days of the slot-th tester", () => {
+    const two = [tester({ optedInAt: daysAgo(9) }), tester({ optedInAt: daysAgo(4) })];
+    expect(computeProgress(app({ testerSlots: 3, testStartDate: daysAgo(4) }), two, [], NOW).testDay).toBe(0);
+    expect(computeProgress(app({ testerSlots: 2 }), two, [], NOW).testDay).toBe(4);
   });
 
   it("seats are sorted by days active, most first", () => {

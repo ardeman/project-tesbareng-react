@@ -565,8 +565,9 @@ function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean 
       </div>
       <div className="kpi">
         <div className="kpi-label">Hari uji</div>
-        <div className="kpi-value num">{p.testDay == null ? <span className="dash">—</span> : v(<>{p.testDay}<small> / {TARGET_DAYS}</small></>)}</div>
-        {p.testDay == null ? <p className="note">Tanggal mulai uji belum diisi kreator.</p> : <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(p.testDay, TARGET_DAYS)} max={TARGET_DAYS} label="Hari uji" /></div>}
+        <div className="kpi-value num">{v(<>{p.testDay}<small> / {TARGET_DAYS}</small></>)}</div>
+        <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(p.testDay, TARGET_DAYS)} max={TARGET_DAYS} label="Hari uji" /></div>
+        {p.active < p.target && <p className="note num">Mulai dihitung saat {p.target} tester aktif</p>}
       </div>
       <div className="kpi">
         <div className="kpi-label">Feedback di Play</div>

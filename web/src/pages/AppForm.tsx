@@ -193,7 +193,7 @@ function Form({ existing }: { existing?: AppDoc }) {
       </section>
 
       <section className="form-section">
-        <div className="label-col"><h2>Pengujian</h2><p>Isi tanggal mulai saat jalur uji tertutup Anda aktif, supaya hitungan hari uji tampil.</p></div>
+        <div className="label-col"><h2>Pengujian</h2><p>Isi tanggal mulai saat jalur uji tertutup Anda aktif. Build sejak tanggal ini dihitung sebagai build selama uji.</p></div>
         <div className="form-panel">
           {field('testStartDate', 'Tanggal mulai uji (opsional)', <input className="input" type="date" value={v.testStartDate} onChange={set('testStartDate')} {...aria('testStartDate')} />)}
           {!creating && (
