@@ -2,7 +2,7 @@
 
 |  |  |
 | --- | --- |
-| **Status** | **Proposed** (5 November 2026, waiting for the owner's decision; not implemented) |
+| **Status** | **Proposed** (5 November 2026, waiting for the owner's decision; implemented on `feat/tester-slots` on 5 November 2026, migration `20261105000100_tester_slots.sql`) |
 | **Decider** | Community Admin |
 | **Date proposed** | 5 November 2026 |
 | **PRD ref** | PRD v2.3 (as amended by ADR-011) FR-4 (app fields), FR-18 (Ready to apply), §5.6–§5.8 and FR-29–FR-38a (cohorts), §9 (data model), §9.3 (`create_app` / `update_app` args) |
@@ -25,12 +25,14 @@ Today every app is treated as needing 12. The list sorts it among apps that need
 4. **The target becomes the slot count.** Wherever the code uses `TARGET_TESTERS` (12) for an app's progress, it uses that app's `tester_slots` instead: the seat strip, "X / slots", "Butuh N tester lagi", and **Ready to apply = eligible ≥ tester_slots** (amends FR-18). An app with fewer than 12 slots shows a line on its detail page: "Target TesBareng: S tester. Sisanya (12 − S) dari luar komunitas, dilaporkan sendiri oleh kreator."
 5. **Cohorts: give what you take.** At `start_cohort` (Day 0), each creator app *i* gets a cohort demand **kᵢ = min(slotsᵢ + 2, N − 1)**, where +2 is the same drop-out buffer that ADR-007's 14 gives over 12. The creator of app *i* then **tests exactly kᵢ apps**, and app *i* **receives exactly kᵢ** assigned creator testers. Total testing given equals total testing received, so the "nobody gets testers without testing back" rule holds, and a creator who needs 3 tests 5 apps, not 14.
    - Generation: shuffle the members, then build the assignment with a degree-balanced greedy (Kleitman–Wang for directed graphs: repeatedly take the member with the most remaining out-degree and assign them to the apps with the most remaining in-degree, never themselves and never twice). It runs inside `start_cohort`, and assignments stay rows (ADR-007 §7).
+   - **When every kᵢ is equal**, the assignment is ADR-007's ring (member i tests i+1 … i+k), so all-equal cohorts look exactly as before.
+   - **When no assignment exists for the kᵢ**, the smallest kᵢ is raised by one, repeatedly (never above N − 1), until one does. Example: N = 13 with four apps at 12 slots (k = 12) and nine at 1 slot (k = 3). Each big app needs all 12 other members, so each small creator must test at least 4 apps. Raising keeps give = take exact and gives every app at least its demand; small creators test (and receive) a little more. The final kᵢ is stored in `cohort_members.demand` (an input snapshot, not a counter). Added during implementation (5 November 2026); the alternatives were lowering the largest kᵢ (big apps short of testers) or refusing to start.
    - If every app has 12 slots, kᵢ = 14 (or N − 1 when N ≤ 15), which is today's behaviour except at N = 16, where ADR-007's full mesh gives 15. That one case is accepted.
    - `cohort_members.ring_position` stays as the shuffle order. With unequal kᵢ, the assignment is no longer a strict ring, so the signature ring visual (ADR-001 §4) draws the actual assignments in that order instead of i+1…i+k arcs.
-   - **Pure testers** are unchanged: 14 apps each, lowest coverage relative to kᵢ first.
+   - **Pure testers** are unchanged: 14 apps each, lowest coverage relative to kᵢ first (open assignments ÷ `demand`).
    - **Minimum cohort size** stays 13 apps (owner decision A).
    - Changing `tester_slots` after Day 0 does **not** move existing assignments; it changes only the app's progress target and Ready-to-apply state.
-6. **List page.** A "Kurang N" / "Kursi penuh" chip next to "X / slots" (glyph plus text), and a sort option **"Hampir penuh"** (fewest open seats first, full apps last).
+6. **List page.** A "Kurang N" / "Kursi penuh" chip next to "X / slots" (glyph plus text), and a sort option **"Hampir penuh"** (fewest open seats first, full apps last). The default sort "Paling butuh tester" now orders by open seats (most first) instead of fewest active testers, and the "Butuh tester sekarang" suggestions on Tugas saya do the same.
 
 ## Alternatives considered
 

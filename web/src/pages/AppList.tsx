@@ -6,12 +6,12 @@ import { IconPlus, IconSearch } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, useApps, useEntriesOf } from '../lib/data'
-import { appStatusLabel, daysActive, relDay, TARGET_TESTERS } from '../lib/progress'
+import { appStatusLabel, daysActive, openSeats, relDay } from '../lib/progress'
 import { useAppCohorts, useBelumTesApps, useCohorts, useMyAssignedApps, type AppCohort, type CohortStatus } from '../lib/cohorts'
 import type { AppDoc, AppStatus, TesterDoc } from '../lib/types'
 
 type Tab = 'all' | AppStatus
-type Sort = 'need' | 'creator' | 'new'
+type Sort = 'need' | 'full' | 'creator' | 'new'
 const TABS: Tab[] = ['all', 'recruiting', 'testing', 'applied', 'live']
 const STILL_TESTING: AppStatus[] = ['recruiting', 'testing']
 
@@ -100,12 +100,17 @@ export function AppList() {
     return list.sort((a, b) => {
       if (sort === 'creator') return (b.app.creatorTestingCount ?? 0) - (a.app.creatorTestingCount ?? 0) || a.app.activeTesterCount - b.app.activeTesterCount
       if (sort === 'new') return created(b) - created(a)
-      return still(a) - still(b) || a.app.activeTesterCount - b.app.activeTesterCount || created(b) - created(a)
+      // ADR-012 §6 "Hampir penuh": fewest open seats first, full apps last.
+      if (sort === 'full') {
+        const open = (r: Row) => openSeats(r.app)
+        return still(a) - still(b) || Number(open(a) <= 0) - Number(open(b) <= 0) || open(a) - open(b) || created(b) - created(a)
+      }
+      return still(a) - still(b) || openSeats(b.app) - openSeats(a.app) || a.app.activeTesterCount - b.app.activeTesterCount || created(b) - created(a)
     })
   }, [base, tab, q, sort])
 
-  const short = rows.filter((r) => STILL_TESTING.includes(r.app.status) && r.app.activeTesterCount < TARGET_TESTERS).length
-  const ready = rows.filter((r) => r.eligible >= TARGET_TESTERS && r.app.status !== 'live').length
+  const short = rows.filter((r) => STILL_TESTING.includes(r.app.status) && openSeats(r.app) > 0).length
+  const ready = rows.filter((r) => r.eligible >= r.app.testerSlots && r.app.status !== 'live').length
   // A linked ?cohort= or ?ditugaskan=1 view waits for its data instead of flashing the unfiltered list.
   const loading = apps.loading || (!!cohortParam && cohortLoading) || (mineParam && !!user && assigned.loading)
 
@@ -144,7 +149,7 @@ export function AppList() {
           {(loading || rows.length > 0) && (
             <p className="sub">
               {loading ? <Skel w={360} h={16} /> : (
-                <><b>{short} dari {rows.length} aplikasi</b> masih kurang dari 12 tester aktif{ready > 0 && <>; {ready} sudah siap ajukan produksi</>}.</>
+                <><b>{short} dari {rows.length} aplikasi</b> masih butuh tester{ready > 0 && <>; {ready} sudah siap ajukan produksi</>}.</>
               )}
             </p>
           )}
@@ -211,6 +216,7 @@ export function AppList() {
           <label className="sr-only" htmlFor="sort">Urutkan</label>
           <select id="sort" className="input" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
             <option value="need">Paling butuh tester</option>
+            <option value="full">Hampir penuh</option>
             <option value="creator">Kreator paling aktif</option>
             <option value="new">Terbaru</option>
           </select>
@@ -285,11 +291,21 @@ function MineChips({ own, mine }: Pick<Row, 'own' | 'mine'>) {
   return <Chip glyph="●" className="mine">Anda menguji<span className="num"> · {daysActive(mine)} hari</span></Chip>
 }
 
+/** ADR-012 §6: open seats against the app's slots. Full stays joinable, so the chip only informs. */
+function SlotChip({ app }: { app: AppDoc }) {
+  if (!STILL_TESTING.includes(app.status)) return null
+  const open = openSeats(app)
+  return open > 0
+    ? <Chip glyph="○" className="num">Kurang {open}</Chip>
+    : <Chip glyph="✓" className="num">Kursi penuh</Chip>
+}
+
 function SeatCell({ app, eligible }: Row) {
   return (
     <span className="seat-cell">
-      <Seats active={app.activeTesterCount} eligible={eligible} />
-      <span className="seat-count num">{app.activeTesterCount}<small> / {TARGET_TESTERS}</small></span>
+      <Seats active={app.activeTesterCount} eligible={eligible} total={app.testerSlots} />
+      <span className="seat-count num">{app.activeTesterCount}<small> / {app.testerSlots}</small></span>
+      <SlotChip app={app} />
     </span>
   )
 }
@@ -317,7 +333,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
         <span className="md-show">Kreatornya menguji {c.t} aplikasi <Badge tier={app.creatorBadgeTier} size="sm" /></span>
       </td>
       <td className="cell-2"><SeatCell app={app} eligible={eligible} /><span className="md-show">{eligible} lewat 14 hari</span></td>
-      <td className="num md-hide"><b>{eligible}</b><span className="of"> / {TARGET_TESTERS}</span></td>
+      <td className="num md-hide"><b>{eligible}</b><span className="of"> / {app.testerSlots}</span></td>
       <td className="num">
         {app.feedbackSentCount === 0 ? <span className="dash">0</span> : <><b>{app.feedbackSentCount}</b><span className="muted"> · {app.feedbackVerifiedCount} terverifikasi</span></>}
       </td>
@@ -338,9 +354,10 @@ function PhoneRow({ row }: { row: Row }) {
   return (
     <Link to={`/apps/${app.id}`} className="mrow">
       <span className="l1">{app.name}</span>
-      <span className="r1 num">{app.activeTesterCount}<span className="of"> / {TARGET_TESTERS}</span></span>
+      <span className="r1 num">{app.activeTesterCount}<span className="of"> / {app.testerSlots}</span></span>
       <span className="l2">
-        <Seats active={app.activeTesterCount} eligible={eligible} />
+        <Seats active={app.activeTesterCount} eligible={eligible} total={app.testerSlots} />
+        <SlotChip app={app} />
         <span>{eligible} lewat 14 hari</span>
         <span>feedback {app.feedbackSentCount}</span>
       </span>

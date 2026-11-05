@@ -14,15 +14,15 @@ export function BoardLegend() {
   )
 }
 
-/** The 12 × 14 board: twelve seats down, fourteen days across, ruled like a sheet.
+/** The slots × 14 board (12 by default, ADR-012): one seat per slot down, fourteen days across, ruled like a sheet.
  *  A full pandan row is a tester Google counts; the tail repeats it as "✓ 14 hari". */
-export function Board({ seats, loading }: { seats: Seat[]; loading: boolean }) {
-  const top = seats.slice(0, TARGET_TESTERS)
-  const empty = Math.max(0, TARGET_TESTERS - top.length)
+export function Board({ seats, loading, total = TARGET_TESTERS }: { seats: Seat[]; loading: boolean; total?: number }) {
+  const top = seats.slice(0, total)
+  const empty = Math.max(0, total - top.length)
   const days = Array.from({ length: TARGET_DAYS }, (_, i) => i)
   return (
     <figure>
-      <div className="board" role="list" aria-label="Papan 12 kursi tester dan 14 hari">
+      <div className="board" role="list" aria-label={`Papan ${total} kursi tester dan 14 hari`}>
         {top.map((s, i) => (
           <div key={s.tester.id} role="listitem" className={`board-row ${s.eligible ? 'eligible' : ''}`}
             aria-label={`${s.tester.displayName}: ${s.days} hari${s.eligible ? ', lulus 14 hari' : ''}`}>
@@ -50,8 +50,8 @@ export function Board({ seats, loading }: { seats: Seat[]; loading: boolean }) {
         <div><span>hari 1</span><span>7</span><span>14</span></div>
         <span />
       </div>
-      {seats.length > TARGET_TESTERS && (
-        <figcaption className="board-more num">{seats.length - TARGET_TESTERS} tester aktif lain ada di tabel di bawah.</figcaption>
+      {seats.length > total && (
+        <figcaption className="board-more num">{seats.length - total} tester aktif lain ada di tabel di bawah.</figcaption>
       )}
     </figure>
   )

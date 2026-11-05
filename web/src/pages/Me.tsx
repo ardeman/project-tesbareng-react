@@ -7,7 +7,7 @@ import { COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, setEmailReminders, useApps, useAppsBy, useEntriesOf, usePublicProfile } from '../lib/data'
 import { useMyAssignedApps, useMyObligations } from '../lib/cohorts'
-import { daysActive, isNewBuild, relDay, TARGET_DAYS, TARGET_TESTERS } from '../lib/progress'
+import { daysActive, isNewBuild, relDay, openSeats, TARGET_DAYS } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 
 interface Todo { entry?: TesterDoc; app: AppDoc; kind: 'join' | 'build' | 'feedback' }
@@ -73,8 +73,8 @@ function MeSignedIn({ uid }: { uid: string }) {
   const suggestions = useMemo(() => {
     const mineIds = new Set(entries.data.map((e) => e.appId))
     return apps.data
-      .filter((a) => (a.status === 'recruiting' || a.status === 'testing') && a.creatorUid !== uid && !mineIds.has(a.id) && a.activeTesterCount < TARGET_TESTERS)
-      .sort((a, b) => a.activeTesterCount - b.activeTesterCount)
+      .filter((a) => (a.status === 'recruiting' || a.status === 'testing') && a.creatorUid !== uid && !mineIds.has(a.id) && openSeats(a) > 0)
+      .sort((a, b) => openSeats(b) - openSeats(a))
       .slice(0, 3)
   }, [apps.data, entries.data, uid])
 
@@ -86,8 +86,8 @@ function MeSignedIn({ uid }: { uid: string }) {
                   {suggestions.map((a) => (
                     <li className="row-line" key={a.id}>
                       <span className="grow cell-2"><Link to={`/apps/${a.id}`}><b>{a.name}</b></Link><span>{a.creatorName}</span></span>
-                      <Seats active={a.activeTesterCount} eligible={a.eligibleCount} className="hide-sm" />
-                      <span className="num w-num">{a.activeTesterCount}<span className="of"> / {TARGET_TESTERS}</span></span>
+                      <Seats active={a.activeTesterCount} eligible={a.eligibleCount} total={a.testerSlots} className="hide-sm" />
+                      <span className="num w-num">{a.activeTesterCount}<span className="of"> / {a.testerSlots}</span></span>
                     </li>
                   ))}
                 </ul>
@@ -234,8 +234,8 @@ function MeSignedIn({ uid }: { uid: string }) {
                   {myApps.data.map((a) => (
                     <li className="row-line" key={a.id}>
                       <span className="grow cell-2"><Link to={`/apps/${a.id}`}><b>{a.name}</b></Link><span style={{ marginTop: 'var(--s-1)' }}><StatusPill status={a.status} /></span></span>
-                      <Seats active={a.activeTesterCount} eligible={a.eligibleCount} className="hide-sm" />
-                      <span className="num w-num">{a.activeTesterCount}<span className="of"> / {TARGET_TESTERS}</span></span>
+                      <Seats active={a.activeTesterCount} eligible={a.eligibleCount} total={a.testerSlots} className="hide-sm" />
+                      <span className="num w-num">{a.activeTesterCount}<span className="of"> / {a.testerSlots}</span></span>
                     </li>
                   ))}
                 </ul>

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { appStatusLabel, fmtDateTime, initial, relDay, relTime, TARGET_DAYS, TARGET_TESTERS, testerStatusLabel } from '../lib/progress'
 import { IconClose, IconExternal, IconMore } from './icons'
@@ -55,12 +55,12 @@ export function FeedbackChip({ t, className }: { t: Pick<TesterDoc, 'feedbackSen
 
 // ---------- progress: counted cells, not a smooth bar ----------
 
-/** Twelve seats: eligible (≥14 days) pandan, active langit, empty white. */
-export function Seats({ active, eligible, label, className }: { active: number; eligible: number; label?: string; className?: string }) {
+/** One cell per tester slot (12 by default, ADR-012): eligible (≥14 days) pandan, active langit, empty white. */
+export function Seats({ active, eligible, total = TARGET_TESTERS, label, className }: { active: number; eligible: number; total?: number; label?: string; className?: string }) {
   return (
-    <span className={`seats ${className ?? ''}`} role="img" aria-label={label ?? `${active} dari ${TARGET_TESTERS} tester aktif, ${eligible} sudah 14 hari`}>
-      {Array.from({ length: TARGET_TESTERS }, (_, i) => (
-        <i key={i} className={i < Math.min(eligible, TARGET_TESTERS) ? 'full' : i < Math.min(active, TARGET_TESTERS) ? 'on' : ''} />
+    <span className={`seats ${className ?? ''}`} style={{ '--n': total } as CSSProperties} role="img" aria-label={label ?? `${active} dari ${total} tester aktif, ${eligible} sudah 14 hari`}>
+      {Array.from({ length: total }, (_, i) => (
+        <i key={i} className={i < Math.min(eligible, total) ? 'full' : i < Math.min(active, total) ? 'on' : ''} />
       ))}
     </span>
   )

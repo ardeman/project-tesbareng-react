@@ -124,10 +124,10 @@ export function AppDetail() {
       <div className="grid">
         <section className="panel span-8" aria-labelledby="board-h">
           <header>
-            <h2 id="board-h">Menuju 12 tester × 14 hari</h2>
+            <h2 id="board-h" className="num">Menuju {progress.target} tester × 14 hari</h2>
             <BoardLegend />
           </header>
-          {testers.error ? <ErrorBox text="Daftar tester gagal dimuat. Coba lagi sebentar lagi." onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} />}
+          {testers.error ? <ErrorBox text="Daftar tester gagal dimuat. Coba lagi sebentar lagi." onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} total={progress.target} />}
         </section>
 
         <aside className="span-4 col-fill">
@@ -162,7 +162,7 @@ export function AppDetail() {
   )
 }
 
-// ---------- header zone: name, status, 12-seat progress, the role's actions (ADR-009 §4) ----------
+// ---------- header zone: name, status, slot progress (ADR-012), the role's actions (ADR-009 §4) ----------
 
 function ActionButton({ a, primary, small }: { a: Action; primary?: boolean; small?: boolean }) {
   const cls = `btn ${primary ? 'primary' : ''} ${small ? 'sm' : ''}`
@@ -188,8 +188,8 @@ function RecordHead({ app, p, loading, actions, assigned }: {
     io.observe(el)
     return () => io.disconnect()
   }, [])
-  const count = loading ? <Skel w={56} h={24} /> : <><b>{p.eligible}</b><small> / {TARGET_TESTERS}</small></>
-  const seatsLabel = `${p.eligible} dari ${TARGET_TESTERS} tester sudah 14 hari, ${p.active} aktif`
+  const count = loading ? <Skel w={56} h={24} /> : <><b>{p.eligible}</b><small> / {p.target}</small></>
+  const seatsLabel = `${p.eligible} dari ${p.target} tester sudah 14 hari, ${p.active} aktif`
   return (
     <>
       <header ref={head} className="record-head">
@@ -211,8 +211,8 @@ function RecordHead({ app, p, loading, actions, assigned }: {
         </div>
         <div className="rh-progress">
           <p className="rh-count num">{count}<span className="rh-label">tester lulus 14 hari</span></p>
-          <Seats active={p.active} eligible={p.eligible} className="wide" label={seatsLabel} />
-          <p className="rh-sub num">{p.active} aktif dari {TARGET_TESTERS} kursi</p>
+          <Seats active={p.active} eligible={p.eligible} total={p.target} className="wide" label={seatsLabel} />
+          <p className="rh-sub num">{p.active >= p.target ? `${p.active} aktif · kursi penuh (${p.target})` : `${p.active} aktif dari ${p.target} kursi`}</p>
         </div>
         <div className="rh-actions">
           {actions.primary && <ActionButton a={actions.primary} primary />}
@@ -227,7 +227,7 @@ function RecordHead({ app, p, loading, actions, assigned }: {
       </header>
       <div className={`record-bar ${stuck ? 'show' : ''}`} inert={!stuck} aria-hidden={!stuck}>
         <span className="rb-name">{app.name}</span>
-        <span className="rb-count num"><b>{p.eligible}</b> / {TARGET_TESTERS}<span className="sr-only"> tester lulus 14 hari</span></span>
+        <span className="rb-count num"><b>{p.eligible}</b> / {p.target}<span className="sr-only"> tester lulus 14 hari</span></span>
         {actions.primary && <ActionButton a={actions.primary} primary small />}
       </div>
     </>
@@ -240,15 +240,18 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
   let text: string
   if (app.status === 'live') text = `Sudah rilis produksi. ${p.active} tester masih tercatat aktif.`
   else if (p.ready) text = `Siap ajukan akses produksi: ${p.eligible} tester sudah 14 hari berturut-turut.`
-  else if (p.active < TARGET_TESTERS) {
-    const need = TARGET_TESTERS - p.active
+  else if (p.active < p.target) {
+    const need = p.target - p.active
     text = `Butuh ${need} tester aktif lagi.` + (soonest != null ? ` Tester terlama lulus 14 hari ${inDays(soonest)}.` : ' Belum ada yang mendaftar.')
   } else {
-    text = `Kursi sudah terisi; tinggal ${TARGET_TESTERS - p.eligible} tester lagi lulus 14 hari` + (soonest != null ? `, paling cepat ${inDays(soonest)}.` : '.')
+    text = `Kursi sudah terisi; tinggal ${p.target - p.eligible} tester lagi lulus 14 hari` + (soonest != null ? `, paling cepat ${inDays(soonest)}.` : '.')
   }
   return (
     <div className="finding">
       <p className="verdict num">{text}</p>
+      {p.target < TARGET_TESTERS && (
+        <p className="muted small num">Target TesBareng: {p.target} tester. Sisanya ({TARGET_TESTERS - p.target}) dari luar komunitas, dilaporkan sendiri oleh kreator.</p>
+      )}
       <p className="desc">{description}</p>
       {p.lowEngagement && app.status !== 'live' && (
         <p className="flag">
@@ -550,8 +553,8 @@ function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean 
     <section className="kpis span-12" aria-label="Ringkasan keterlibatan">
       <div className="kpi">
         <div className="kpi-label">Tester aktif</div>
-        <div className="kpi-value num">{v(<>{p.active}<small> / {TARGET_TESTERS}</small></>)}</div>
-        <div style={{ marginTop: 'var(--s-2)' }}><Bar value={p.active} max={TARGET_TESTERS} label="Tester aktif" /></div>
+        <div className="kpi-value num">{v(<>{p.active}<small> / {p.target}</small></>)}</div>
+        <div style={{ marginTop: 'var(--s-2)' }}><Bar value={p.active} max={p.target} label="Tester aktif" /></div>
       </div>
       <div className="kpi">
         <div className="kpi-label">Hari uji</div>

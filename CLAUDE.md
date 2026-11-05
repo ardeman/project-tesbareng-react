@@ -31,7 +31,7 @@ Precedence and conflicts:
 | 009 | Work surface UX: the "B2B" rules | Accepted (2026-11-02) |
 | 010 | Story surface UX: the "B2C" rules | Accepted (2026-11-02) |
 | 011 | Email-list testing: tester shares email with the creator by consent | **Proposed** (2026-11-04, implemented, merged in #6 on 2026-11-05) |
-| 012 | Tester slots: creator chooses how many testers an app needs (amends 007, builds on 011) | **Proposed** (2026-11-05, not implemented) |
+| 012 | Tester slots: creator chooses how many testers an app needs (amends 007, builds on 011) | **Proposed** (2026-11-05, implemented on `feat/tester-slots`, PR #8) |
 
 ## UI work
 

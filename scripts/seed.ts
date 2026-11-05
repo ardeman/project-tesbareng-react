@@ -138,6 +138,8 @@ interface TesterSpec {
 }
 
 interface AppSpec {
+  /** ADR-012 tester slots (default 12) */
+  testerSlots?: number;
   id: string;
   creator: string;
   name: string;
@@ -230,6 +232,7 @@ const APPS: AppSpec[] = [
     id: "kasirku-warung",
     creator: "dewi",
     name: "KasirKu – Kasir Warung",
+    testerSlots: 4,
     packageName: "id.dewianggraini.kasirwarung",
     description:
       "Aplikasi kasir sederhana untuk warung kelontong: scan barcode pakai kamera, catat utang pelanggan, dan lihat barang yang hampir habis. Data tersimpan di HP, bisa backup ke Google Drive.",
@@ -257,6 +260,7 @@ const APPS: AppSpec[] = [
     id: "trayek-angkot-bandung",
     creator: "hendra",
     name: "Trayek Angkot Bandung",
+    testerSlots: 6,
     packageName: "id.hendragunawan.trayekangkot",
     description:
       "Cari angkot dari titik A ke B di Bandung: nomor trayek, warna angkot, tempat ngetem, dan perkiraan ongkos. Data trayek dikumpulkan dari Dishub dan masukan pengguna.",
@@ -815,6 +819,7 @@ async function main() {
       feedback_guide: app.feedbackGuide,
       creator_id: member(app.creator).uid,
       status: app.status,
+      tester_slots: app.testerSlots ?? 12,
       created_at: iso(createdAt),
       updated_at: iso(Math.max(createdAt, lastBuild)),
       deleted: app.deleted === true,
