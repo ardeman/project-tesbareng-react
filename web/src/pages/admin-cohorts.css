@@ -150,3 +150,11 @@
   .ch-member > .btn.sm { margin-left: 44px; }
   .ch-member > .chip + .btn.sm { margin-left: auto; }
 }
+
+/* ---------- ADR-013: pending requests ---------- */
+.ch-req-acts { display: flex; gap: var(--s-2); flex-wrap: wrap; justify-content: flex-end; }
+.ch-req .cell-2 > span { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .ch-req .ch-req-acts { margin-left: 44px; flex: 1 1 100%; justify-content: flex-start; }
+  .ch-req .ch-req-acts .btn { flex: 1 1 0; justify-content: center; }
+}

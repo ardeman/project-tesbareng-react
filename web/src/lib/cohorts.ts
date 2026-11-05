@@ -439,3 +439,106 @@ export const useMyAssignedApps = (uid?: string | null) =>
       : null,
     new Map<string, { cohortId: string; name: string }>(), [uid],
   )
+
+// ---------- ADR-013: cohort app requests (creator asks, admin approves) ----------
+
+export type RequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn' | 'expired'
+
+export interface CohortRequest {
+  id: string
+  cohortId: string
+  cohortName: string
+  userId: string
+  displayName: string
+  photoURL: string | null
+  maskedEmail: string
+  appId: string
+  appName: string
+  status: RequestStatus
+  /** admin's reason, rejected only (max 280) */
+  reason: string | null
+  createdAt: number
+  decidedAt: number | null
+}
+
+export const REQUEST_REASON_MAX = 280
+
+function toRequest(r: Row): CohortRequest {
+  return {
+    id: r.id, cohortId: r.cohort_id, cohortName: r.cohort?.name ?? '',
+    userId: r.user_id, displayName: r.profile?.display_name ?? '', photoURL: r.profile?.photo_url ?? null,
+    maskedEmail: r.profile?.masked_email ?? '',
+    appId: r.app_id, appName: r.app?.name ?? '',
+    status: r.status, reason: r.reason ?? null,
+    createdAt: ms(r.created_at)!, decidedAt: ms(r.decided_at),
+  }
+}
+
+// Two FKs point at profiles (user_id, decided_by): name the one to embed.
+const REQUEST_COLUMNS = '*, cohort:cohorts(name), profile:profiles!cohort_requests_user_id_fkey(display_name, photo_url, masked_email), app:apps(name)'
+
+/**
+ * The signed-in member's request state for the cohort page: their pending request (any cohort; one at a time,
+ * ADR-013 §2) and their latest decided request for this cohort (to show a rejection and its reason).
+ */
+export const useMyCohortRequest = (cohortId: string | undefined, uid: string | null | undefined) =>
+  useFetch<{ pending: CohortRequest | null; latestHere: CohortRequest | null }>(
+    cohortId && uid
+      ? async () => {
+          const r = (await rows<Row[]>(supabase.from('cohort_requests').select(REQUEST_COLUMNS).eq('user_id', uid)
+            .order('created_at', { ascending: false }).limit(20))).map(toRequest)
+          return {
+            pending: r.find((x) => x.status === 'pending') ?? null,
+            latestHere: r.find((x) => x.cohortId === cohortId) ?? null,
+          }
+        }
+      : null,
+    { pending: null, latestHere: null }, [cohortId, uid],
+  )
+
+/**
+ * The member's live apps, each with the open cohort it is already in (request_cohort_slot refuses those).
+ * For the "Ajukan app" picker. The server re-checks every rule.
+ */
+export const useMyRequestableApps = (uid: string | null | undefined) =>
+  useFetch(
+    uid
+      ? async () => {
+          const [apps, memberships] = await Promise.all([
+            rows<Row[]>(supabase.from('apps').select('id, name').eq('creator_id', uid).eq('deleted', false).order('name')),
+            rows<Row[]>(supabase.from('cohort_members').select('app_id, cohort:cohorts(name, status)').eq('user_id', uid).not('app_id', 'is', null)),
+          ])
+          const openCohortOf = new Map<string, string>()
+          for (const m of memberships) if (m.cohort?.status !== 'closed') openCohortOf.set(m.app_id, m.cohort?.name ?? '')
+          return apps.map((a) => ({ id: a.id as string, name: a.name as string, inCohort: openCohortOf.get(a.id) ?? null }))
+        }
+      : null,
+    [] as { id: string; name: string; inCohort: string | null }[], [uid],
+  )
+
+/** Admin: pending requests for one cohort, oldest first. */
+export const usePendingRequests = (cohortId: string | undefined) =>
+  useFetch<CohortRequest[]>(
+    cohortId
+      ? async () => (await rows<Row[]>(supabase.from('cohort_requests').select(REQUEST_COLUMNS)
+          .eq('cohort_id', cohortId).eq('status', 'pending').order('created_at'))).map(toRequest)
+      : null,
+    [] as CohortRequest[], [cohortId],
+  )
+
+/** Admin: pending request count per cohort, for the cohort list. */
+export const usePendingRequestCounts = () =>
+  useFetch(async () => {
+    const r = await rows<Row[]>(supabase.from('cohort_requests').select('cohort_id').eq('status', 'pending'))
+    const m = new Map<string, number>()
+    for (const x of r) m.set(x.cohort_id as string, (m.get(x.cohort_id as string) ?? 0) + 1)
+    return m
+  }, new Map<string, number>(), [])
+
+export const requestCohortSlot = (cohortId: string, appId: string) =>
+  rpc<string>('request_cohort_slot', { p_cohort_id: cohortId, p_app_id: appId })
+export const withdrawCohortRequest = (requestId: string) => rpc('withdraw_cohort_request', { p_request_id: requestId })
+export const approveCohortRequest = (requestId: string) => rpc('approve_cohort_request', { p_request_id: requestId })
+/** Empty reason → null (the server trims too). */
+export const rejectCohortRequest = (requestId: string, reason: string) =>
+  rpc('reject_cohort_request', { p_request_id: requestId, p_reason: reason.trim() || null })
