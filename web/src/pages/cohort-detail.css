@@ -38,10 +38,10 @@
 .matrix-cell.not_joined { background: var(--surface-soft); color: var(--muted); }
 .matrix-cell.left        { background: var(--surface-soft); color: var(--muted); }
 .matrix-cell.reassigned  { background: var(--surface-soft); color: var(--muted); }
-.matrix-cell.opted_in    { background: var(--langit); color: var(--ink); }
-.matrix-cell.used        { background: var(--langit); color: var(--ink); }
-.matrix-cell.feedback_sent     { background: var(--pandan); color: var(--ink); }
-.matrix-cell.feedback_verified { background: var(--pandan); color: var(--ink); font-weight: 800; }
+.matrix-cell.opted_in    { background: var(--langit); color: var(--on-fill); }
+.matrix-cell.used        { background: var(--langit); color: var(--on-fill); }
+.matrix-cell.feedback_sent     { background: var(--pandan); color: var(--on-fill); }
+.matrix-cell.feedback_verified { background: var(--pandan); color: var(--on-fill); font-weight: 800; }
 .matrix-cell.own      { background: var(--surface-soft); color: var(--muted); }
 .matrix-cell.unassigned { background: var(--putih); }
 /* behind: cabai left edge on the name cell (ADR-001 §2.2; edge = inset shadow, not border, to preserve layout) */

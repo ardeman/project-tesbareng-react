@@ -19,7 +19,7 @@ a { color: inherit; text-decoration: none; }
 b, strong { font-weight: 700; }
 button, input, select, textarea { font: inherit; color: inherit; }
 img, svg { display: block; }
-::selection { background: var(--kunyit); color: var(--ink); }
+::selection { background: var(--kunyit); color: var(--on-fill); }
 .num { font-variant-numeric: tabular-nums; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* Focus: the global 3 px ink outline from tokens.css. Nothing here may remove it. */
@@ -52,7 +52,7 @@ img, svg { display: block; }
 /* The current page is the "active tab": white, ink-bordered, lifted. */
 .nav-item[aria-current="page"] { background: var(--putih); border-color: var(--ink); box-shadow: var(--shadow); }
 .nav-item .count {
-  margin-left: auto; min-width: 24px; padding: 0 6px; border: var(--bw) solid var(--ink); background: var(--cabai);
+  margin-left: auto; min-width: 24px; padding: 0 6px; border: var(--bw) solid var(--ink); background: var(--cabai); color: var(--on-fill);
   font-size: var(--fs-caption); line-height: 20px; font-weight: 700; text-align: center;
 }
 .sidebar .bottom { margin-top: auto; display: grid; gap: var(--s-2); padding-top: var(--s-3); border-top: var(--bw) solid var(--ink); }
@@ -254,6 +254,7 @@ th.col-id { width: 30%; min-width: 220px; }
   color: var(--ink); /* never inherit a muted row's grey: muted text on langit/pandan fails 4.5:1 */
 }
 .chip .g { font-weight: 800; letter-spacing: 0; }
+.chip.pandan, .chip.langit, .chip.cabai { color: var(--on-fill); }
 .chip.pandan { background: var(--pandan); }
 .chip.langit { background: var(--langit); }
 .chip.cabai { background: var(--cabai); }
@@ -273,6 +274,7 @@ th.col-id { width: 30%; min-width: 220px; }
 }
 .badge.sm { padding: 0 8px 0 2px; gap: 4px; }
 .badge.sm .badge-mark { min-width: 18px; height: 16px; }
+.badge.bronze, .badge.silver, .badge.gold, .badge.platinum { color: var(--on-fill); }
 .badge.bronze { background: var(--tier-bronze); }
 .badge.silver { background: var(--tier-silver); }
 .badge.gold { background: var(--tier-gold); }
@@ -295,8 +297,8 @@ th.col-id { width: 30%; min-width: 220px; }
   .btn:hover { transform: translate(calc(-1 * var(--lift)), calc(-1 * var(--lift))); box-shadow: var(--shadow-hover); }
 }
 .btn:active { transform: translate(var(--sh), var(--sh)); box-shadow: none; transition-duration: var(--t-press); }
-.btn.primary { background: var(--kunyit); }
-.btn.danger { background: var(--cabai); }
+.btn.primary { background: var(--kunyit); color: var(--on-fill); }
+.btn.danger { background: var(--cabai); color: var(--on-fill); }
 .btn.block { width: 100%; }
 /* Small: 36 px visible inside dense rows; the hit area still reaches 44 px. */
 .btn.sm { min-height: 36px; padding: 6px 12px; font-size: var(--fs-small); }
@@ -331,7 +333,7 @@ th.col-id { width: 30%; min-width: 220px; }
 .field .hint.err, .err-text { display: flex; gap: var(--s-2); align-items: flex-start; color: var(--ink); font-weight: 700; }
 .field .hint.err::before, .err-text::before {
   content: "!"; flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px;
-  background: var(--cabai); border: var(--bw) solid var(--ink); font-size: var(--fs-caption); line-height: 1; font-weight: 800;
+  background: var(--cabai); color: var(--on-fill); border: var(--bw) solid var(--ink); font-size: var(--fs-caption); line-height: 1; font-weight: 800;
 }
 .field .count { justify-self: end; color: var(--muted); font-size: var(--fs-small); }
 .input, select.input, textarea.input {
@@ -355,9 +357,10 @@ select.input { cursor: pointer; accent-color: var(--ink); }
 }
 .check input::after { content: ""; width: 6px; height: 12px; margin-top: -3px; border: solid var(--ink); border-width: 0 3px 3px 0; transform: rotate(45deg); opacity: 0; }
 .check input:checked { background: var(--pandan); }
-.check input:checked::after { opacity: 1; }
+.check input:checked::after { opacity: 1; border-color: var(--on-fill); }
 .check input[type="radio"] { border-radius: var(--r-full); }
 .check input[aria-invalid="true"] { background: var(--cabai); }
+.check input[aria-invalid="true"]::after { border-color: var(--on-fill); }
 .check:has(input:disabled) { cursor: not-allowed; }
 .check input:disabled { background: var(--surface-soft); border-color: var(--muted); cursor: not-allowed; }
 .check:has(input:disabled) .t { color: var(--muted); }
@@ -401,14 +404,16 @@ select.input { cursor: pointer; accent-color: var(--ink); }
 .skeleton { display: inline-block; vertical-align: middle; background: var(--surface-soft); color: transparent !important; }
 .error-box {
   display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; padding: var(--s-2) var(--s-3); margin-bottom: var(--s-3);
-  border: var(--bw) solid var(--ink); background: var(--cabai); font-weight: 700;
+  border: var(--bw) solid var(--ink); background: var(--cabai); color: var(--on-fill); font-weight: 700;
 }
-.error-box .g { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; background: var(--putih); border: var(--bw) solid var(--ink); font-weight: 800; }
+.error-box .text-action, .error-box .link { color: var(--on-fill); }
+.error-box .g { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; color: var(--ink); background: var(--putih); border: var(--bw) solid var(--ink); font-weight: 800; }
 .notice {
   display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; padding: var(--s-2) var(--s-3); margin-bottom: var(--s-4);
   border: var(--bw) solid var(--ink); background: var(--putih);
 }
-.notice.info { background: var(--langit); }
+.notice.info { background: var(--langit); color: var(--on-fill); }
+.notice.info .link, .notice.info .text-action { color: var(--on-fill); }
 .notice .spacer { flex: 1; }
 .guide-quote { padding: var(--s-2) var(--s-3); border-left: 6px solid var(--ink); background: var(--kertas); white-space: pre-line; overflow-wrap: anywhere; }
 
@@ -481,7 +486,7 @@ dialog.sheet[open] { animation: rise var(--t-enter) var(--ease); }
   transition: transform var(--t-control) var(--ease);
 }
 .switch input:checked + .track { background: var(--pandan); }
-.switch input:checked + .track::after { transform: translateX(24px); }
+.switch input:checked + .track::after { background: var(--on-fill); transform: translateX(24px); }
 .switch input:focus-visible + .track { outline: 3px solid var(--ink); outline-offset: 2px; }
 .switch input:disabled { cursor: progress; }
 .switch input:disabled + .track { background: var(--surface-soft); }
@@ -554,7 +559,7 @@ dialog.sheet[open] { animation: rise var(--t-enter) var(--ease); }
 
 /* ---------- hover only on devices that hover (ADR-009 §9): touch keeps no sticky hover state ---------- */
 @media (hover: hover) and (pointer: fine) {
-  .scope a:hover { background: var(--langit); }
+  .scope a:hover { background: var(--langit); color: var(--on-fill); }
   .nav-item:hover { border-color: var(--ink); }
   .user-info:hover .who span { text-decoration: underline; text-underline-offset: 3px; }
   .crumb:hover { text-decoration-color: var(--ink); }
@@ -564,12 +569,12 @@ dialog.sheet[open] { animation: rise var(--t-enter) var(--ease); }
   table.data tr.clickable:hover td { background: var(--surface-soft); }
   .cell-2 a:hover b { text-decoration: underline; text-underline-offset: 3px; }
   .mrow:hover { background: var(--surface-soft); }
-  .link:hover { background: var(--langit); }
-  .text-action:hover { background: var(--langit); }
+  .link:hover { background: var(--langit); color: var(--on-fill); }
+  .text-action:hover { background: var(--langit); color: var(--on-fill); }
   .input:hover { background-color: var(--kertas); }
   .tab:hover { border-color: var(--ink); }
-  .error-box .text-action:hover { background: var(--putih); }
-  .notice .link:hover { background: var(--putih); }
+  .error-box .text-action:hover { background: var(--putih); color: var(--ink); }
+  .notice .link:hover { background: var(--putih); color: var(--ink); }
 }
 
 /* ---------- record header (ADR-009 §4): name, status, 12/14 progress and the primary action stay together ---------- */
@@ -638,7 +643,7 @@ dialog.sheet[open] { animation: rise var(--t-enter) var(--ease); }
 }
 .tick input::after { content: ""; width: 6px; height: 12px; margin-top: -3px; border: solid var(--ink); border-width: 0 3px 3px 0; transform: rotate(45deg); opacity: 0; }
 .tick input:checked { background: var(--pandan); }
-.tick input:checked::after { opacity: 1; }
+.tick input:checked::after { border-color: var(--on-fill); opacity: 1; }
 table.data tr.open td { background: var(--surface-soft); }
 table.data tr.detail td { height: auto; padding: 0; background: var(--surface-soft); }
 .detail-body { display: grid; gap: var(--s-3); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-6); position: sticky; left: 0; box-sizing: border-box; max-width: min(78ch, calc(100vw - 2 * var(--s-3) - 2 * var(--bw))); white-space: normal; }
@@ -687,7 +692,7 @@ table.data tbody.history tr.group-row td { height: var(--target); padding: 0; ba
 /* ---------- toast with action / close; errors carry the cabai glyph and stay until dismissed ---------- */
 .toast { display: flex; align-items: center; gap: var(--s-3); }
 .toast.error { background: var(--putih); box-shadow: inset 6px 0 0 var(--cabai), var(--shadow-modal); padding-left: calc(var(--s-3) + 6px); }
-.toast.error .g { display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; background: var(--cabai); border: var(--bw) solid var(--ink); font-size: var(--fs-caption); font-weight: 800; }
+.toast.error .g { color: var(--on-fill); display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; background: var(--cabai); border: var(--bw) solid var(--ink); font-size: var(--fs-caption); font-weight: 800; }
 .toast-text { min-width: 0; overflow-wrap: anywhere; }
 .toast .text-action { white-space: nowrap; min-height: var(--target); }
 .toast-close { display: inline-grid; place-items: center; flex: none; width: var(--target); height: var(--target); margin: -12px -12px -12px 0; padding: 0; border: 0; background: none; cursor: pointer; color: var(--ink); }
@@ -783,3 +788,6 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
 .ci-list > .row-line > :last-child:not(.grow) { flex: none; }
 .ci-status { display: inline-flex; }
 .ci-list .nw, .ci-head ~ p .nw { white-space: nowrap; }
+
+/* Theme toggle in the sidebar: a quiet bordered button; the icon shows the current mode, the text says it too. */
+.theme-toggle { justify-content: flex-start; }
