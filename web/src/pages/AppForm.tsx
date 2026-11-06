@@ -193,7 +193,7 @@ function Form({ existing }: { existing?: AppDoc }) {
       </section>
 
       <section className="form-section">
-        <div className="label-col"><h2>Pengujian</h2><p>Isi tanggal mulai saat jalur uji tertutup Anda aktif, supaya hitungan hari uji tampil.</p></div>
+        <div className="label-col"><h2>Pengujian</h2><p>Isi tanggal mulai saat jalur uji tertutup Anda aktif. Build sejak tanggal ini dihitung sebagai build selama uji.</p></div>
         <div className="form-panel">
           {field('testStartDate', 'Tanggal mulai uji (opsional)', <input className="input" type="date" value={v.testStartDate} onChange={set('testStartDate')} {...aria('testStartDate')} />)}
           {!creating && (
@@ -230,8 +230,8 @@ function Form({ existing }: { existing?: AppDoc }) {
           )}
           <div className="preview-card" role="group" aria-label="Pratinjau untuk tester">
             <span className="small muted">Yang dilihat tester di atas tombol Gabung sebagai tester:</span>
-            <span className="t">Yang ingin diuji kreator</span>
-            <p className="guide-quote">{v.feedbackGuide?.trim() || <span className="muted">Kreator belum menulis panduan feedback.</span>}</p>
+            <span className="t">Yang ingin diuji creator</span>
+            <p className="guide-quote">{v.feedbackGuide?.trim() || <span className="muted">Creator belum menulis panduan feedback.</span>}</p>
           </div>
         </div>
       </section>

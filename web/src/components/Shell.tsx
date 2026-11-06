@@ -4,7 +4,8 @@ import { useAuth } from '../lib/auth'
 import { useAppsBy, useEntriesOf, errorText } from '../lib/data'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { Avatar, useToast } from './bits'
-import { IconAdmin, IconApps, IconBook, IconClose, IconCohort, IconMenu, IconSignOut, IconTodo, IconUser, Mark } from './icons'
+import { useReducedMotion, useTheme } from '../lib/theme'
+import { IconAdmin, IconApps, IconBook, IconClose, IconCohort, IconMenu, IconSignOut, IconSun, IconMoon, IconTodo, IconUser, Mark } from './icons'
 
 export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -17,6 +18,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const menuBtn = useRef<HTMLButtonElement>(null)
   const closeBtn = useRef<HTMLButtonElement>(null)
   const wasOpen = useRef(false)
+  const { dark, toggle: toggleTheme } = useTheme(useReducedMotion())
 
   useEffect(() => setOpen(false), [pathname])
   useEffect(() => {
@@ -36,7 +38,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="app">
+    <div className="app dark-ready">
       <a className="btn skip-link" href="#main" inert={open}>Langsung ke isi</a>
       {/* While the drawer is open, everything behind it is inert, so focus cannot slip under it (WCAG 2.4.11). */}
       <header className="topbar" inert={open}>
@@ -60,7 +62,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <NavLink to="/cohorts" className="nav-item"><IconCohort /><span className="label">Cohort</span></NavLink>
           <NavLink to="/me" className="nav-item"><IconTodo /><span className="label">Tugas saya</span>{owed > 0 && <span className="count num">{owed > 99 ? '99+' : owed}<span className="sr-only"> feedback belum dikirim</span></span>}</NavLink>
           {user && <NavLink to={`/u/${user.uid}`} className="nav-item"><IconUser /><span className="label">Profil saya</span></NavLink>}
-          <NavLink to="/about" className="nav-item"><IconBook /><span className="label">Cara kerja</span></NavLink>
+          <NavLink to="/about" className="nav-item"><IconBook /><span className="label">Aturan main</span></NavLink>
           {isAdmin && <NavLink to="/admin" className="nav-item"><IconAdmin /><span className="label">Admin</span></NavLink>}
         </nav>
 
@@ -78,6 +80,9 @@ export function Shell({ children }: { children: ReactNode }) {
         )}
 
         <div className="bottom">
+          <button type="button" className="btn theme-toggle" onClick={toggleTheme} aria-pressed={dark}>
+            {dark ? <IconMoon /> : <IconSun />}<span>{dark ? 'Mode gelap: nyala' : 'Mode gelap: mati'}</span>
+          </button>
           {!ready ? null : user ? (
             <div className="user-row">
               <Link to={`/u/${user.uid}`} className="user-info">

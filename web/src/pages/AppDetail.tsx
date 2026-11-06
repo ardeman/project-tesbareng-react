@@ -258,7 +258,7 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
       <p className="verdict num">{text}</p>
       {outside > 0 && (
         <p className="muted small num">
-          Target TesBareng: {p.target} tester{p.active > p.target && `, sudah ${p.active} aktif`}. Sisanya ({outside}) dari luar komunitas, dilaporkan sendiri oleh kreator.
+          Target TesBareng: {p.target} tester{p.active > p.target && `, sudah ${p.active} aktif`}. Sisanya ({outside}) dari luar komunitas, dilaporkan sendiri oleh creator.
         </p>
       )}
       <p className="desc">{description}</p>
@@ -287,7 +287,7 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
       <TestingMissions guide={app.feedbackGuide} appId={app.id} uid={mine?.uid ?? undefined} />
     </div>
   ) : (
-    <p className="muted">Kreator belum menulis panduan feedback. Ceritakan apa yang berjalan, apa yang rusak, dan apa yang perlu diperbaiki.</p>
+    <p className="muted">Creator belum menulis panduan feedback. Ceritakan apa yang berjalan, apa yang rusak, dan apa yang perlu diperbaiki.</p>
   )
 
   if (isCreator) {
@@ -353,7 +353,7 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
     return (
       <section className="panel stack-8" aria-label="Status Anda">
         <h2>Anda dikeluarkan</h2>
-        <p className="muted">Kreator mengeluarkan Anda dari daftar tester aplikasi ini{mine.note ? `: “${mine.note}”` : '.'} Hubungi kreator lewat grup jika ini keliru.</p>
+        <p className="muted">Creator mengeluarkan Anda dari daftar tester aplikasi ini{mine.note ? `: “${mine.note}”` : '.'} Hubungi creator lewat grup jika ini keliru.</p>
       </section>
     )
   }
@@ -364,7 +364,7 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
       {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi memulai hitungan 14 hari dari awal.</p>}
       {guide}
       {app.testerMethod === 'email_list'
-        ? <p className="muted small">Aplikasi ini memakai daftar email: minta ditambahkan, tunggu kreator menambahkan email Anda, lalu opt-in dan pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>
+        ? <p className="muted small">Aplikasi ini memakai daftar email: minta ditambahkan, tunggu creator menambahkan email Anda, lalu opt-in dan pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>
         : <p className="muted small">Butuh 3 langkah: gabung grup, buka link opt-in, pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>}
     </section>
   )
@@ -464,7 +464,7 @@ function CheckIns({ flow }: { flow: CheckInFlow }) {
         <h3 id="ci-h">Check-in</h3>
         {!state.loading && !state.error && <span className="meta num">{done} / {items.length} tercatat</span>}
       </div>
-      <p className="muted small">Check-in berdasarkan kejujuran. Bukti terkuat tetap feedback yang diverifikasi kreator di Play Console.</p>
+      <p className="muted small">Check-in berdasarkan kejujuran. Bukti terkuat tetap feedback yang diverifikasi creator di Play Console.</p>
       {state.error ? <ErrorBox text="Check-in gagal dimuat. Coba lagi sebentar lagi." onRetry={state.retry} /> : state.loading || !result ? (
         <div aria-busy="true">
           <span className="sr-only">Memuat check-in…</span>
@@ -483,7 +483,7 @@ function CheckIns({ flow }: { flow: CheckInFlow }) {
                   <li className="row-line top">
                     <span className="grow cell-2">
                       <b>Sudah update</b>
-                      <span>Terbuka setiap kali kreator mencatat build baru.</span>
+                      <span>Terbuka setiap kali creator mencatat build baru.</span>
                     </span>
                     <Chip glyph="—">Belum ada build</Chip>
                   </li>
@@ -586,16 +586,17 @@ function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean 
       </div>
       <div className="kpi">
         <div className="kpi-label">Hari uji</div>
-        <div className="kpi-value num">{p.testDay == null ? <span className="dash">—</span> : v(<>{p.testDay}<small> / {TARGET_DAYS}</small></>)}</div>
-        {p.testDay == null ? <p className="note">Tanggal mulai uji belum diisi kreator.</p> : <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(p.testDay, TARGET_DAYS)} max={TARGET_DAYS} label="Hari uji" /></div>}
+        <div className="kpi-value num">{v(<>{p.testDay}<small> / {TARGET_DAYS}</small></>)}</div>
+        <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(p.testDay, TARGET_DAYS)} max={TARGET_DAYS} label="Hari uji" /></div>
+        {p.active < p.target && <p className="note num">Mulai dihitung saat {p.target} tester aktif</p>}
       </div>
       <div className="kpi">
         <div className="kpi-label">Feedback di Play</div>
         <div className="kpi-value num">{v(<>{p.feedbackSent}<small> terkirim</small></>)}</div>
-        <p className="note num">{p.feedbackVerified} terverifikasi kreator</p>
+        <p className="note num">{p.feedbackVerified} terverifikasi creator</p>
       </div>
       <div className="kpi">
-        <div className="kpi-label">Dibalas kreator</div>
+        <div className="kpi-label">Dibalas creator</div>
         <div className="kpi-value num">{v(p.feedbackSent === 0 ? <span className="dash">—</span> : <>{p.replied}<small> / {p.feedbackSent}</small></>)}</div>
         <p className="note">{p.feedbackSent === 0 ? 'Belum ada feedback untuk dibalas' : 'dari tester yang kirim feedback'}</p>
       </div>
@@ -686,6 +687,33 @@ function TestingMissions({ guide, appId, uid }: { guide: string; appId: string; 
 }
 
 // ---------- tester table: 4 fields per row, details behind a tap, inline edits (ADR-009 §3) ----------
+
+function downloadTestersCsv(appName: string, testers: TesterDoc[]) {
+  const headers = ['Nama', 'Email', 'Hari Aktif', 'Status', 'Feedback Terkirim', 'Feedback Terverifikasi', 'Dibalas Kreator', 'Tanggal Gabung'];
+  const now = Date.now();
+  const rows = testers.map((t) => [
+    '"' + t.displayName.replace(/"/g, '""') + '"',
+    '"' + (t.maskedEmail ?? '') + '"',
+    daysActive(t, now),
+    '"' + testerStatusLabel[t.status] + '"',
+    t.feedbackSent ? 'Ya' : 'Tidak',
+    t.feedbackVerified ? 'Ya' : 'Tidak',
+    t.replied ? 'Ya' : 'Tidak',
+    t.optedInAt ? new Date(t.optedInAt).toISOString().split('T')[0] : '',
+  ]);
+
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const cleanName = appName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  link.href = url;
+  link.setAttribute('download', 'testers-' + cleanName + '-' + new Date().toISOString().split('T')[0] + '.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 type SortKey = 'name' | 'days'
 type Quick = Partial<Pick<TesterDoc, 'feedbackVerified' | 'replied' | 'status'>>
@@ -811,8 +839,8 @@ function TesterTable({ app, testers, loading, isCreator, myUid, onEdit }: {
                   <div><dt>Opt-in sejak</dt><dd className="num">{fmtDate(t.optedInAt)}</dd></div>
                   {t.status !== 'active' && t.leftAt && <div><dt>{t.status === 'removed' ? 'Dikeluarkan' : 'Berhenti'}</dt><dd className="num">{fmtDate(t.leftAt)}</dd></div>}
                   <div><dt>Email</dt><dd>{t.maskedEmail}</dd></div>
-                  {!isCreator && <div><dt>Dibalas kreator</dt><dd>{t.replied ? 'Sudah' : 'Belum'}</dd></div>}
-                  <div><dt>Catatan</dt><dd>{t.note || (t.addedBy === 'creator' ? 'Ditambahkan kreator' : '—')}</dd></div>
+                  {!isCreator && <div><dt>Dibalas creator</dt><dd>{t.replied ? 'Sudah' : 'Belum'}</dd></div>}
+                  <div><dt>Catatan</dt><dd>{t.note || (t.addedBy === 'creator' ? 'Ditambahkan creator' : '—')}</dd></div>
                 </dl>
                 {t.feedbackSummary && t.status !== 'removed' && <p className="guide-quote">{t.feedbackSummary}</p>}
                 {isCreator && (
@@ -841,9 +869,21 @@ function TesterTable({ app, testers, loading, isCreator, myUid, onEdit }: {
 
   return (
     <section className="panel flush span-12" aria-labelledby="testers-h">
-      <header>
-        <h2 id="testers-h">Daftar tester</h2>
-        <span className="meta num">{active.length} aktif{history.length > 0 ? ` · ${history.length} riwayat` : ''}</span>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 id="testers-h">Daftar tester</h2>
+          <span className="meta num">{active.length} aktif{history.length > 0 ? ` · ${history.length} riwayat` : ''}</span>
+        </div>
+        {testers.length > 0 && (
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => downloadTestersCsv(app.name, testers)}
+            title="Unduh daftar tester dalam format CSV"
+          >
+            Ekspor CSV
+          </button>
+        )}
       </header>
       {/* One sheet on every width (CLAUDE.md, DR-14): it scrolls inside its own box, so the header row
           and the name column both stay put. */}
@@ -1062,7 +1102,7 @@ function CreatorCard({ app }: { app: AppDoc }) {
   const v = app.creatorFeedbackVerifiedCount ?? 0
   return (
     <section className="panel stack-12" aria-labelledby="creator-h">
-      <h2 id="creator-h">Kreatornya juga membantu?</h2>
+      <h2 id="creator-h">Creator-nya juga membantu?</h2>
       <Link to={`/u/${app.creatorUid}`} className="creator-link">
         <Avatar name={app.creatorName} photo={app.creatorPhotoURL} />
         <span>{app.creatorName}</span>

@@ -4,9 +4,11 @@
 // Local dev: SMTP goes to the local mail catcher (Mailpit, no TLS, no auth), web UI on port 54324.
 // Production: smtp.gmail.com:465 (implicit TLS) with an App Password.
 //
-// Reminders come from two service-role functions, merged into one digest per member:
+// Reminders come from four service-role functions, merged into one digest per member:
 //   due_reminders()         new builds, unreplied verified feedback, app reached 12 eligible
 //   due_cohort_reminders()  cohort days 1/2 (opt-in), 5 (feedback), 7 (used app), 13 (still opted in)
+//   due_admin_reminders()   admins: pending cohort app requests (ADR-013)
+//   due_listing_reminders() email-list apps (ADR-011): creator has members to add; tester was added
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6";
@@ -108,6 +110,14 @@ function renderItem(item: ReminderRow): string {
       return `<li>${cohort}: kirim feedback di Google Play untuk ${appList(e)}. Tenggatnya hari ke-7, ${esc(atWib(e.due_at))}.</li>`;
     case "cohort_used_app":
       return `<li>${cohort}, hari ke-7: check-in "Sudah buka app" dan kirim feedback di Google Play untuk ${appList(e)}.</li>`;
+    case "cohort_requests":
+      return `<li>${cohort}: ${esc(e.count)} pengajuan aplikasi menunggu keputusan Anda (${appList(e)}). Setujui atau tolak di Admin, bagian Cohort.</li>`;
+    case "email_listing_pending": {
+      const names = Array.isArray(e.names) ? (e.names as unknown[]).map((n) => esc(n)).join(", ") : "";
+      return `<li><strong>${esc(item.app_name)}</strong>: ${esc(e.count)} tester menunggu emailnya ditambahkan ke daftar tester di Play Console (${names}). Setelah itu, tandai "Sudah ditambahkan" di halaman aplikasi.</li>`;
+    }
+    case "email_listing_added":
+      return `<li><strong>${esc(item.app_name)}</strong>: creator sudah menambahkan email Anda ke daftar tester. Sekarang buka link opt-in, pasang aplikasinya, lalu tekan Gabung sebagai tester.</li>`;
     case "cohort_still_opted_in":
       return `<li>${cohort}, hari ke-13: check-in "Masih opt-in" untuk ${appList(e)}.</li>`;
     default:
@@ -155,8 +165,13 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
-  const [general, cohort] = await Promise.all([supabase.rpc("due_reminders"), supabase.rpc("due_cohort_reminders")]);
-  const error = general.error ?? cohort.error;
+  const [general, cohort, admin, listing] = await Promise.all([
+    supabase.rpc("due_reminders"),
+    supabase.rpc("due_cohort_reminders"),
+    supabase.rpc("due_admin_reminders"),
+    supabase.rpc("due_listing_reminders"),
+  ]);
+  const error = general.error ?? cohort.error ?? admin.error ?? listing.error;
   if (error) {
     console.error("due reminders error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
@@ -165,7 +180,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  const digests = groupByUser([...(general.data ?? []), ...(cohort.data ?? [])] as ReminderRow[]);
+  const digests = groupByUser([...(general.data ?? []), ...(cohort.data ?? []), ...(admin.data ?? []), ...(listing.data ?? [])] as ReminderRow[]);
   const transport = makeTransport();
   const results: { user_id: string; ok: boolean; error?: string }[] = [];
 

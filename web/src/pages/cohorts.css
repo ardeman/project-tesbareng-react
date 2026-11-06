@@ -78,7 +78,7 @@
 @media (hover: hover) and (pointer: fine) {
   .cohort-row:hover { background: var(--surface-soft); }
   .cohort-row:hover .cr-name b, .member-name:hover, .cohort-fold:hover { text-decoration: underline; text-underline-offset: 3px; }
-  .member-app:hover { background: var(--langit); }
+  .member-app:hover { background: var(--langit); color: var(--on-fill); }
 }
 @media (max-width: 1023px) {
   .rh-note { max-width: none; }

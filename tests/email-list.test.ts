@@ -250,3 +250,32 @@ describe("cohort milestones on an email-list app (base_at)", () => {
     expect((await status(assignment)).behind_on).toContain("opt_in");
   });
 });
+
+describe("due_listing_reminders (digest)", () => {
+  type Row = { user_id: string; kind: string; ref_id: string; extra: { count?: number; names?: string[] } };
+  const due = async (appId: string) => ((await must(service.rpc("due_listing_reminders"))) as Row[]).filter((r) => r.ref_id === appId);
+
+  it("tells the creator who waits to be added, then tells the tester once they are added", async () => {
+    const app = await emailApp();
+    await must(request(tester, app));
+    let rows = await due(app);
+    expect(rows).toEqual([expect.objectContaining({ user_id: creator.id, kind: "email_listing_pending", extra: { count: 1, names: ["Dimas Pratama"] } })]);
+
+    await must(markListed(creator, app, tester.id));
+    rows = await due(app);
+    expect(rows).toEqual([expect.objectContaining({ user_id: tester.id, kind: "email_listing_added" })]);
+
+    // Once the tester has joined, nothing is due for this app.
+    await must(tester.db.rpc("join_as_tester", { p_app_id: app, p_checklist: optedIn }));
+    expect(await due(app)).toEqual([]);
+  });
+
+  it("skips a listing marked more than 24 h ago, and is service role only", async () => {
+    const app = await emailApp();
+    await must(request(other, app));
+    await must(markListed(creator, app, other.id));
+    await must(service.from("email_listings").update({ listed_at: ago(2 * DAY_MS) }).eq("app_id", app).eq("user_id", other.id));
+    expect(await due(app)).toEqual([]);
+    expect((await creator.db.rpc("due_listing_reminders")).error?.code).toBe("42501");
+  });
+});

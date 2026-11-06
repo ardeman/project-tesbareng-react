@@ -103,10 +103,10 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (step === 'ask' && consent) asked.run(async () => { await requestEmailListing(app.id); toast('Permintaan terkirim. Kreator akan menambahkan email Anda.') })
+    if (step === 'ask' && consent) asked.run(async () => { await requestEmailListing(app.id); toast('Permintaan terkirim. Creator akan menambahkan email Anda.') })
     if (step === 'join' && all) joined.run(() => api.joinAsTester({ appId: app.id, checklist: { optedIn: true, installed: true } }))
   }
-  const withdraw = () => asked.run(async () => { await cancelEmailListing(app.id); toast('Permintaan dibatalkan. Kreator tidak lagi melihat email Anda.') })
+  const withdraw = () => asked.run(async () => { await cancelEmailListing(app.id); toast('Permintaan dibatalkan. Creator tidak lagi melihat email Anda.') })
   const err = asked.err ?? joined.err ?? listing.error
   const busy = asked.busy || joined.busy
 
@@ -115,22 +115,22 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
         <div className="sheet-body">
           <h2>Gabung sebagai tester {app.name}</h2>
           {rejoin && <p className="muted">Hitungan 14 hari dimulai lagi dari hari ini.</p>}
-          <p className="lede">Aplikasi ini memakai daftar email di Play Console, bukan Google Group. Kreator perlu menambahkan email Anda dulu sebelum Anda bisa opt-in.</p>
+          <p className="lede">Aplikasi ini memakai daftar email di Play Console, bukan Google Group. Creator perlu menambahkan email Anda dulu sebelum Anda bisa opt-in.</p>
           <ol className="steps" aria-label="Langkah">
             <li aria-current={step === 'ask' ? 'step' : undefined}><span className="num" aria-hidden="true">{step !== 'ask' ? '✓' : '1'}</span><span>Minta ditambahkan{step !== 'ask' && <span className="muted small"> · selesai</span>}</span></li>
-            <li aria-current={step === 'wait' ? 'step' : undefined}><span className="num" aria-hidden="true">{step === 'join' ? '✓' : '2'}</span><span>Kreator menambahkan email Anda{step === 'join' && <span className="muted small"> · selesai</span>}</span></li>
+            <li aria-current={step === 'wait' ? 'step' : undefined}><span className="num" aria-hidden="true">{step === 'join' ? '✓' : '2'}</span><span>Creator menambahkan email Anda{step === 'join' && <span className="muted small"> · selesai</span>}</span></li>
             <li aria-current={step === 'join' ? 'step' : undefined}><span className="num" aria-hidden="true">3</span><span>Opt-in dan pasang aplikasinya</span></li>
           </ol>
           {listing.loading ? <p className="muted">Memuat…</p> : step === 'ask' ? (
             <label className="check">
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-              <span><span className="t">Saya setuju kreator {app.name} melihat email lengkap akun Google saya</span>
+              <span><span className="t">Saya setuju creator {app.name} melihat email lengkap akun Google saya</span>
                 {email && <span className="d addr">{email}</span>}
-                <span className="d">Hanya kreator aplikasi ini yang melihatnya, untuk ditempel di Play Console. Pastikan ini akun yang sama dengan akun Play Store di HP Anda. Anda bisa membatalkan kapan saja.</span></span>
+                <span className="d">Hanya creator aplikasi ini yang melihatnya, untuk ditempel di Play Console. Pastikan ini akun yang sama dengan akun Play Store di HP Anda. Anda bisa membatalkan kapan saja.</span></span>
             </label>
           ) : step === 'wait' ? (
             <div className="notice info" role="status">
-              <span>Menunggu kreator menambahkan email Anda · diminta <span className="num">{fmtDate(l!.requestedAt)}</span>. Anda akan bisa opt-in setelah ditandai “Sudah ditambahkan”.</span>
+              <span>Menunggu creator menambahkan email Anda · diminta <span className="num">{fmtDate(l!.requestedAt)}</span>. Anda akan bisa opt-in setelah ditandai “Sudah ditambahkan”.</span>
             </div>
           ) : (
             <div>

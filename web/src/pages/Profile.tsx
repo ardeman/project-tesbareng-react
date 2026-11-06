@@ -50,7 +50,7 @@ export function Profile() {
           {p && <TierProgress count={p.appsTestedCount} tier={p.badgeTier} nextAt={p.nextTierAt} />}
         </div>
         <div className="kpi"><div className="kpi-label">Menguji aplikasi lain</div><div className="kpi-value num">{p ? p.testingCount : <Skel w={40} h={24} />}</div><p className="note">aktif, atau selesai 14 hari</p></div>
-        <div className="kpi"><div className="kpi-label">Feedback di Play</div><div className="kpi-value num">{p ? p.feedbackSentCount : <Skel w={40} h={24} />}</div><p className="note">{p ? `${p.feedbackVerifiedCount} terverifikasi kreator` : ''}</p></div>
+        <div className="kpi"><div className="kpi-label">Feedback di Play</div><div className="kpi-value num">{p ? p.feedbackSentCount : <Skel w={40} h={24} />}</div><p className="note">{p ? `${p.feedbackVerifiedCount} terverifikasi creator` : ''}</p></div>
         <div className="kpi"><div className="kpi-label">Aplikasi didaftarkan</div><div className="kpi-value num">{p ? p.appsCreatedCount : <Skel w={40} h={24} />}</div><p className="note">sedang atau pernah diuji</p></div>
       </section>
 
@@ -97,7 +97,7 @@ export function Profile() {
               <li className="row-line" key={`${m.cohortId}:${uid}`}>
                 <span className="grow cell-2">
                   <Link to={`/cohorts/${m.cohortId}`}><b>{m.cohortName}</b></Link>
-                  <span>{m.appId ? 'Kreator' : 'Tester murni'} · {fmtDate(m.joinedAt)}</span>
+                  <span>{m.appId ? 'Creator' : 'Tester murni'} · {fmtDate(m.joinedAt)}</span>
                 </span>
                 <CohortChip status={m.cohortStatus} />
                 {m.standing && <StandingChip standing={m.standing} />}

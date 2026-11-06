@@ -32,6 +32,7 @@ Precedence and conflicts:
 | 010 | Story surface UX: the "B2C" rules | Accepted (2026-11-02) |
 | 011 | Email-list testing: tester shares email with the creator by consent | Accepted, implemented (merged in #6, 2026-11-05) |
 | 012 | Tester slots: creator chooses how many testers an app needs (amends 007, builds on 011) | Accepted, implemented (`feat/tester-slots`, PR #8, 2026-11-05) |
+| 013 | Cohort app requests: creator asks, admin approves (amends PRD FR-30) | Accepted (2026-11-05); implemented (`feat/cohort-app-requests`) |
 
 ## UI work
 

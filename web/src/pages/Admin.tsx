@@ -20,7 +20,7 @@ const SECTIONS: Section[] = [
   {
     id: 'cohort',
     label: 'Cohort',
-    summary: 'Bentuk cohort, tambahkan kreator dengan aplikasinya, lalu mulai. Pasang link grup WhatsApp dan tandai lunas anggota yang berutang.',
+    summary: 'Bentuk cohort, tambahkan creator dengan aplikasinya, lalu mulai. Pasang link grup WhatsApp dan tandai lunas anggota yang berutang.',
     render: () => <Cohorts />,
   },
   {
@@ -120,7 +120,7 @@ function DeletedApps() {
       </header>
       {list.error ? <ErrorBox text="Daftar aplikasi terhapus gagal dimuat." onRetry={list.retry} /> : list.loading ? <RowsSkeleton /> : shown.length === 0 ? (
         <Empty title="Tidak ada aplikasi terhapus.">
-          <p>Aplikasi yang dihapus kreatornya muncul di sini. Kreator bisa mengurungkan sendiri dalam 10 menit; setelah itu hanya admin yang bisa memulihkannya.</p>
+          <p>Aplikasi yang dihapus creator-nya muncul di sini. Creator bisa mengurungkan sendiri dalam 10 menit; setelah itu hanya admin yang bisa memulihkannya.</p>
         </Empty>
       ) : (
         <ul className="deleted-list">
@@ -371,11 +371,11 @@ function EntryForm({ t, onClose, onSaved }: { t: AdminTesterRow; onClose: () => 
           </Field>
           <label className="check">
             <input type="checkbox" checked={f.sent && f.verified} disabled={!f.sent} onChange={(e) => setF({ ...f, verified: e.target.checked })} />
-            <span><span className="t">Terverifikasi di Play Console</span><span className="d">Biasanya dicentang kreator setelah melihat feedback-nya.</span></span>
+            <span><span className="t">Terverifikasi di Play Console</span><span className="d">Biasanya dicentang creator setelah melihat feedback-nya.</span></span>
           </label>
           <label className="check">
             <input type="checkbox" checked={f.replied} onChange={(e) => setF({ ...f, replied: e.target.checked })} />
-            <span><span className="t">Sudah dibalas kreator</span><span className="d">Balasan dikirim dari Play Console.</span></span>
+            <span><span className="t">Sudah dibalas creator</span><span className="d">Balasan dikirim dari Play Console.</span></span>
           </label>
           {summaryEdit && (
             <p className="notice admin-notice" role="status">

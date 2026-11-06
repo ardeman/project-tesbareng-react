@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { usePageMeta } from '../lib/pageMeta'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../lib/auth'
+import { StoryHeader, StoryFooter, useSignIn } from '../components/StoryChrome'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import './about.css'
 
@@ -115,7 +115,7 @@ const STEPS: { t: string; d: ReactNode }[] = [
 ]
 
 const COHORT_FACTS: { t: string; d: ReactNode }[] = [
-  { t: 'Minimal 13 app', d: 'Setiap creator membawa satu app. Dengan 13 app, setiap app sudah bisa dapat 12 tester dari sesama creator saja.' },
+  { t: 'Minimal 13 app', d: 'Setiap creator membawa satu app. Selama cohort masih Forming, creator mengajukan app-nya, lalu admin menyetujui atau menolak. Admin juga bisa langsung menambahkan app. Dengan 13 app, setiap app sudah bisa dapat 12 tester dari sesama creator saja.' },
   { t: 'Opt-in dalam 48 jam', d: <>Hitungan mulai Hari 0. Lewat 48 jam, yang belum opt-in tercatat Behind, dan app miliknya mendapat label <span className="ab-chip c-cabai">! Belum tes</span> sampai tugasnya terpenuhi. Admin bisa memindahkan slot yang kosong ke anggota lain.</> },
   { t: 'Tutup di hari 21', d: 'Cohort ditutup saat semua app siap ajukan production, atau paling lambat hari ke-21.' },
   { t: 'Good, Owing, Settled', d: 'Saat cohort tutup, anggota yang semua tugasnya selesai berstatus Good. Yang belum berstatus Owing dan tidak bisa ikut cohort berikutnya sampai admin menandainya Settled.' },
@@ -165,25 +165,108 @@ const RULES: { group: string; items: { t: string; d: string }[] }[] = [
   },
 ]
 
-export function About() {
-  usePageMeta(TITLE, DESCRIPTION)
-  const { user } = useAuth()
+const readHh = () => {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hh'))
+  return Number.isNaN(v) ? 72 : v
+}
+
+/** Inside the app shell there is no story header: the strip sticks under the mobile top bar, or at 0 on desktop. */
+function useShellHh(on: boolean) {
+  useEffect(() => {
+    if (!on) return
+    const root = document.documentElement
+    const bar = document.querySelector<HTMLElement>('.topbar')
+    const set = () => root.style.setProperty('--hh', `${bar?.offsetHeight ?? 0}px`)
+    set()
+    const ro = bar && 'ResizeObserver' in window ? new ResizeObserver(set) : null
+    if (bar) ro?.observe(bar)
+    window.addEventListener('resize', set)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', set); root.style.removeProperty('--hh') }
+  }, [on])
+}
+
+/** Floating section strip: one scrollable row, shown once the 5x2 grid has scrolled away. Scroll-spy sets the current item. */
+function TocStrip({ gridRef }: { gridRef: React.RefObject<HTMLElement | null> }) {
+  const [shown, setShown] = useState(false)
+  const [active, setActive] = useState<string | null>(null)
+  const listRef = useRef<HTMLOListElement>(null)
+  // Header height (--hh) changes when the header wraps or the viewport rotates; re-create the observers when it does.
+  const [hh, setHh] = useState(readHh)
+  useEffect(() => {
+    let frame = 0
+    const onResize = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => setHh(readHh())) }
+    window.addEventListener('resize', onResize)
+    return () => { window.removeEventListener('resize', onResize); cancelAnimationFrame(frame) }
+  }, [])
+
+  useEffect(() => {
+    const grid = gridRef.current
+    if (!grid || !('IntersectionObserver' in window)) return
+    const io = new IntersectionObserver(
+      ([e]) => setShown(!e.isIntersecting && e.boundingClientRect.bottom < hh + 1),
+      { rootMargin: `-${hh}px 0px 0px 0px` },
+    )
+    io.observe(grid)
+    return () => io.disconnect()
+  }, [gridRef, hh])
+
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) return
+    const seen = new Set<string>()
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) e.isIntersecting ? seen.add(e.target.id) : seen.delete(e.target.id)
+        const cur = TOC.find((x) => seen.has(x.id))
+        if (cur) setActive(cur.id)
+      },
+      { rootMargin: `-${hh + 48 + 8}px 0px -60% 0px` },
+    )
+    TOC.forEach((x) => { const el = document.getElementById(x.id); if (el) io.observe(el) })
+    return () => io.disconnect()
+  }, [hh])
+
+  // Keep the current item visible inside the strip by moving the strip only, never the page.
+  // Setting scrollLeft is instant, so it needs no reduced-motion branch.
+  useEffect(() => {
+    const list = listRef.current
+    const el = active ? list?.querySelector<HTMLElement>(`[aria-current]`) : null
+    if (!list || !el) return
+    const l = el.offsetLeft, r = l + el.offsetWidth
+    if (l < list.scrollLeft) list.scrollLeft = l - 8
+    else if (r > list.scrollLeft + list.clientWidth) list.scrollLeft = r - list.clientWidth + 8
+  }, [active, shown])
 
   return (
-    <div className="ab surface-story">
-      <a className="ab-skip" href="#isi">Langsung ke isi</a>
+    <nav className="ab-strip" aria-label="Bagian halaman" hidden={!shown ? true : undefined}>
+      <ol ref={listRef}>
+        {TOC.map((x, i) => (
+          <li key={x.id}>
+            <a href={`#${x.id}`} aria-current={active === x.id ? 'location' : undefined}>
+              <span className="ab-toc-n num">{String(i + 1).padStart(2, '0')}</span>{x.label}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  )
+}
 
-      <header className="ab-top">
-        <div className="ab-wrap ab-top-row">
-          <Link to="/" className="ab-brand" aria-label="TesBareng, beranda"><span className="ab-brand-box" aria-hidden="true" />TesBareng</Link>
-          <nav className="ab-nav" aria-label="Utama">
-            {user ? <Link to="/apps">Daftar app</Link> : <Link to="/">Beranda</Link>}
-            <Link className="ab-btn ab-btn--sm" to={user ? '/me' : '/apps'}>{user ? 'Tugas saya' : 'Daftar app'}</Link>
-          </nav>
-        </div>
-      </header>
+/** `embedded`: rendered inside the app shell for signed-in members, so the shell supplies the nav, skip link and <main>. */
+export function About({ embedded = false }: { embedded?: boolean }) {
+  usePageMeta(TITLE, DESCRIPTION)
+  const signIn = useSignIn()
+  const gridRef = useRef<HTMLElement>(null)
+  useShellHh(embedded)
+  const Main = embedded ? 'div' : 'main'
 
-      <main id="isi">
+  return (
+    <div className={`ab surface-story dark-ready${embedded ? ' ab--embedded' : ''}`}>
+      {!embedded && <a className="ab-skip" href="#isi">Langsung ke isi</a>}
+
+      {!embedded && <StoryHeader page="about" signIn={signIn} />}
+
+      <Main id="isi">
+        <TocStrip gridRef={gridRef} />
         <div className="ab-wrap ab-hero">
           <p className="ab-label"><b>Aturan main</b>TesBareng</p>
           <h1>Cara kerja, tanpa basa‑basi.</h1>
@@ -191,7 +274,7 @@ export function About() {
             Semua aturan komunitas di satu halaman: syarat dari Google, cara ngetes, cohort, titik cek, badge dan privasi.
             Melihat-lihat tidak perlu masuk; ikut ngetes perlu akun Google.
           </p>
-          <nav className="ab-toc" aria-label="Di halaman ini">
+          <nav className="ab-toc" aria-label="Di halaman ini" ref={gridRef}>
             <ol>
               {TOC.map((x, i) => (
                 <li key={x.id}><a href={`#${x.id}`}><span className="ab-toc-n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>{x.label}</a></li>
@@ -324,9 +407,9 @@ export function About() {
           <div className="ab-privacy">
             <span className="ab-masked">bu*****@gmail.com</span>
             <ul className="ab-bullets">
-              <li>Email selalu tampil disamarkan seperti ini, untuk semua orang, termasuk creator app yang kamu tes.</li>
+              <li>Email tampil disamarkan seperti ini di semua halaman, termasuk tabel tester.</li>
               <li>Profil publik tidak menampilkan email sama sekali.</li>
-              <li>Alamat lengkap hanya dipakai untuk mengirim pengingat.</li>
+              <li>Alamat lengkap dipakai untuk mengirim pengingat. Creator hanya melihatnya kalau app-nya pakai daftar email dan kamu setuju dibagikan. Persetujuan ini berlaku untuk app itu saja dan bisa kamu tarik kapan saja (alamat yang sudah dimasukkan ke Play Console tidak ikut terhapus).</li>
             </ul>
           </div>
         </Section>
@@ -358,16 +441,9 @@ export function About() {
             </div>
           </div>
         </section>
-      </main>
+      </Main>
 
-      <footer className="ab-wrap ab-foot">
-        <span>Komunitas creator Android Indonesia. Bukan layanan resmi Google.</span>
-        <nav aria-label="Kaki halaman">
-          <Link to="/">Beranda</Link>
-          <Link to="/apps">Daftar app</Link>
-          <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Google Group<span className="sr-only"> (tab baru)</span></a>
-        </nav>
-      </footer>
+      {!embedded && <StoryFooter page="about" />}
     </div>
   )
 }
