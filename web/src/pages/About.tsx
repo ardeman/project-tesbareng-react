@@ -304,7 +304,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
           </div>
         </Section>
 
-        <Section id="ngetes" n={2} title="Cara ngetes satu app" lede="Enam langkah. Langkah pertama cukup sekali untuk semua app.">
+        <Section id="ngetes" n={2} title="Cara ngetes satu app" lede="Enam langkah. Langkah pertama cukup sekali untuk semua app. Yang masih harus kamu kerjakan selalu ada di Tugas saya.">
           <ol className="ab-steps">
             {STEPS.map((s, i) => (
               <li key={s.t}>
@@ -347,7 +347,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
           </ol>
         </Section>
 
-        <Section id="tester-murni" n={4} title="Tester murni" lede="Belum punya app, atau sedang di antara dua app? Ikut cohort tanpa membawa app.">
+        <Section id="tester-murni" n={4} title="Tester murni" lede="Belum punya app, atau sedang di antara dua app? Ikut cohort tanpa membawa app. Tanpa cohort pun bisa: pilih app di daftar app dan gabung sebagai tester.">
           <ul className="ab-rule-list ab-rule-list--boxed">
             <li><b>Gabung sampai akhir hari 6</b><span>Selama cohort masih Forming, atau sudah berjalan sampai akhir hari ke-6 (tepat 7 × 24 jam setelah Hari 0). Batas ini menyisakan 14 hari sebelum cohort tutup di hari 21.</span></li>
             <li><b>14 app untukmu</b><span>Kamu ditugaskan 14 app (atau semua app kalau kurang dari itu), dimulai dari app yang testernya paling sedikit.</span></li>
