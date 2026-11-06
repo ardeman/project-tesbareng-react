@@ -72,6 +72,7 @@ export function AppDetail() {
       const overflow: MenuItem[] = []
       if (a.storeUrl) overflow.push({ label: 'Buka halaman Play', href: a.storeUrl })
       overflow.push({ label: 'Buka link opt-in', href: a.optInUrl })
+      overflow.push({ label: 'Bagikan ke WhatsApp', onSelect: () => shareToWhatsApp(a.name, openSeats(a), a.id) })
       return {
         primary: { label: 'Catat build', icon: <IconPlus />, onClick: () => setDialog('build') },
         secondary: [
@@ -100,6 +101,7 @@ export function AppDetail() {
     }
     const optInAction: Action = { label: 'Buka link opt-in', icon: <IconExternal />, href: a.optInUrl }
     const storeOverflow: MenuItem[] = a.storeUrl ? [{ label: 'Halaman Play Store', href: a.storeUrl }] : []
+    storeOverflow.push({ label: 'Bagikan ke WhatsApp', onSelect: () => shareToWhatsApp(a.name, openSeats(a), a.id) })
     if (mine?.status === 'removed') return { secondary: [optInAction], overflow: storeOverflow }
     if (a.testerMethod === 'email_list') {
       // The opt-in link only works once the creator has added this member's email in Play Console.
@@ -313,8 +315,8 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
   }, [mine?.feedbackSent])
   const guide = app.feedbackGuide ? (
     <div className="stack-8">
-      <h3>Yang ingin diuji creator</h3>
-      <p className="guide-quote">{app.feedbackGuide}</p>
+      <h3>Yang ingin diuji kreator</h3>
+      <TestingMissions guide={app.feedbackGuide} appId={app.id} uid={mine?.uid ?? undefined} />
     </div>
   ) : (
     <p className="muted">Creator belum menulis panduan feedback. Ceritakan apa yang berjalan, apa yang rusak, dan apa yang perlu diperbaiki.</p>
@@ -342,7 +344,26 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
           <h2>Anda tester di sini</h2>
           <p className="lead-num num" style={{ marginTop: 'var(--s-2)' }}>{Math.min(d, 999)}<small> / {TARGET_DAYS} hari</small></p>
           <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(d, TARGET_DAYS)} max={TARGET_DAYS} label="Hari aktif Anda" /></div>
-          <p className="muted small num" style={{ marginTop: 'var(--s-2)' }}>Sejak {fmtDate(mine.optedInAt)}. Jangan uninstall sebelum 14 hari.</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--s-2)' }}>
+            <p className="muted small num" style={{ margin: 0 }}>Sejak {fmtDate(mine.optedInAt)}. Jangan uninstall sebelum 14 hari.</p>
+            {mine.optedInAt && (
+              <button
+                type="button"
+                className="text-action"
+                style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                onClick={() => {
+                  const targetDay = d < 5 ? 5 : TARGET_DAYS;
+                  const targetTime = new Date(mine.optedInAt + targetDay * 24 * 60 * 60 * 1000);
+                  const title = targetDay === 5 ? 'Kirim feedback Play Store: ' + app.name : 'Selesai 14 hari uji: ' + app.name;
+                  const desc = 'Buka TesBareng untuk check-in pengujian aplikasi ' + app.name + ': ' + window.location.href;
+                  window.open(createCalendarUrl(title, desc, targetTime), '_blank');
+                }}
+                title="Pasang pengingat jadwal di Google Calendar"
+              >
+                + Pengingat Kalender
+              </button>
+            )}
+          </div>
         </div>
         <CheckIns flow={flow} />
         {mine.feedbackSent ? (
@@ -620,7 +641,111 @@ function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean 
   )
 }
 
+// ---------- helper functions: share to WhatsApp, Google Calendar reminder, Testing Missions ----------
+
+function shareToWhatsApp(appName: string, openCount: number, appId: string) {
+  const url = window.location.origin + '/apps/' + appId;
+  const needed = openCount > 0 ? openCount + ' ' : '';
+  const text = 'Halo teman-teman! Saya butuh ' + needed + 'tester untuk aplikasi "' + appName + '" di TesBareng agar lolos 14 hari Google Play.\n\n📲 Bantu uji di sini: ' + url + '\n✨ Ada sistem timbal balik (reciprocity), saya siap tes balik aplikasi kalian! 🙌';
+  window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(text), '_blank');
+}
+
+function createCalendarUrl(title: string, details: string, targetDate: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const y = targetDate.getFullYear();
+  const m = pad(targetDate.getMonth() + 1);
+  const d = pad(targetDate.getDate());
+  const dates = y + m + d + '/' + y + m + d;
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(title) + '&details=' + encodeURIComponent(details) + '&dates=' + dates;
+}
+
+function TestingMissions({ guide, appId, uid }: { guide: string; appId: string; uid?: string | null }) {
+  const key = 'tb_missions_' + appId + '_' + (uid ?? 'anon');
+  const lines = useMemo(() => {
+    return guide
+      .split('\n')
+      .map((l) => l.trim().replace(/^[-*•\d.]+\s*/, ''))
+      .filter((l) => l.length > 0);
+  }, [guide]);
+
+  const [done, setDone] = useState<Record<number, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(key) ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  const toggle = (idx: number) => {
+    setDone((prev) => {
+      const next = { ...prev, [idx]: !prev[idx] };
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  if (lines.length <= 1) {
+    return <p className="guide-quote">{guide}</p>;
+  }
+
+  const completed = lines.filter((_, i) => done[i]).length;
+
+  return (
+    <div className="stack-8" style={{ marginTop: 'var(--s-2)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span className="small muted">Misi pengujian fitur:</span>
+        <span className="small num muted">{completed} / {lines.length} dicoba</span>
+      </div>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--s-2)' }}>
+        {lines.map((line, i) => (
+          <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--s-2)', fontSize: '0.9rem' }}>
+            <input
+              type="checkbox"
+              id={'mission-' + i}
+              checked={!!done[i]}
+              onChange={() => toggle(i)}
+              style={{ marginTop: '0.2rem', cursor: 'pointer' }}
+            />
+            <label htmlFor={'mission-' + i} style={{ cursor: 'pointer', textDecoration: done[i] ? 'line-through' : 'none', opacity: done[i] ? 0.7 : 1 }}>
+              {line}
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ---------- tester table: 4 fields per row, details behind a tap, inline edits (ADR-009 §3) ----------
+
+function downloadTestersCsv(appName: string, testers: TesterDoc[]) {
+  const headers = ['Nama', 'Email', 'Hari Aktif', 'Status', 'Feedback Terkirim', 'Feedback Terverifikasi', 'Dibalas Kreator', 'Tanggal Gabung'];
+  const now = Date.now();
+  const rows = testers.map((t) => [
+    '"' + t.displayName.replace(/"/g, '""') + '"',
+    '"' + (t.maskedEmail ?? '') + '"',
+    daysActive(t, now),
+    '"' + testerStatusLabel[t.status] + '"',
+    t.feedbackSent ? 'Ya' : 'Tidak',
+    t.feedbackVerified ? 'Ya' : 'Tidak',
+    t.replied ? 'Ya' : 'Tidak',
+    t.optedInAt ? new Date(t.optedInAt).toISOString().split('T')[0] : '',
+  ]);
+
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const cleanName = appName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  link.href = url;
+  link.setAttribute('download', 'testers-' + cleanName + '-' + new Date().toISOString().split('T')[0] + '.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 type SortKey = 'name' | 'days'
 type Quick = Partial<Pick<TesterDoc, 'feedbackVerified' | 'replied' | 'status'>>
@@ -776,9 +901,21 @@ function TesterTable({ app, testers, loading, isCreator, myUid, onEdit }: {
 
   return (
     <section className="panel flush span-12" aria-labelledby="testers-h">
-      <header>
-        <h2 id="testers-h">Daftar tester</h2>
-        <span className="meta num">{active.length} aktif{history.length > 0 ? ` · ${history.length} riwayat` : ''}</span>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 id="testers-h">Daftar tester</h2>
+          <span className="meta num">{active.length} aktif{history.length > 0 ? ` · ${history.length} riwayat` : ''}</span>
+        </div>
+        {testers.length > 0 && (
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => downloadTestersCsv(app.name, testers)}
+            title="Unduh daftar tester dalam format CSV"
+          >
+            Ekspor CSV
+          </button>
+        )}
       </header>
       {/* One sheet on every width (CLAUDE.md, DR-14): it scrolls inside its own box, so the header row
           and the name column both stay put. */}
@@ -912,7 +1049,18 @@ function FeedbackList({ testers, loading }: { testers: TesterDoc[]; loading: boo
                   <b>{t.displayName}</b>
                   <span className="creator-nums">{t.feedbackSentAt && <RelTime t={t.feedbackSentAt} />}{t.feedbackVerified && <FeedbackChip t={t} />}</span>
                 </span>
-                <span className="fb-text">{t.feedbackSummary}</span>
+                {(() => {
+                  const m = t.feedbackSummary?.match(/^\[([^\]]+)\]\s*(.*)$/s);
+                  if (m) {
+                    return (
+                      <span className="fb-text">
+                        <span className="chip sm" style={{ marginRight: 'var(--s-2)', display: 'inline-block' }}>{m[1]}</span>
+                        {m[2]}
+                      </span>
+                    );
+                  }
+                  return <span className="fb-text">{t.feedbackSummary}</span>;
+                })()}
               </span>
             </li>
           ))}

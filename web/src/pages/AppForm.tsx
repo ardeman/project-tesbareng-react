@@ -213,7 +213,21 @@ function Form({ existing }: { existing?: AppDoc }) {
           <p>Tulis sebagai pertanyaan atau hal yang perlu dicoba, bukan teks ulasan siap salin. Ulasan identik dari banyak akun bisa dianggap tidak asli oleh Google.</p>
         </div>
         <div className="form-panel">
-          {field('feedbackGuide', 'Yang ingin Anda uji (opsional)', <textarea className="input" rows={4} maxLength={LIMITS.feedbackGuide} placeholder="Coba level 3 di layar kecil: apakah tombol lompat mudah ditekan?" value={v.feedbackGuide} onChange={set('feedbackGuide')} {...aria('feedbackGuide')} />, undefined, LIMITS.feedbackGuide)}
+          {field(
+            'feedbackGuide',
+            'Yang ingin Anda uji (opsional)',
+            <textarea
+              className="input"
+              rows={5}
+              maxLength={LIMITS.feedbackGuide}
+              placeholder={"Gunakan tanda strip (-) dan Enter per baris:\n- Coba alur login dengan akun Google\n- Apakah tombol di layar kecil responsif?\n- Coba navigasi menu utama"}
+              value={v.feedbackGuide}
+              onChange={set('feedbackGuide')}
+              {...aria('feedbackGuide', true)}
+            />,
+            'Tips: Gunakan tanda minus (-) dan Enter per baris agar otomatis menjadi daftar checklist misi untuk tester.',
+            LIMITS.feedbackGuide
+          )}
           <div className="preview-card" role="group" aria-label="Pratinjau untuk tester">
             <span className="small muted">Yang dilihat tester di atas tombol Gabung sebagai tester:</span>
             <span className="t">Yang ingin diuji creator</span>

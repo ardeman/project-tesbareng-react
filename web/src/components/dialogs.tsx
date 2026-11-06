@@ -174,16 +174,27 @@ export function FeedbackDialog({ open, onClose, app, entry }: { open: boolean; o
   )
 }
 
+function parseDeviceSummary(raw = '') {
+  const match = raw.match(/^\[([^\]]+)\]\s*(.*)$/s);
+  return match ? { device: match[1], summary: match[2] } : { device: '', summary: raw };
+}
+
 function FeedbackForm({ onClose, app, entry }: { onClose: () => void; app: AppDoc; entry?: TesterDoc }) {
   const toast = useToast()
-  const [summary, setSummary] = useState(entry?.feedbackSummary ?? '')
+  const initial = parseDeviceSummary(entry?.feedbackSummary ?? '')
+  const [device, setDevice] = useState(initial.device)
+  const [summary, setSummary] = useState(initial.summary)
   const { busy, err, run } = useSubmit(onClose)
   const already = !!entry?.feedbackSent
+
   const save = (e: FormEvent) => {
     e.preventDefault()
     run(async () => {
-      await api.markFeedbackSent({ appId: app.id, sent: true, summary: summary.trim() || undefined })
-      toast(already ? 'Catatan feedback diperbarui.' : 'Feedback ditandai terkirim. Creator akan memverifikasinya di Play Console.')
+      const cleanDevice = device.trim()
+      const cleanSummary = summary.trim()
+      const combined = cleanDevice ? ('[' + cleanDevice + '] ' + cleanSummary).trim() : cleanSummary
+      await api.markFeedbackSent({ appId: app.id, sent: true, summary: combined || undefined })
+      toast(already ? 'Catatan feedback diperbarui.' : 'Feedback ditandai terkirim. Kreator akan memverifikasinya di Play Console.')
     })
   }
   const unmark = () => run(async () => {
@@ -200,6 +211,11 @@ function FeedbackForm({ onClose, app, entry }: { onClose: () => void; app: AppDo
           {!already && (
             <a className="btn" style={{ justifySelf: 'start' }} href={app.storeUrl ?? app.optInUrl} target="_blank" rel="noreferrer"><IconExternal />Buka {app.name} di Play</a>
           )}
+          <div className="field">
+            <label htmlFor="fb-device">Tipe HP / Versi Android <span className="opt">(opsional)</span></label>
+            <input id="fb-device" className="input" maxLength={60} placeholder="Contoh: Samsung A54 / Android 14" value={device} onChange={(e) => setDevice(e.target.value)} aria-describedby="fb-dev-hint" />
+            <span className="hint" id="fb-dev-hint">Membantu kreator saat menjawab kuesioner audit Google Play.</span>
+          </div>
           <div className="field">
             <label htmlFor="fb-sum">Ringkasan yang Anda tulis <span className="opt">(opsional)</span></label>
             <textarea id="fb-sum" className="input" maxLength={500} value={summary} onChange={(e) => setSummary(e.target.value)} aria-describedby="fb-sum-hint" />
