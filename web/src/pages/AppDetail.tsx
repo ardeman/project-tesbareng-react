@@ -144,7 +144,8 @@ export function AppDetail() {
 
       <Finding app={a} p={progress} loading={loading} description={a.description} />
 
-      {isNewBuild(a) && builds.data[0] && (
+      {/* Hidden for a tester who already checked in "Sudah update" on this build (same rule as Tugas saya). */}
+      {isNewBuild(a) && builds.data[0] && !(mine?.status === 'active' && flow.isDone('updated_build', builds.data[0].id)) && (
         <div className="notice info" role="status">
           <span><b>Build baru {builds.data[0].versionName}</b> · {relTime(builds.data[0].uploadedAt)}. Perbarui aplikasi dari Play Store, lalu uji lagi.</span>
           <span className="spacer" />

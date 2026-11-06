@@ -518,17 +518,22 @@ export async function hasOpenTodos(uid: string, now = Date.now()): Promise<boole
   if (await hasEmailListingTodo(uid)) return true
   if (entries.length === 0) return false
   const ids = entries.map((e) => e.appId)
-  const [apps, stats] = await Promise.all([
+  const [apps, stats, updated] = await Promise.all([
     rows<Row[]>(supabase.from('apps').select('id').in('id', ids).eq('deleted', false)),
     rows<Row[]>(supabase.from('app_stats').select('app_id, last_build_at').in('app_id', ids)),
+    rows<Row[]>(supabase.from('check_ins').select('build:builds!inner(app_id, uploaded_at)').eq('kind', 'updated_build').in('tester_id', entries.map((e) => e.id))),
   ])
+  const updatedAt = new Map<string, number>()
+  for (const { build: b } of updated) {
+    const t = ms(b.uploaded_at)
+    if (t != null && t > (updatedAt.get(b.app_id) ?? -Infinity)) updatedAt.set(b.app_id, t)
+  }
   const live = new Set(apps.map((a) => a.id as string))
   const lastBuild = new Map(stats.map((s) => [s.app_id as string, ms(s.last_build_at)]))
   return entries.some((e) => {
     if (!live.has(e.appId)) return false
     if (!e.feedbackSent) return true
-    const b = lastBuild.get(e.appId)
-    return b != null && now - b < 3 * 86_400_000 && b > (e.feedbackSentAt ?? e.optedInAt)
+    return buildTodoOpen(lastBuild.get(e.appId), e.feedbackSentAt ?? e.optedInAt, updatedAt.get(e.appId), now)
   })
 }
 
@@ -584,4 +589,32 @@ export const useEmailListingTodos = (uid: string | null | undefined, myEmailAppI
       : null,
     { pending: new Map<string, number>(), listed: [] as { appId: string; listedAt: number }[] }, [uid, key],
   )
+}
+
+/**
+ * Per app, the newest build (by `uploaded_at`) this member has checked in "Sudah update" on.
+ * A "build baru" to-do is done once this is at least the app's `lastBuildAt`.
+ */
+export const useMyUpdatedBuilds = (uid?: string | null) =>
+  useFetch(
+    uid
+      ? async () => {
+          const r = await rows<Row[]>(
+            supabase.from('check_ins').select('builds!inner(app_id, uploaded_at), testers!inner(user_id)')
+              .eq('kind', 'updated_build').eq('testers.user_id', uid),
+          )
+          const out = new Map<string, number>()
+          for (const { builds: b } of r) {
+            const t = ms(b.uploaded_at)
+            if (t != null && t > (out.get(b.app_id) ?? -Infinity)) out.set(b.app_id, t)
+          }
+          return out
+        }
+      : null,
+    new Map<string, number>(), [uid],
+  )
+
+/** The "build baru" to-do rule, shared by Tugas saya, the nav badge and hasOpenTodos. */
+export function buildTodoOpen(lastBuildAt: number | null | undefined, since: number, updatedAt: number | undefined, now = Date.now()) {
+  return lastBuildAt != null && now - lastBuildAt < 3 * 86_400_000 && lastBuildAt > since && !(updatedAt != null && updatedAt >= lastBuildAt)
 }
