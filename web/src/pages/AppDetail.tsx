@@ -35,6 +35,8 @@ export function AppDetail() {
   const myAssigned = useMyAssignedApps(user?.uid)
   const toast = useToast()
   const [dialog, setDialog] = useState<DialogKind>(null)
+  // Placed only once app, testers and builds are in, so the KPI block does not jump after first paint.
+  const kpiPlace = useKpiPlacement(!!app.data && !testers.loading && !builds.loading)
   usePageMeta(app.data && !app.data.deleted ? app.data.name : 'Aplikasi', app.data && !app.data.deleted ? app.data.description : undefined)
 
   const progress = useMemo(
@@ -156,20 +158,24 @@ export function AppDetail() {
       )}
 
       <div className="grid">
-        <section className="panel span-8" aria-labelledby="board-h">
-          <header>
-            <h2 id="board-h" className="num">Menuju {progress.target} tester × 14 hari</h2>
-            <BoardLegend />
-          </header>
-          {testers.error ? <ErrorBox text="Daftar tester gagal dimuat. Coba lagi sebentar lagi." onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} total={progress.target} counted={progress.testDay} />}
-        </section>
+        {/* KPIs move under the board only when the aside is clearly taller (few seats); otherwise full width below both. */}
+        <div className="span-8 col-fill">
+          <section className="panel" aria-labelledby="board-h" ref={kpiPlace.board}>
+            <header>
+              <h2 id="board-h" className="num">Menuju {progress.target} tester × 14 hari</h2>
+              <BoardLegend />
+            </header>
+            {testers.error ? <ErrorBox text="Daftar tester gagal dimuat. Coba lagi sebentar lagi." onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} total={progress.target} counted={progress.testDay} />}
+          </section>
+          {kpiPlace.beside && <Kpis p={progress} app={a} loading={loading} />}
+        </div>
 
-        <aside className="span-4 col-fill">
+        <aside className="span-4 col-fill" ref={kpiPlace.aside}>
           <InfoPanel app={a} p={progress} mine={mine} isCreator={isCreator} flow={flow} />
           <CreatorCard app={a} />
         </aside>
 
-        <Kpis p={progress} app={a} loading={loading} />
+        {!kpiPlace.beside && <Kpis p={progress} app={a} loading={loading} wide />}
 
         <TesterTable
           app={a} testers={testers.data} loading={testers.loading} isCreator={isCreator} myUid={user?.uid}
@@ -608,10 +614,33 @@ function LeaveDialog({ open, onClose, app, days }: { open: boolean; onClose: () 
   )
 }
 
-function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean }) {
+// Where the KPI block goes on wide screens: under the board (2 × 2) when the aside outgrows the board by more than
+// about half that block, so either placement leaves the smaller hole. Board and aside heights do not depend on it.
+const KPI_BESIDE_MIN = 130
+function useKpiPlacement(ready: boolean) {
+  const board = useRef<HTMLElement>(null)
+  const aside = useRef<HTMLElement>(null)
+  const [beside, setBeside] = useState(false)
+  useEffect(() => {
+    const b = board.current
+    const s = aside.current
+    if (!ready || !b || !s || typeof ResizeObserver === 'undefined') return
+    const wide = window.matchMedia('(min-width: 1024px)')
+    const check = () => setBeside(wide.matches && s.offsetHeight - b.offsetHeight > KPI_BESIDE_MIN)
+    const ro = new ResizeObserver(check)
+    ro.observe(b)
+    ro.observe(s)
+    wide.addEventListener('change', check)
+    check()
+    return () => { ro.disconnect(); wide.removeEventListener('change', check) }
+  }, [ready])
+  return { board, aside, beside }
+}
+
+function Kpis({ p, app, loading, wide }: { p: Progress; app: AppDoc; loading: boolean; wide?: boolean }) {
   const v = (x: ReactNode) => (loading ? <Skel w={64} h={24} /> : x)
   return (
-    <section className="kpis span-12" aria-label="Ringkasan keterlibatan">
+    <section className={wide ? 'kpis span-12' : 'kpis'} aria-label="Ringkasan keterlibatan">
       <div className="kpi">
         <div className="kpi-label">Tester aktif</div>
         <div className="kpi-value num">{v(<>{p.active}<small> / {p.target}</small></>)}</div>
