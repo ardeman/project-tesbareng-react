@@ -179,7 +179,7 @@ img, svg { display: block; }
 }
 .board-days i { height: 18px; background: var(--putih); }
 .board-days i.on { background: var(--langit); }
-.board-row.eligible .board-days i { background: var(--pandan); }
+.board-days i.count { background: var(--pandan); }
 .board-row.vacant .board-days i { background: var(--surface-soft); }
 .board-tail { text-align: right; font-size: var(--fs-small); white-space: nowrap; }
 .board-row.eligible .board-tail { font-weight: 700; }

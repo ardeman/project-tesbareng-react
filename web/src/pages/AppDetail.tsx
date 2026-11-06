@@ -161,7 +161,7 @@ export function AppDetail() {
             <h2 id="board-h" className="num">Menuju {progress.target} tester × 14 hari</h2>
             <BoardLegend />
           </header>
-          {testers.error ? <ErrorBox text="Daftar tester gagal dimuat. Coba lagi sebentar lagi." onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} total={progress.target} />}
+          {testers.error ? <ErrorBox text="Daftar tester gagal dimuat. Coba lagi sebentar lagi." onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} total={progress.target} counted={progress.testDay} />}
         </section>
 
         <aside className="span-4 col-fill">
@@ -222,8 +222,10 @@ function RecordHead({ app, p, loading, actions, assigned }: {
     io.observe(el)
     return () => io.disconnect()
   }, [])
-  const count = loading ? <Skel w={56} h={24} /> : <><b>{p.eligible}</b><small> / {p.target}</small></>
-  const seatsLabel = `${p.eligible} dari ${p.target} tester sudah 14 hari, ${p.active} aktif`
+  // Google counts a day only while all slots are active together: the same clock as the board's pandan columns.
+  const counted = Math.min(p.testDay, TARGET_DAYS)
+  const count = loading ? <Skel w={56} h={24} /> : <><b>{counted}</b><small> / {TARGET_DAYS}</small></>
+  const daysLabel = `${counted} dari ${TARGET_DAYS} hari terhitung, ${p.active} tester aktif dari ${p.target} kursi`
   return (
     <>
       <header ref={head} className="record-head">
@@ -244,8 +246,8 @@ function RecordHead({ app, p, loading, actions, assigned }: {
           </div>
         </div>
         <div className="rh-progress">
-          <p className="rh-count num">{count}<span className="rh-label">tester lulus 14 hari</span></p>
-          <Seats active={p.active} eligible={p.eligible} total={p.target} className="wide" label={seatsLabel} />
+          <p className="rh-count num">{count}<span className="rh-label">hari terhitung</span></p>
+          <Seats active={counted} eligible={counted} total={TARGET_DAYS} className="wide" label={daysLabel} />
           <p className="rh-sub num">{p.active >= p.target ? `${p.active} aktif · kursi penuh (${p.target})` : `${p.active} aktif dari ${p.target} kursi`}</p>
         </div>
         <div className="rh-actions">
@@ -261,7 +263,7 @@ function RecordHead({ app, p, loading, actions, assigned }: {
       </header>
       <div className={`record-bar ${stuck ? 'show' : ''}`} inert={!stuck} aria-hidden={!stuck}>
         <span className="rb-name">{app.name}</span>
-        <span className="rb-count num"><b>{p.eligible}</b> / {p.target}<span className="sr-only"> tester lulus 14 hari</span></span>
+        <span className="rb-count num"><b>{Math.min(p.testDay, TARGET_DAYS)}</b> / {TARGET_DAYS}<span className="sr-only"> hari terhitung</span></span>
         {actions.primary && <ActionButton a={actions.primary} primary small />}
       </div>
     </>
@@ -281,9 +283,8 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
     text = `Butuh ${need} tester aktif lagi.` + (p.active > 0 ? ` Paling cepat siap 14 hari setelah kursi ke-${p.target} terisi.` : ' Belum ada yang mendaftar.')
   } else {
     // Ready only when the target-th most senior tester reaches 14 days, not the next one to pass.
-    const last = p.seats[p.target - 1]
-    text = `Kursi sudah terisi; tinggal ${p.target - p.eligible} tester lagi lulus 14 hari.` +
-      (last ? ` Siap ajukan paling cepat ${inDays(TARGET_DAYS - last.days)}, jika ${p.target} tester teratas tetap aktif.` : '')
+    text = `Kursi sudah terisi; ${p.testDay} dari ${TARGET_DAYS} hari sudah terhitung.` +
+      ` Siap ajukan paling cepat ${inDays(TARGET_DAYS - p.testDay)}, jika ${p.target} tester teratas tetap aktif.`
   }
   return (
     <div className="finding">

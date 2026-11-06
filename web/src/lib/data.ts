@@ -40,6 +40,7 @@ function toApp(r: Row, s: Row | undefined): AppDoc {
     testerSlots: r.tester_slots ?? TARGET_TESTERS,
     activeTesterCount: s?.active_tester_count ?? 0,
     eligibleCount: s?.eligible_count ?? 0,
+    countedDays: s?.counted_days ?? 0,
     feedbackSentCount: s?.feedback_sent_count ?? 0,
     feedbackVerifiedCount: s?.feedback_verified_count ?? 0,
     repliedCount: s?.replied_count ?? 0,

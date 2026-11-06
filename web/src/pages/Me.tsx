@@ -48,7 +48,7 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                   {suggestions.map((a) => (
                     <li className="row-line" key={a.id}>
                       <span className="grow cell-2"><Link to={`/apps/${a.id}`}><b>{a.name}</b></Link><span>{a.creatorName}</span></span>
-                      <Seats active={a.activeTesterCount} eligible={a.eligibleCount} total={a.testerSlots} className="hide-sm" />
+                      <Seats active={a.activeTesterCount} total={a.testerSlots} className="hide-sm" />
                       <span className="num w-num">{a.activeTesterCount}<span className="of"> / {a.testerSlots}</span></span>
                     </li>
                   ))}
@@ -211,7 +211,7 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                   {myApps.data.map((a) => (
                     <li className="row-line" key={a.id}>
                       <span className="grow cell-2"><Link to={`/apps/${a.id}`}><b>{a.name}</b></Link><span style={{ marginTop: 'var(--s-1)' }}><StatusPill status={a.status} /></span></span>
-                      <Seats active={a.activeTesterCount} eligible={a.eligibleCount} total={a.testerSlots} className="hide-sm" />
+                      <Seats active={a.activeTesterCount} total={a.testerSlots} className="hide-sm" />
                       <span className="num w-num">{a.activeTesterCount}<span className="of"> / {a.testerSlots}</span></span>
                     </li>
                   ))}
