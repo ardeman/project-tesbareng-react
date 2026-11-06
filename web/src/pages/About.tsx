@@ -328,7 +328,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
               <ul className="ab-rule-list">
                 <li><b>Butuh + 2</b><span>Setiap app dapat tester sebanyak yang creator butuhkan dari TesBareng, ditambah 2 cadangan (paling banyak semua app lain di cohort).</span></li>
                 <li><b>Memberi = menerima</b><span>Kamu ngetes sebanyak tester yang diterima app‑mu. Butuh 12, kamu ngetes 14 app; butuh 3, biasanya 5.</span></li>
-                <li><b>Diacak</b><span>Urutan anggota diacak, lalu tugas dibagi sistem. Kalau semua app butuh 12, hasilnya lingkaran seperti di samping.</span></li>
+                <li><b>Diacak</b><span>Urutan anggota diacak, lalu tugas dibagi sistem. Kalau semua app butuh 12, hasilnya lingkaran seperti pada gambar.</span></li>
               </ul>
             </div>
             <RingRule />
