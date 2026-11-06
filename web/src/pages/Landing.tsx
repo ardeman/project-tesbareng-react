@@ -705,6 +705,9 @@ const TIERS = [
 ]
 
 const FAQ = [
+  { q: 'Harus punya app dulu untuk ikut?', a: 'Tidak. Kamu bisa ikut sebagai tester murni: gabung Google Group, masuk dengan Google, lalu pilih app di daftar app dan tekan Gabung sebagai tester. Mau tugas yang sudah dibagi? Gabung cohort sebagai tester, selama cohort masih Forming atau paling lambat Hari 7. Setiap app yang kamu tes sampai 14 hari dihitung untuk badge.' },
+  { q: 'App atau game saya sudah rilis di Play Store. Perlu ikut?', a: 'Kalau sudah rilis ke production, syarat 12 tester selama 14 hari sudah kamu lewati, jadi app itu tidak perlu didaftarkan. Kamu tetap boleh ikut sebagai tester untuk membantu creator lain. Kalau app-nya baru ada di closed testing, daftarkan dan ajukan ke cohort.' },
+  { q: 'Sudah daftar jadi tester. Lalu apa?', a: 'Tetap opt-in dan biarkan app terpasang selama 14 hari. Buka app-nya sesekali, kirim feedback di Google Play dengan kata-katamu sendiri, lalu tekan Tandai sudah kirim di TesBareng. Kalau ada build baru, update app-nya. Semua yang masih harus kamu kerjakan ada di Tugas saya.' },
   { q: 'Apakah TesBareng layanan resmi Google?', a: 'Bukan. TesBareng dibuat oleh komunitas creator Android Indonesia untuk saling membantu memenuhi syarat closed test Google Play.' },
   { q: 'Apakah TesBareng tersambung ke Play Console?', a: 'Tidak. Google tidak menyediakan data opt-in untuk aplikasi lain, jadi semua dicatat sendiri oleh anggota. Feedback yang ditandai Verified adalah bukti terkuat, karena creator mengeceknya langsung di Play Console.' },
   { q: 'Kenapa feedback harus dikirim di Google Play?', a: 'Feedback di Play masuk langsung ke Play Console milik creator, lengkap dengan nama pengirimnya. TesBareng hanya mencatat bahwa kamu sudah mengirimnya, lalu creator menandainya Verified. Tulis dengan kata-katamu sendiri: ulasan yang disalin dari banyak akun terlihat tidak asli.' },
@@ -840,7 +843,7 @@ export function Landing() {
           <div className="hero-copy">
             <p className="lp-hud"><b aria-hidden="true">00</b>Komunitas creator Android Indonesia</p>
             <h1 id="hero-h"><span>12 tester.</span><span>14 hari.</span><span>Bareng.<i className="caret" aria-hidden="true" /></span></h1>
-            <p className="lp-lede">Syarat closed test Google Play untuk akun developer pribadi baru. Creator Android Indonesia saling ngetes lewat cohort: kamu tes app mereka, mereka tes app kamu.</p>
+            <p className="lp-lede">Syarat closed test Google Play untuk akun developer pribadi baru. Creator Android Indonesia saling ngetes lewat cohort: kamu tes app mereka, mereka tes app kamu. Belum punya app? Kamu tetap bisa ikut sebagai tester.</p>
             <div className="cta-row">
               <a className="lp-btn lp-btn--primary" href="#gabung">Gabung komunitas</a>
               <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />Grup WhatsApp<span className="sr-only"> (tab baru)</span></a>
