@@ -270,7 +270,6 @@ function RecordHead({ app, p, loading, actions, assigned }: {
 
 function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; loading: boolean; description: string }) {
   if (loading) return <div className="finding"><Skel w={420} h={20} /></div>
-  const soonest = p.seats.filter((s) => !s.eligible).map((s) => TARGET_DAYS - s.days)[0]
   // ADR-012 §4: what Google's 12 still needs from outside; community testers beyond the slots count too.
   const outside = p.target < TARGET_TESTERS ? TARGET_TESTERS - Math.max(p.active, p.target) : 0
   let text: string
@@ -278,7 +277,8 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
   else if (p.ready) text = `Siap ajukan akses produksi: ${p.eligible} tester sudah 14 hari berturut-turut.`
   else if (p.active < p.target) {
     const need = p.target - p.active
-    text = `Butuh ${need} tester aktif lagi.` + (soonest != null ? ` Tester terlama lulus 14 hari ${inDays(soonest)}.` : ' Belum ada yang mendaftar.')
+    // Not ready until the target-th seat is filled and then runs 14 days; the soonest tester's date unlocks nothing.
+    text = `Butuh ${need} tester aktif lagi.` + (p.active > 0 ? ` Paling cepat siap 14 hari setelah kursi ke-${p.target} terisi.` : ' Belum ada yang mendaftar.')
   } else {
     // Ready only when the target-th most senior tester reaches 14 days, not the next one to pass.
     const last = p.seats[p.target - 1]
