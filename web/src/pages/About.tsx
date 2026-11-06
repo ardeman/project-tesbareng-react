@@ -284,7 +284,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
         </div>
 
         <Section id="syarat" n={1} title="Syarat dari Google Play"
-          lede="Akun developer pribadi baru wajib menjalankan closed test sebelum boleh mengajukan akses production.">
+          lede="Akun developer pribadi baru wajib menjalankan closed test sebelum boleh mengajukan akses production. Kalau app‑mu sudah rilis ke production, syarat ini sudah lewat; kamu tetap bisa ikut sebagai tester.">
           <div className="ab-sheet">
             <div className="ab-meter">
               <div className="ab-meter-top"><span>Tester tetap opt-in</span><span className="num">minimal 12</span></div>
