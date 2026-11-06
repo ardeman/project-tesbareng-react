@@ -248,7 +248,7 @@ function RecordHead({ app, p, loading, actions, assigned }: {
         <div className="rh-progress">
           <p className="rh-count num">{count}<span className="rh-label">hari terhitung</span></p>
           <Seats active={counted} eligible={counted} total={TARGET_DAYS} className="wide" label={daysLabel} />
-          <p className="rh-sub num">{p.active >= p.target ? `${p.active} aktif · kursi penuh (${p.target})` : `${p.active} aktif dari ${p.target} kursi`}</p>
+          <p className="rh-sub num">{p.active >= p.target ? `${p.active} aktif · kursi penuh (${p.target})` : `${p.active} aktif dari ${p.target} kursi · hari mulai dihitung saat kursi penuh`}</p>
         </div>
         <div className="rh-actions">
           {actions.primary && <ActionButton a={actions.primary} primary />}
@@ -616,12 +616,6 @@ function Kpis({ p, app, loading }: { p: Progress; app: AppDoc; loading: boolean 
         <div className="kpi-label">Tester aktif</div>
         <div className="kpi-value num">{v(<>{p.active}<small> / {p.target}</small></>)}</div>
         <div style={{ marginTop: 'var(--s-2)' }}><Bar value={p.active} max={p.target} label="Tester aktif" /></div>
-      </div>
-      <div className="kpi">
-        <div className="kpi-label">Hari uji</div>
-        <div className="kpi-value num">{v(<>{p.testDay}<small> / {TARGET_DAYS}</small></>)}</div>
-        <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(p.testDay, TARGET_DAYS)} max={TARGET_DAYS} label="Hari uji" /></div>
-        {p.active < p.target && <p className="note num">Mulai dihitung saat {p.target} tester aktif</p>}
       </div>
       <div className="kpi">
         <div className="kpi-label">Feedback di Play</div>
