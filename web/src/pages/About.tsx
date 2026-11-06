@@ -320,7 +320,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
         </Section>
 
         <Section id="cohort" n={3} title="Cohort: tugas dibagi rata"
-          lede="Cohort mengelompokkan creator supaya tidak ada yang cuma minta dites. Siapa ngetes app siapa ditentukan sistem, bukan dipilih sendiri.">
+          lede="Cohort mengelompokkan creator supaya tidak ada yang cuma minta dites. Siapa ngetes app siapa ditentukan sistem, bukan dipilih sendiri. Cohort tidak wajib: tanpa cohort kamu tetap bisa mendaftarkan app dan ngetes app mana saja, hanya tanpa jaminan dites balik.">
           <div className="ab-split">
             <div className="ab-card-flat">
               <h3>Pembagian tugas</h3>

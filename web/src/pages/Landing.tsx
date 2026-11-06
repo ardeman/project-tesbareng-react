@@ -706,6 +706,7 @@ const TIERS = [
 
 const FAQ = [
   { q: 'Harus punya app dulu untuk ikut?', a: 'Tidak. Kamu bisa ikut sebagai tester murni: gabung Google Group, masuk dengan Google, lalu pilih app di daftar app dan tekan Gabung sebagai tester. Mau tugas yang sudah dibagi? Gabung cohort sebagai tester, selama cohort masih Forming atau sampai akhir hari ke-6 setelah dimulai. Setiap app yang kamu tes sampai 14 hari dihitung untuk badge.' },
+  { q: 'Wajib ikut cohort?', a: 'Tidak. Tanpa cohort kamu tetap bisa mendaftarkan app dan ngetes app mana saja, dan app yang kamu tes sampai 14 hari tetap dihitung untuk badge. Bedanya, tanpa cohort tidak ada jaminan app‑mu dites balik. Di cohort, tugas dibagi rata: kamu ngetes sebanyak tester yang diterima app‑mu.' },
   { q: 'App atau game saya sudah rilis di Play Store. Perlu ikut?', a: 'Kalau sudah rilis ke production, syarat 12 tester selama 14 hari sudah kamu lewati, jadi app itu tidak perlu didaftarkan. Kamu tetap boleh ikut sebagai tester untuk membantu creator lain. Kalau app-nya baru ada di closed testing, daftarkan dan ajukan ke cohort.' },
   { q: 'Sudah daftar jadi tester. Lalu apa?', a: 'Tetap opt-in dan biarkan app terpasang selama 14 hari. Buka app-nya sesekali, kirim feedback di Google Play dengan kata-katamu sendiri, lalu tekan Tandai sudah kirim di TesBareng. Kalau ada build baru, update app-nya. Semua yang masih harus kamu kerjakan ada di Tugas saya.' },
   { q: 'Apakah TesBareng layanan resmi Google?', a: 'Bukan. TesBareng dibuat oleh komunitas creator Android Indonesia untuk saling membantu memenuhi syarat closed test Google Play.' },
@@ -935,8 +936,8 @@ export function Landing() {
               </li>
               <li>
                 <span className="n" aria-hidden="true">3</span>
-                <h3>Ikut cohort berikutnya</h3>
-                <p>Sebagai creator, ajukan app-mu lalu tunggu persetujuan admin, atau sebagai tester murni. Link grup WhatsApp cohort dibagikan setelah kamu masuk.</p>
+                <h3>Ikut cohort (opsional)</h3>
+                <p>Di cohort, tugas dibagi rata sehingga app‑mu pasti dites balik. Ajukan app‑mu lalu tunggu persetujuan admin, atau ikut sebagai tester murni. Tanpa cohort pun kamu tetap bisa mendaftarkan app dan ngetes app mana saja. Link grup WhatsApp cohort dibagikan setelah kamu masuk.</p>
               </li>
             </ol>
             <div className="cta-row join-cta">
