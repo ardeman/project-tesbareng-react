@@ -664,7 +664,7 @@ const DAYS = [
   { d: 0, title: 'Opt-in dan install', text: 'Daftar app tugasmu muncul di Tugas saya. Gabung Google Group, buka link opt-in tiap app, lalu install. Batasnya 48 jam.', chip: 'c-putih', chipText: '✓ Opt-in' },
   { d: 2, title: 'Batas opt-in', text: 'Lewat 48 jam, yang belum opt-in tercatat Behind, dan app miliknya sendiri mendapat label Belum tes yang terlihat semua anggota.', chip: 'c-cabai', chipText: '! Belum tes' },
   { d: 7, title: 'Pakai, lalu kirim feedback', text: 'Buka app-nya dan centang Sudah buka app. Tulis feedback di Google Play dengan kata-katamu sendiri; creator menandai Verified setelah membacanya.', chip: 'c-pandan', chipText: '✓✓ Verified' },
-  { d: 13, title: 'Masih opt-in?', text: 'Centang sekali lagi. Besoknya, app dengan 12 tester eligible siap diajukan ke production.', chip: 'c-langit', chipText: '✓ Masih opt-in' },
+  { d: 13, title: 'Masih opt-in?', text: 'Centang sekali lagi. Besoknya, app yang tester eligible-nya sudah memenuhi target siap diajukan ke production.', chip: 'c-langit', chipText: '✓ Masih opt-in' },
 ]
 const RAIL: Record<number, string> = { 0: 'c-kunyit', 2: 'c-cabai', 7: 'c-pandan', 13: 'c-langit' }
 
@@ -713,8 +713,10 @@ const FAQ = [
   { q: 'Apakah TesBareng tersambung ke Play Console?', a: 'Tidak. Google tidak menyediakan data opt-in untuk aplikasi lain, jadi semua dicatat sendiri oleh anggota. Feedback yang ditandai Verified adalah bukti terkuat, karena creator mengeceknya langsung di Play Console.' },
   { q: 'Kenapa feedback harus dikirim di Google Play?', a: 'Feedback di Play masuk langsung ke Play Console milik creator, lengkap dengan nama pengirimnya. TesBareng hanya mencatat bahwa kamu sudah mengirimnya, lalu creator menandainya Verified. Tulis dengan kata-katamu sendiri: ulasan yang disalin dari banyak akun terlihat tidak asli.' },
   { q: 'Bagaimana kalau ada anggota yang tidak ikut ngetes?', a: 'Lewat 48 jam, app miliknya mendapat label Belum tes, dan admin bisa memindahkan slotnya ke anggota lain. Saat cohort ditutup, kewajiban yang belum selesai tercatat Owing. Dia tidak bisa ikut cohort berikutnya sampai admin menandainya Settled.' },
-  { q: 'Wajib gabung grup WhatsApp cohort?', a: 'Tidak. Grup WhatsApp cohort opsional, dan anggota grup bisa melihat nomor HP satu sama lain. Status tetap dilaporkan di TesBareng, bukan di chat. Yang wajib hanya Google Group, karena Play Console membutuhkannya.' },
-  { q: 'Siapa yang bisa melihat emailku?', a: 'Tidak ada. Di semua halaman, email tampil disamarkan, misalnya bu*****@gmail.com. Alamat lengkap hanya dipakai sistem untuk mengirim pengingat.' },
+  { q: 'Wajib gabung grup WhatsApp cohort?', a: 'Tidak. Grup WhatsApp cohort opsional, dan anggota grup bisa melihat nomor HP satu sama lain. Status tetap dilaporkan di TesBareng, bukan di chat. Yang dibutuhkan hanya Google Group, karena Play Console memakainya sebagai daftar tester, atau persetujuan berbagi email untuk app yang memakai daftar email.' },
+  { q: 'Siapa yang bisa melihat emailku?', a: 'Di semua halaman, email tampil disamarkan, misalnya bu*****@gmail.com. Alamat lengkap dipakai sistem untuk mengirim pengingat. Satu-satunya pengecualian: kalau app memakai daftar email dan kamu menekan Minta ditambahkan, creator app itu saja yang melihat alamat lengkapmu. Persetujuan itu bisa kamu tarik kapan saja.' },
+  { q: 'Closed track saya sudah memakai daftar email, bukan Google Group.', a: 'Di Play Console, satu track memakai Google Group atau daftar email, tidak bisa keduanya. Pilih Daftar email di form app; pilihan ini terbuka setelah kamu ngetes 3 app. Tester menekan Minta ditambahkan, kamu menempel email mereka di Play Console, lalu menandai Sudah ditambahkan. Setelah itu mereka bisa opt-in.' },
+  { q: 'Saya sudah punya sebagian tester sendiri.', a: 'Isi berapa tester yang kamu butuhkan dari TesBareng (1–12) di form app. Sisanya dari luar komunitas, dilaporkan sendiri. Di cohort, app-mu dapat jumlah itu ditambah 2 cadangan, dan kamu ngetes sebanyak itu juga: butuh 3, biasanya kamu ngetes 5 app.' },
 ]
 
 /** FAQ: animate the details height open and closed (owner decision; off under reduced motion). */
@@ -926,7 +928,7 @@ export function Landing() {
               <li>
                 <span className="n" aria-hidden="true">1</span>
                 <h3>Gabung Google Group</h3>
-                <p>Masuk ke <code className="email">{COMMUNITY_GROUP}</code> dengan akun Google yang ada di HP-mu. Creator memasang grup ini sebagai daftar tester di Play Console, jadi cukup sekali untuk semua app.</p>
+                <p>Masuk ke <code className="email">{COMMUNITY_GROUP}</code> dengan akun Google yang ada di HP-mu. Creator memasang grup ini sebagai daftar tester di Play Console, jadi cukup sekali untuk semua app. Untuk app yang memakai daftar email, tekan Minta ditambahkan di halaman app-nya.</p>
                 <CopyEmail onCopied={() => say('Email grup tersalin')} />
               </li>
               <li>
