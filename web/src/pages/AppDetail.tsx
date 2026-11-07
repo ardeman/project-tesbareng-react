@@ -179,6 +179,7 @@ export function AppDetail() {
 
         <TesterTable
           app={a} testers={testers.data} loading={testers.loading} isCreator={isCreator} myUid={user?.uid}
+          appPassed={progress.testDay >= TARGET_DAYS}
           onEdit={(t) => setDialog({ tester: t })}
         />
 
@@ -304,7 +305,7 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
       {p.lowEngagement && app.status !== 'live' && (
         <p className="flag">
           <Chip glyph="!">Keterlibatan rendah</Chip>
-          <span>{p.builds === 0 ? 'Belum ada build baru selama uji.' : 'Kurang dari separuh tester yang lulus 14 hari sudah kirim feedback.'} Google juga menilai feedback dan pembaruan, bukan hanya jumlah tester.</span>
+          <span>{p.builds === 0 ? 'Belum ada build baru selama uji.' : 'Kurang dari separuh tester yang sudah 14 hari mengirim feedback.'} Google juga menilai feedback dan pembaruan, bukan hanya jumlah tester.</span>
         </p>
       )}
     </div>
@@ -774,8 +775,8 @@ function downloadTestersCsv(appName: string, testers: TesterDoc[]) {
 type SortKey = 'name' | 'days'
 type Quick = Partial<Pick<TesterDoc, 'feedbackVerified' | 'replied' | 'status'>>
 
-function TesterTable({ app, testers, loading, isCreator, myUid, onEdit }: {
-  app: AppDoc; testers: TesterDoc[]; loading: boolean; isCreator: boolean; myUid?: string; onEdit: (t: TesterDoc) => void
+function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdit }: {
+  app: AppDoc; testers: TesterDoc[]; loading: boolean; isCreator: boolean; myUid?: string; appPassed: boolean; onEdit: (t: TesterDoc) => void
 }) {
   const toast = useToast()
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'days', dir: 'desc' })
@@ -874,7 +875,7 @@ function TesterTable({ app, testers, loading, isCreator, myUid, onEdit }: {
             </span>
           </td>
           <td className="num"><b>{d}</b><span className="of"> / {TARGET_DAYS}</span></td>
-          <td><TesterChip t={t} days={d} /></td>
+          <td><TesterChip t={t} days={d} appPassed={appPassed} /></td>
           <td>
             <span className="fb-cell">
               <FeedbackChip t={t} />

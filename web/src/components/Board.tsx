@@ -27,7 +27,7 @@ export function Board({ seats, loading, total = TARGET_TESTERS, counted = 0 }: {
       <div className="board" role="list" aria-label={`Papan ${total} kursi tester dan 14 hari`}>
         {top.map((s, i) => (
           <div key={s.tester.id} role="listitem" className={`board-row ${s.eligible ? 'eligible' : ''}`}
-            aria-label={`${s.tester.displayName}: ${s.days} hari${s.eligible ? ', lulus 14 hari' : ''}`}>
+            aria-label={`${s.tester.displayName}: ${s.days} hari${s.eligible ? (counted >= TARGET_DAYS ? ', lulus 14 hari' : ', 14 hari tercapai, tetap ikut sampai app lulus') : ''}`}>
             <span className="board-name">
               <span className="seat-no num">{i + 1}</span>
               {/* Plain text: rows are 24 px, too small to tap; the tester table below links each profile. */}
