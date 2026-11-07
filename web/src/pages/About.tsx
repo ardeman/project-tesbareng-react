@@ -109,7 +109,7 @@ const STEPS: { t: string; d: ReactNode }[] = [
   { t: 'Gabung Google Group', d: <>Masuk ke <code className="ab-email">{COMMUNITY_GROUP}</code> dengan akun Google di HP-mu. Hanya anggota grup ini yang bisa opt-in. Untuk app yang memakai daftar email, grup tidak dipakai: tekan Minta ditambahkan di halaman app dan setujui emailmu terlihat oleh creator app itu, lalu tunggu creator menandai Sudah ditambahkan.</> },
   { t: 'Opt-in', d: 'Buka link opt-in di halaman app, lalu ketuk Jadi penguji di Google Play.' },
   { t: 'Install, lalu daftar', d: 'Pasang app-nya dari Play Store dengan akun yang sama, lalu tekan Gabung sebagai tester di halaman app di TesBareng.' },
-  { t: 'Pakai', d: 'Baca panduan feedback dari creator, lalu benar-benar pakai app-nya. Biarkan terpasang 14 hari.' },
+  { t: 'Pakai', d: 'Baca panduan feedback dari creator, lalu benar-benar pakai app-nya. Biarkan terpasang sampai app lulus 14 hari Google.' },
   { t: 'Kirim feedback di Google Play', d: 'Rating plus komentar yang spesifik, dengan kata-katamu sendiri: apa yang jalan, apa yang rusak, apa yang perlu diperbaiki.' },
   { t: 'Centang di TesBareng', d: 'Tekan Tandai sudah kirim di halaman app. Ringkasan singkat boleh ditambahkan, maksimal 500 karakter.' },
 ]
@@ -147,7 +147,7 @@ const RULES: { group: string; items: { t: string; d: string }[] }[] = [
   {
     group: 'Sebagai tester',
     items: [
-      { t: 'Biarkan terpasang 14 hari', d: 'Google menghitung tester yang tetap opt-in 14 hari berturut-turut. Keluar di hari ke-10 berarti mulai lagi dari nol.' },
+      { t: 'Biarkan terpasang sampai app lulus', d: 'Google menghitung 14 hari berturut-turut selama minimal 12 tester tetap opt-in. Kalau ada yang keluar dan jumlahnya turun di bawah 12, hitungan app itu mulai lagi dari nol.' },
       { t: 'Tulis feedback dengan kata sendiri', d: 'Ulasan yang disalin dari banyak akun terlihat tidak asli bagi Google.' },
       { t: 'Coba lagi setiap build baru', d: 'Saat creator mencatat build, update dari Play Store, coba lagi, lalu centang Sudah update.' },
       { t: 'Berhenti dengan terus terang', d: 'Kalau harus berhenti, tekan Berhenti menguji. Lembarnya tetap jujur dan creator tahu slot mana yang perlu diisi.' },

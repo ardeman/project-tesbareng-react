@@ -352,7 +352,7 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
           <p className="lead-num num" style={{ marginTop: 'var(--s-2)' }}>{Math.min(d, 999)}<small> / {TARGET_DAYS} hari</small></p>
           <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(d, TARGET_DAYS)} max={TARGET_DAYS} label="Hari aktif Anda" /></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--s-2)' }}>
-            <p className="muted small num" style={{ margin: 0 }}>Sejak {fmtDate(mine.optedInAt)}. Jangan uninstall sebelum 14 hari.</p>
+            <p className="muted small num" style={{ margin: 0 }}>Sejak {fmtDate(mine.optedInAt)}. Jangan uninstall sebelum app ini lulus 14 hari Google.</p>
             {mine.optedInAt && (
               <button
                 type="button"
@@ -400,7 +400,7 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
   return (
     <section className="panel stack-16" aria-label="Ikut menguji">
       <h2>{mine?.status === 'left' ? 'Uji lagi aplikasi ini' : 'Ikut menguji'}</h2>
-      {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi memulai hitungan 14 hari dari awal.</p>}
+      {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi menghitung hari aktif Anda dari nol.</p>}
       {guide}
       {app.testerMethod === 'email_list'
         ? <p className="muted small">Aplikasi ini memakai daftar email: minta ditambahkan, tunggu creator menambahkan email Anda, lalu opt-in dan pasang aplikasinya. Mulai dari tombol di atas.</p>
@@ -604,7 +604,7 @@ function LeaveDialog({ open, onClose, app, days }: { open: boolean; onClose: () 
     <Dialog open={open} onClose={onClose} label={`Berhenti menguji ${app.name}?`}>
       <div className="sheet-body">
         <h2>Berhenti menguji {app.name}?</h2>
-        <p className="lede">Hari aktif Anda ({days} hari) berhenti dihitung. Jika gabung lagi, hitungan 14 hari mulai dari awal.</p>
+        <p className="lede">Hari aktif Anda ({days} hari) berhenti dihitung. Jika gabung lagi, hari aktif Anda mulai dari nol.</p>
       </div>
       <div className="sheet-foot">
         <button type="button" className="btn" onClick={onClose}>Tetap menguji</button>
