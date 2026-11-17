@@ -15,7 +15,7 @@ import { usePageMeta } from '../lib/pageMeta'
 import { api, errorCode, markEmailListed, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useEmailListings, useMyEmailListing, useTesters } from '../lib/data'
 import { checkIn, milestones, useCheckIns, type CheckIn, type Milestone } from '../lib/checkins'
 import {
-  groupPlayStepsDone, hasStoreUrl, isLikelyMobile, markResumeJoin, openPlayInstall, playInstallUrl,
+  groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, markResumeJoin, openPlayInstall, playInstallUrl,
   readGroupJoinProgress, takeResumeJoin, writeGroupJoinProgress, type GroupJoinProgress,
 } from '../lib/joinProgress'
 import {
@@ -75,7 +75,6 @@ export function AppDetail() {
   const mine = user ? testers.data.find((t) => t.uid === user.uid) : undefined
   const loading = testers.loading || builds.loading
   const playUrl = playInstallUrl(a)
-  const optInUrl = a.optInUrl
   const storeOk = hasStoreUrl(a)
   const isBeginner = !isCreator && mine?.status !== 'active' && mine?.status !== 'removed'
 
@@ -101,7 +100,7 @@ export function AppDetail() {
     if (isCreator) {
       const overflow: MenuItem[] = []
       if (storeOk) overflow.push({ label: 'Buka halaman Play', href: a.storeUrl! })
-      overflow.push({ label: 'Buka link opt-in', href: a.optInUrl })
+      if (a.optInUrl) overflow.push({ label: 'Buka link opt-in', href: a.optInUrl })
       overflow.push({ label: 'Bagikan ke WhatsApp', onSelect: () => shareToWhatsApp(a.name, openSeats(a), a.id) })
       return {
         primary: { label: 'Catat build', icon: <IconPlus />, onClick: () => setDialog('build') },
@@ -118,9 +117,15 @@ export function AppDetail() {
       const latest = builds.data[0]
       const buildWaiting = isNewBuild(a) && a.lastBuildAt != null && a.lastBuildAt > since && !(latest && flow.isDone('updated_build', latest.id))
       const leave: MenuItem = { label: 'Berhenti menguji', danger: true, onSelect: () => setDialog('leave') }
-      const play: Action = { label: storeOk ? 'Buka di Play Store' : 'Buka link opt-in', icon: <IconExternal />, href: playUrl }
-      const editNote: Action = { label: 'Ubah catatan feedback', onClick: () => setDialog('feedback') }
-      if (!mine.feedbackSent) return { primary: { label: 'Tandai sudah kirim', onClick: () => setDialog('feedback') }, secondary: [play], overflow: [leave] }
+      const play: Action = { label: storeOk || isLiveApp(a) ? 'Buka di Play Store' : 'Buka link opt-in', icon: <IconExternal />, href: playUrl }
+      const editNote: Action = { label: isLiveApp(a) ? 'Ubah catatan ulasan' : 'Ubah catatan feedback', onClick: () => setDialog('feedback') }
+      if (!mine.feedbackSent) {
+        return {
+          primary: { label: isLiveApp(a) ? 'Tandai sudah kirim ulasan' : 'Tandai sudah kirim', onClick: () => setDialog('feedback') },
+          secondary: [play],
+          overflow: [leave],
+        }
+      }
       if (buildWaiting) return { primary: { label: 'Uji build baru di Play', icon: <IconExternal />, href: playUrl }, secondary: [editNote], overflow: [leave] }
       const next = flow.next
       if (next) {
@@ -129,11 +134,29 @@ export function AppDetail() {
       }
       return { secondary: [play, editNote], overflow: [leave] }
     }
-    const playAction: Action = { label: storeOk ? 'Buka di Play Store' : 'Buka link opt-in', icon: <IconExternal />, href: playUrl }
+    const playAction: Action = { label: storeOk || isLiveApp(a) ? 'Buka di Play Store' : 'Buka link opt-in', icon: <IconExternal />, href: playUrl }
     const storeOverflow: MenuItem[] = []
-    if (storeOk) storeOverflow.push({ label: 'Link opt-in (cadangan)', href: optInUrl })
+    if (storeOk && a.optInUrl) storeOverflow.push({ label: 'Link opt-in (cadangan)', href: a.optInUrl })
     storeOverflow.push({ label: 'Bagikan ke WhatsApp', onSelect: () => shareToWhatsApp(a.name, openSeats(a), a.id) })
     if (mine?.status === 'removed') return { secondary: [playAction], overflow: storeOverflow }
+    if (isLiveApp(a)) {
+      if (groupPlayStepsDone(groupProgress)) {
+        return {
+          primary: { label: 'Catat saya sebagai pengulas', onClick: openJoinOrLogin },
+          secondary: [playAction],
+          overflow: storeOverflow,
+          note: user
+            ? 'Sudah pasang? Catat di TesBareng, lalu tulis ulasan publik di Play Store.'
+            : 'Sudah pasang? Masuk dengan Google untuk mencatat, lalu tulis ulasan publik di Play.',
+        }
+      }
+      return {
+        primary: { label: 'Mulai ulas app ini', onClick: focusGuide },
+        secondary: [playAction],
+        overflow: storeOverflow,
+        note: 'App sudah rilis: buka Play Store → pasang → catat di TesBareng → tulis ulasan publik.',
+      }
+    }
     if (a.testerMethod === 'email_list') {
       // The opt-in link only works once the creator has added this member's email in Play Console.
       const l = myListing.data
@@ -336,7 +359,11 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
   // ADR-012 §4: what Google's 12 still needs from outside; community testers beyond the slots count too.
   const outside = p.target < TARGET_TESTERS ? TARGET_TESTERS - Math.max(p.active, p.target) : 0
   let text: string
-  if (app.status === 'live') text = `Sudah rilis produksi. ${p.active} tester masih tercatat aktif.`
+  if (app.status === 'live') {
+    text = p.active > 0
+      ? `Sudah rilis production. ${p.active} pengulas tercatat; minta mereka tulis ulasan publik di Play Store.`
+      : 'Sudah rilis production. Bagikan halaman ini atau ajukan ke cohort agar anggota memasang app dan menulis ulasan publik di Play Store.'
+  }
   else if (p.ready) text = `Siap ajukan akses produksi: ${p.eligible} tester sudah 14 hari berturut-turut.`
   else if (p.active < p.target) {
     const need = p.target - p.active
@@ -503,6 +530,43 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
     if (isLikelyMobile()) openPlayInstall(app)
   }
 
+  if (isLiveApp(app)) {
+    const step = !progress.installed ? 1 : 2
+    return (
+      <section ref={ref} tabIndex={-1} className="panel stack-16 span-12 beginner-guide" aria-labelledby="beginner-h" id="cara-dapat-app">
+        <div>
+          <h2 id="beginner-h">Cara ulas app ini</h2>
+          <p className="muted">App sudah rilis di production. Pasang dari Play Store, catat di TesBareng, lalu tulis ulasan publik (tampil untuk semua orang).</p>
+        </div>
+        <ol className="beginner-steps">
+          <li className={progress.installed ? 'done' : step === 1 ? 'current' : undefined}>
+            <span className="num" aria-hidden="true">{progress.installed ? '✓' : '1'}</span>
+            <div className="beginner-step-body">
+              <p className="t">Buka Play Store dan pasang</p>
+              <p className="d">Ketuk tombol di bawah. Pasang, lalu buka sekali.</p>
+              {step === 1 && (
+                <div className="beginner-step-actions">
+                  <a className="btn primary sm" href={playUrl} target="_blank" rel="noreferrer"><IconExternal />Buka di Play Store</a>
+                  <button type="button" className="btn sm" onClick={() => mark({ installed: true, group: true })}>Sudah memasang</button>
+                </div>
+              )}
+            </div>
+          </li>
+          <li className={step === 2 ? 'current' : undefined}>
+            <span className="num" aria-hidden="true">2</span>
+            <div className="beginner-step-body">
+              <p className="t">Catat, lalu tulis ulasan publik</p>
+              <p className="d">Catat di TesBareng (login Google). Setelah itu buka lagi Play Store → tulis bintang + komentar dengan kata-kata Anda sendiri → kembali ke sini dan tandai sudah kirim.</p>
+              {step === 2 && (
+                <button type="button" className="btn primary sm" onClick={onRecord}>Catat saya sebagai pengulas</button>
+              )}
+            </div>
+          </li>
+        </ol>
+      </section>
+    )
+  }
+
   if (email) {
     const state = emailListed ?? 'signed_out'
     return (
@@ -537,7 +601,7 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
               <p className="d">Setelah email ditambahkan: jadi penguji → Install di Play → catat di TesBareng.</p>
               {state === 'listed' && (
                 <div className="beginner-step-actions">
-                  <a className="btn primary sm" href={storeOk ? playUrl : app.optInUrl} target="_blank" rel="noreferrer">
+                  <a className="btn primary sm" href={playUrl || app.optInUrl || undefined} target="_blank" rel="noreferrer">
                     <IconExternal />{storeOk ? 'Buka di Play Store' : 'Buka link opt-in'}
                   </a>
                   <button type="button" className="btn sm" onClick={onOpenJoin}>Lanjut di panduan</button>

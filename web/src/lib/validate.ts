@@ -6,19 +6,29 @@ export const STORE_PREFIX = 'https://play.google.com/store/apps/'
 
 export type Errors = Partial<Record<keyof AppInput | 'groupConfirmed', string>>
 
-export function validateApp(v: AppInput, opts: { creating: boolean; groupConfirmed: boolean }): Errors {
+export function validateApp(v: AppInput, opts: {
+  creating: boolean
+  groupConfirmed: boolean
+  /** Production listing: no closed-test opt-in / group confirm (public reviews). */
+  released?: boolean
+}): Errors {
   const e: Errors = {}
+  const released = !!opts.released
   if (!v.name.trim()) e.name = 'Nama aplikasi wajib diisi.'
   else if (v.name.trim().length > LIMITS.name) e.name = `Maksimal ${LIMITS.name} karakter.`
   if (!v.description.trim()) e.description = 'Deskripsi singkat wajib diisi.'
   else if (v.description.trim().length > LIMITS.description) e.description = `Maksimal ${LIMITS.description} karakter.`
-  if (!v.optInUrl.trim().startsWith(OPT_IN_PREFIX) || v.optInUrl.trim().length <= OPT_IN_PREFIX.length)
-    e.optInUrl = `Harus link opt-in uji tertutup, diawali ${OPT_IN_PREFIX}`
+  if (!released) {
+    if (!v.optInUrl.trim().startsWith(OPT_IN_PREFIX) || v.optInUrl.trim().length <= OPT_IN_PREFIX.length)
+      e.optInUrl = `Harus link opt-in uji tertutup, diawali ${OPT_IN_PREFIX}`
+  } else if (v.optInUrl.trim() && (!v.optInUrl.trim().startsWith(OPT_IN_PREFIX) || v.optInUrl.trim().length <= OPT_IN_PREFIX.length)) {
+    e.optInUrl = `Kalau diisi, harus diawali ${OPT_IN_PREFIX}`
+  }
   if (!v.storeUrl?.trim()) e.storeUrl = 'Link halaman Play Store wajib diisi.'
   else if (!v.storeUrl.trim().startsWith(STORE_PREFIX)) e.storeUrl = `Harus diawali ${STORE_PREFIX}`
   if (v.packageName?.trim() && !/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/.test(v.packageName.trim())) e.packageName = 'Format nama paket seperti id.namadev.aplikasi'
   if ((v.feedbackGuide?.trim().length ?? 0) > LIMITS.feedbackGuide) e.feedbackGuide = `Maksimal ${LIMITS.feedbackGuide} karakter.`
-  if (opts.creating && !opts.groupConfirmed) e.groupConfirmed = 'Centang dulu setelah grup ditambahkan di Play Console.'
+  if (opts.creating && !released && !opts.groupConfirmed) e.groupConfirmed = 'Centang dulu setelah grup ditambahkan di Play Console.'
   return e
 }
 

@@ -51,15 +51,18 @@ function Form({ existing }: { existing?: AppDoc }) {
   const toast = useToast()
   const creating = !existing
   const [v, setV] = useState<AppInput>(() => existing ? {
-    name: existing.name, description: existing.description, optInUrl: existing.optInUrl,
+    name: existing.name, description: existing.description, optInUrl: existing.optInUrl ?? '',
     storeUrl: existing.storeUrl ?? '', packageName: existing.packageName ?? '',
     testStartDate: isoDate(existing.testStartDate), feedbackGuide: existing.feedbackGuide ?? '',
   } : EMPTY)
   const [status, setStatus] = useState<AppStatus>(existing?.status ?? 'recruiting')
+  const [released, setReleased] = useState(existing?.status === 'live')
   const [group, setGroup] = useState(false)
   const [method, setMethod] = useState<TesterMethod>(existing?.testerMethod ?? 'google_group')
   const [slots, setSlots] = useState<number>(existing?.testerSlots ?? TARGET_TESTERS)
-  const groupStep = creating && method === 'google_group'
+  const effectiveStatus: AppStatus = creating ? (released ? 'live' : 'recruiting') : status
+  const isReleased = effectiveStatus === 'live'
+  const groupStep = creating && method === 'google_group' && !isReleased
   // Email list unlocks after testing others (the database enforces it too). An app already on it keeps it.
   const { user } = useAuth()
   const creatorStats = usePublicProfile(existing ? existing.creatorUid : user?.uid)
@@ -70,12 +73,13 @@ function Form({ existing }: { existing?: AppDoc }) {
   const [fail, setFail] = useState<string | null>(null)
   const [buildOpen, setBuildOpen] = useState(false)
 
-  const initial = useRef({ v, status, group, method, slots })
+  const initial = useRef({ v, status, released, group, method, slots })
   const leaving = useRef(false)
   const dirty = useMemo(() => {
     const i = initial.current
-    return status !== i.status || group !== i.group || method !== i.method || slots !== i.slots || (Object.keys(v) as (keyof AppInput)[]).some((k) => (v[k] ?? '') !== (i.v[k] ?? ''))
-  }, [v, status, group, method, slots])
+    return status !== i.status || released !== i.released || group !== i.group || method !== i.method || slots !== i.slots
+      || (Object.keys(v) as (keyof AppInput)[]).some((k) => (v[k] ?? '') !== (i.v[k] ?? ''))
+  }, [v, status, released, group, method, slots])
 
   // ADR-009 §6: warn before leaving with unsaved changes (reload, tab close, and links on this page).
   useEffect(() => {
@@ -88,7 +92,14 @@ function Form({ existing }: { existing?: AppDoc }) {
     if (dirty && !leaving.current && !window.confirm('Perubahan belum disimpan. Tinggalkan halaman ini?')) e.preventDefault()
   }
 
-  const errorsNow = useMemo(() => validateApp(v, { creating: creating && method === 'google_group', groupConfirmed: group }), [v, creating, group, method])
+  const errorsNow = useMemo(
+    () => validateApp(v, {
+      creating: creating && method === 'google_group' && !isReleased,
+      groupConfirmed: group,
+      released: isReleased,
+    }),
+    [v, creating, group, method, isReleased],
+  )
   const { errors, blur, check } = useValidation(errorsNow, FIELD_ORDER)
 
   const set = (k: keyof AppInput) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value })
@@ -102,18 +113,32 @@ function Form({ existing }: { existing?: AppDoc }) {
     }
     setBusy(true); setFail(null)
     const clean: AppInput = {
-      name: v.name.trim(), description: v.description.trim(), optInUrl: v.optInUrl.trim(),
+      name: v.name.trim(), description: v.description.trim(),
+      optInUrl: isReleased ? v.optInUrl.trim() : v.optInUrl.trim(),
       storeUrl: v.storeUrl.trim(), packageName: v.packageName?.trim() || undefined,
       testStartDate: v.testStartDate || undefined, feedbackGuide: v.feedbackGuide?.trim() || undefined,
     }
     try {
       if (creating) {
-        const { appId } = await api.createApp({ ...clean, groupConfirmed: method === 'google_group' && group, testerMethod: method, testerSlots: slots })
+        const { appId } = await api.createApp({
+          ...clean,
+          groupConfirmed: isReleased || (method === 'google_group' && group),
+          testerMethod: isReleased ? 'google_group' : method,
+          testerSlots: slots,
+          status: isReleased ? 'live' : 'recruiting',
+        })
         leaving.current = true
-        toast(`${clean.name} terdaftar. Bagikan halamannya ke grup.`)
+        toast(isReleased
+          ? `${clean.name} terdaftar sebagai app rilis. Ajukan ke cohort untuk minta ulasan publik.`
+          : `${clean.name} terdaftar. Bagikan halamannya ke grup.`)
         navigate(`/apps/${appId}`)
       } else {
-        await updateApp(existing.id, { ...clean, status, testerMethod: method, testerSlots: slots })
+        await updateApp(existing.id, {
+          ...clean,
+          status: effectiveStatus,
+          testerMethod: isReleased ? 'google_group' : method,
+          testerSlots: slots,
+        })
         leaving.current = true
         toast('Perubahan disimpan.')
         navigate(`/apps/${existing.id}`)
@@ -171,7 +196,11 @@ function Form({ existing }: { existing?: AppDoc }) {
       <div className="title-row">
         <div>
           <h1>{creating ? 'Tambah aplikasi' : 'Edit aplikasi'}</h1>
-          <p className="sub">{creating ? 'Aplikasi langsung tampil di daftar dengan status Mencari tester.' : `Didaftarkan ${fmtDate(existing.createdAt)}.`}</p>
+          <p className="sub">{creating
+            ? (isReleased
+              ? 'App rilis: anggota memasang dari Play Store dan menulis ulasan publik. Bisa diajukan ke cohort.'
+              : 'Aplikasi langsung tampil di daftar dengan status Mencari tester.')
+            : `Didaftarkan ${fmtDate(existing.createdAt)}.`}</p>
         </div>
       </div>
 
@@ -181,27 +210,51 @@ function Form({ existing }: { existing?: AppDoc }) {
           {field('name', 'Nama aplikasi', <input className="input" maxLength={LIMITS.name} value={v.name} onChange={set('name')} {...aria('name')} />, undefined, LIMITS.name)}
           {field('description', 'Deskripsi singkat', <textarea className="input" rows={3} maxLength={LIMITS.description} value={v.description} onChange={set('description')} {...aria('description', true)} />, 'Untuk siapa aplikasinya dan apa gunanya.', LIMITS.description)}
           {field('packageName', 'Nama paket (opsional)', <input className="input" placeholder="id.namadev.aplikasi" value={v.packageName} onChange={set('packageName')} {...aria('packageName', true)} />, 'Mencegah aplikasi yang sama didaftarkan dua kali.')}
+          {creating && (
+            <label className="check" style={{ padding: 0 }}>
+              <input type="checkbox" checked={released} onChange={(e) => setReleased(e.target.checked)} />
+              <span>
+                <span className="t">App sudah rilis production</span>
+                <span className="d">Untuk minta ulasan publik di Play Store lewat cohort. Tidak perlu link opt-in uji tertutup.</span>
+              </span>
+            </label>
+          )}
         </div>
       </section>
 
       <section className="form-section">
-        <div className="label-col"><h2>Link Google Play</h2><p>Link opt-in ada di Play Console → Uji tertutup → Penguji → “Gabung di web”.</p></div>
+        <div className="label-col">
+          <h2>Link Google Play</h2>
+          <p>{isReleased
+            ? 'Halaman Play Store wajib — di situlah tester memasang app dan menulis ulasan publik.'
+            : 'Link opt-in ada di Play Console → Uji tertutup → Penguji → “Gabung di web”.'}</p>
+        </div>
         <div className="form-panel">
-          {field('optInUrl', 'Link opt-in uji tertutup', <input className="input" type="url" inputMode="url" placeholder={`${OPT_IN_PREFIX}nama.paket`} value={v.optInUrl} onChange={set('optInUrl')} {...aria('optInUrl', true)} />, `Diawali ${OPT_IN_PREFIX}`)}
-          {field('storeUrl', 'Link halaman Play Store', <input className="input" type="url" inputMode="url" placeholder="https://play.google.com/store/apps/details?id=…" value={v.storeUrl} onChange={set('storeUrl')} {...aria('storeUrl', true)} />, 'Wajib. Setelah gabung grup, tester dibuka ke halaman ini (terutama di HP) untuk memasang app dan menulis feedback.')}
+          {!isReleased && field('optInUrl', 'Link opt-in uji tertutup', <input className="input" type="url" inputMode="url" placeholder={`${OPT_IN_PREFIX}nama.paket`} value={v.optInUrl} onChange={set('optInUrl')} {...aria('optInUrl', true)} />, `Diawali ${OPT_IN_PREFIX}`)}
+          {field('storeUrl', 'Link halaman Play Store', <input className="input" type="url" inputMode="url" placeholder="https://play.google.com/store/apps/details?id=…" value={v.storeUrl} onChange={set('storeUrl')} {...aria('storeUrl', true)} />, isReleased
+            ? 'Wajib. Tester dibuka ke halaman ini untuk memasang dan menulis ulasan yang tampil publik.'
+            : 'Wajib. Setelah gabung grup, tester dibuka ke halaman ini (terutama di HP) untuk memasang app dan menulis feedback.')}
         </div>
       </section>
 
       <section className="form-section">
-        <div className="label-col"><h2>Pengujian</h2><p>Isi tanggal mulai saat jalur uji tertutup Anda aktif. Build sejak tanggal ini dihitung sebagai build selama uji.</p></div>
+        <div className="label-col">
+          <h2>{isReleased ? 'Status & ulasan' : 'Pengujian'}</h2>
+          <p>{isReleased
+            ? 'App rilis memakai status Rilis produksi. Build opsional; fokusnya ulasan publik di Play.'
+            : 'Isi tanggal mulai saat jalur uji tertutup Anda aktif. Build sejak tanggal ini dihitung sebagai build selama uji.'}</p>
+        </div>
         <div className="form-panel">
-          {field('testStartDate', 'Tanggal mulai uji (opsional)', <input className="input" type="date" value={v.testStartDate} onChange={set('testStartDate')} {...aria('testStartDate')} />)}
+          {!isReleased && field('testStartDate', 'Tanggal mulai uji (opsional)', <input className="input" type="date" value={v.testStartDate} onChange={set('testStartDate')} {...aria('testStartDate')} />)}
           {!creating && (
             <div className="field">
               <label htmlFor="f-status">Status</label>
               <select id="f-status" className="input" value={status} onChange={(e) => setStatus(e.target.value as AppStatus)}>
                 {(Object.keys(appStatusLabel) as AppStatus[]).map((s) => <option key={s} value={s}>{appStatusLabel[s]}</option>)}
               </select>
+              {status === 'live' && (
+                <span className="hint">Rilis produksi: tester memasang dari Play Store dan menulis ulasan publik. Bisa diajukan ke cohort.</span>
+              )}
             </div>
           )}
         </div>
@@ -238,17 +291,22 @@ function Form({ existing }: { existing?: AppDoc }) {
 
       <section className="form-section">
         <div className="label-col">
-          <h2>Tester</h2>
-          <p>Berapa tester yang Anda butuhkan dari komunitas, dan cara mereka ditambahkan. Di Play Console, satu jalur uji tertutup memakai Google Groups <i>atau</i> daftar email, tidak bisa keduanya.</p>
+          <h2>{isReleased ? 'Pengulas' : 'Tester'}</h2>
+          <p>{isReleased
+            ? 'Berapa anggota yang Anda minta menulis ulasan publik di Play Store (lewat cohort atau berbagi link).'
+            : 'Berapa tester yang Anda butuhkan dari komunitas, dan cara mereka ditambahkan. Di Play Console, satu jalur uji tertutup memakai Google Groups atau daftar email, tidak bisa keduanya.'}</p>
         </div>
         <div className="form-panel">
           <div className="field">
-            <label htmlFor="f-slots">Butuh berapa tester dari TesBareng?</label>
+            <label htmlFor="f-slots">Butuh berapa {isReleased ? 'pengulas' : 'tester'} dari TesBareng?</label>
             <select id="f-slots" className="input num" style={{ maxWidth: '12rem' }} value={slots} onChange={(e) => setSlots(Number(e.target.value))} aria-describedby="f-slots-hint">
-              {Array.from({ length: TARGET_TESTERS }, (_, i) => TARGET_TESTERS - i).map((n) => <option key={n} value={n}>{n} tester</option>)}
+              {Array.from({ length: TARGET_TESTERS }, (_, i) => TARGET_TESTERS - i).map((n) => <option key={n} value={n}>{n} {isReleased ? 'pengulas' : 'tester'}</option>)}
             </select>
-            <span className="hint" id="f-slots-hint">Google butuh {TARGET_TESTERS} tester total selama 14 hari. Kalau sebagian sudah ada dari grup atau daftar Anda yang lain, isi sisanya saja.{existing && ' Mengubahnya tidak memindahkan penugasan cohort yang sudah berjalan.'}</span>
+            <span className="hint" id="f-slots-hint">{isReleased
+              ? 'Di cohort, app Anda mendapat jumlah ini (+ cadangan) dan Anda mengulas app anggota lain sebanyak itu juga.'
+              : `Google butuh ${TARGET_TESTERS} tester total selama 14 hari. Kalau sebagian sudah ada dari grup atau daftar Anda yang lain, isi sisanya saja.`}{existing && !isReleased ? ' Mengubahnya tidak memindahkan penugasan cohort yang sudah berjalan.' : ''}</span>
           </div>
+          {!isReleased && (
           <fieldset style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }} aria-describedby={groupStep ? undefined : 'f-method-hint'}>
             <legend className="sr-only">Cara tester ditambahkan</legend>
             <label className="check">
@@ -271,6 +329,7 @@ function Form({ existing }: { existing?: AppDoc }) {
             {/* The group checkbox below carries the full Play Console path; say it once. */}
             {!groupStep && <span className="hint" id="f-method-hint">Play Console → Uji tertutup → Penguji.</span>}
           </fieldset>
+          )}
           {groupStep && (
             <label className="check" style={{ padding: 0 }}>
               <input id="f-groupConfirmed" type="checkbox" checked={group} onChange={(e) => setGroup(e.target.checked)} onBlur={blur('groupConfirmed')} aria-describedby={`f-group-hint${errors.groupConfirmed ? ' f-groupConfirmed-err' : ''}`} aria-invalid={!!errors.groupConfirmed || undefined} />

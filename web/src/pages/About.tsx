@@ -156,7 +156,7 @@ const RULES: { group: string; items: { t: string; d: string }[] }[] = [
   {
     group: 'Sebagai creator',
     items: [
-      { t: 'Pasang grup komunitas', d: `Masukkan ${COMMUNITY_GROUP} sebagai daftar tester di closed track, dan isi link halaman Play Store di form app (wajib). Tester lalu membuka halaman Play untuk memasang. Kalau track-mu sudah memakai daftar email, pilih Daftar email di form app (terbuka setelah kamu ngetes 3 app): tempel email tester yang meminta, lalu tandai Sudah ditambahkan.` },
+      { t: 'Pasang grup komunitas', d: `Untuk uji tertutup: masukkan ${COMMUNITY_GROUP} sebagai daftar tester di closed track, dan isi link Play Store (wajib). Untuk app yang sudah rilis production: centang “App sudah rilis” di form — tidak perlu opt-in; anggota memasang dari Play dan menulis ulasan publik, dan app bisa diajukan ke cohort. Kalau track-mu memakai daftar email (bukan grup), pilih Daftar email di form (terbuka setelah ngetes 3 app).` },
       { t: 'Minta tester sesuai kebutuhan', d: 'Di form app, isi berapa tester yang kamu butuhkan dari TesBareng (1–12). Google tetap butuh 12; sisanya dari grup atau daftarmu sendiri, dilaporkan sendiri. Kursi penuh tidak menolak tester baru, mereka jadi cadangan.' },
       { t: 'Tulis panduan feedback sebagai pertanyaan', d: '“Coba level 3 di layar kecil: tombol lompat mudah ditekan?” Bukan teks ulasan siap salin. Maksimal 500 karakter.' },
       { t: 'Balas setiap feedback', d: 'Baca feedback di Play Console, tandai Terverifikasi, balas di sana, lalu tandai Sudah saya balas di TesBareng.' },

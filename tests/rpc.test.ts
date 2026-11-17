@@ -93,6 +93,17 @@ describe("create_app", () => {
     await expectCode(creator.db.rpc("create_app", appInput({ p_store_url: null })), "invalid-argument", /Play Store|wajib/i);
   });
 
+  it("creates a live app without closed-test opt-in or group confirm", async () => {
+    const appId = await createApp(creator, {
+      p_status: "live",
+      p_opt_in_url: "",
+      p_group_confirmed: false,
+      p_store_url: "https://play.google.com/store/apps/details?id=id.live.app",
+    });
+    const app = await must(anon().from("apps").select("*").eq("id", appId).single());
+    expect(app).toMatchObject({ status: "live", opt_in_url: null, store_url: "https://play.google.com/store/apps/details?id=id.live.app" });
+  });
+
   it("requires group_confirmed === true", async () => {
     await expectCode(creator.db.rpc("create_app", appInput({ p_group_confirmed: false })), "invalid-argument", /googlegroups/);
     await expectCode(creator.db.rpc("create_app", appInput({ p_group_confirmed: null })), "invalid-argument");

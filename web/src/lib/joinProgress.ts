@@ -83,9 +83,14 @@ export function emailPlayStepsDone(p: EmailJoinProgress) {
 }
 
 /** Prefer the Play Store listing; fall back to opt-in for older apps that never set storeUrl. */
-export function playInstallUrl(app: { storeUrl?: string | null; optInUrl: string }) {
+export function playInstallUrl(app: { storeUrl?: string | null; optInUrl?: string | null }) {
   const store = app.storeUrl?.trim()
-  return store || app.optInUrl
+  const optIn = app.optInUrl?.trim()
+  return store || optIn || ''
+}
+
+export function isLiveApp(app: { status?: string }) {
+  return app.status === 'live'
 }
 
 export function hasStoreUrl(app: { storeUrl?: string | null }) {
@@ -102,7 +107,9 @@ export function isLikelyMobile() {
 }
 
 /** Open Play Store (or opt-in fallback). Returns false if the popup was blocked. */
-export function openPlayInstall(app: { storeUrl?: string | null; optInUrl: string }) {
-  const w = window.open(playInstallUrl(app), '_blank', 'noopener,noreferrer')
+export function openPlayInstall(app: { storeUrl?: string | null; optInUrl?: string | null }) {
+  const url = playInstallUrl(app)
+  if (!url) return false
+  const w = window.open(url, '_blank', 'noopener,noreferrer')
   return !!w
 }

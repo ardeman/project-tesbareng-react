@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { api, cancelEmailListing, errorText, requestEmailListing, updateTesterAsCreator, useMyEmailListing } from '../lib/data'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import {
-  clearJoinProgress, emailPlayStepsDone, groupPlayStepsDone, hasStoreUrl, isLikelyMobile, openPlayInstall,
+  clearJoinProgress, emailPlayStepsDone, groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, openPlayInstall,
   playInstallUrl, readEmailJoinProgress, readGroupJoinProgress, writeEmailJoinProgress, writeGroupJoinProgress,
 } from '../lib/joinProgress'
 import { fmtDate, isoDate, todayIso } from '../lib/progress'
@@ -27,11 +27,75 @@ function useSubmit(onDone: () => void) {
 
 export function JoinDialog({ open, onClose, app, rejoin }: { open: boolean; onClose: () => void; app: AppDoc; rejoin?: boolean }) {
   return (
-    <Dialog open={open} onClose={onClose} label={`Gabung sebagai tester ${app.name}`}>
-      {app.testerMethod === 'email_list'
-        ? <EmailJoinForm app={app} rejoin={rejoin} onClose={onClose} />
-        : <JoinForm app={app} rejoin={rejoin} onClose={onClose} />}
+    <Dialog open={open} onClose={onClose} label={isLiveApp(app) ? `Ulas ${app.name}` : `Gabung sebagai tester ${app.name}`}>
+      {isLiveApp(app)
+        ? <LiveJoinForm app={app} rejoin={rejoin} onClose={onClose} />
+        : app.testerMethod === 'email_list'
+          ? <EmailJoinForm app={app} rejoin={rejoin} onClose={onClose} />
+          : <JoinForm app={app} rejoin={rejoin} onClose={onClose} />}
     </Dialog>
+  )
+}
+
+/** Production apps: Play Store install → catat (public review comes after join). */
+function LiveJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
+  const toast = useToast()
+  const [done, setDone] = useState(() => readGroupJoinProgress(app.id))
+  const [step, setStep] = useState<'play' | 'confirm'>(() => (readGroupJoinProgress(app.id).installed ? 'confirm' : 'play'))
+  const { busy, err, run } = useSubmit(() => {
+    clearJoinProgress(app.id)
+    toast(`Anda tercatat mengulas ${app.name}. Tulis ulasan publik di Play Store, lalu tandai sudah kirim.`)
+    onClose()
+  })
+  const playUrl = playInstallUrl(app)
+
+  const markInstalled = () => {
+    const merged = { ...done, installed: true, group: true }
+    setDone(merged)
+    writeGroupJoinProgress(app.id, merged)
+    setStep('confirm')
+  }
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (step !== 'confirm' || !done.installed) return
+    run(() => api.joinAsTester({ appId: app.id, checklist: { installed: true } }))
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <div className="sheet-body">
+        <h2>Ulas {app.name} di Play Store</h2>
+        {rejoin && <p className="muted">Hari aktif Anda dihitung lagi dari nol mulai hari ini.</p>}
+        <p className="lede">App ini sudah rilis production. Pasang dari Play Store, lalu catat di TesBareng. Setelah itu tulis ulasan publik di halaman Play.</p>
+        <WizardProgress labels={['Pasang di Play', 'Catat']} current={step === 'play' ? 0 : 1} doneFlags={[!!done.installed, false]} />
+        {step === 'play' ? (
+          <WizardStep
+            title="1. Buka Play Store dan pasang"
+            body={<>Ketuk tombol di bawah, pasang app-nya, lalu buka sekali. Akun Google di Play harus sama dengan yang Anda pakai di TesBareng.</>}
+            actionHref={playUrl}
+            actionLabel="Buka di Play Store"
+            onDone={markInstalled}
+            doneLabel="Sudah memasang"
+          />
+        ) : (
+          <div className="stack-12">
+            <p className="strong">2. Catat di TesBareng</p>
+            <p className="muted">Supaya creator melihat Anda di daftar. Setelah ini, tulis ulasan publik di Play Store (bintang + komentar dengan kata-kata Anda sendiri), lalu tekan Tandai sudah kirim.</p>
+            <button type="button" className="text-action" onClick={() => setStep('play')}>Kembali ke langkah pasang</button>
+          </div>
+        )}
+        {err && <ErrorBox text={err} />}
+      </div>
+      <div className="sheet-foot">
+        <button type="button" className="btn" onClick={onClose}>Batal</button>
+        {step === 'confirm' && (
+          <button className="btn primary" disabled={busy || !done.installed}>
+            {busy ? 'Menyimpan…' : 'Catat saya sebagai pengulas'}
+          </button>
+        )}
+      </div>
+    </form>
   )
 }
 
@@ -343,9 +407,11 @@ function FeedbackForm({ onClose, app, entry }: { onClose: () => void; app: AppDo
   return (
       <form onSubmit={save}>
         <div className="sheet-body">
-          <h2>{already ? 'Catatan feedback Anda' : 'Tandai sudah kirim feedback'}</h2>
+          <h2>{already ? 'Catatan feedback Anda' : (isLiveApp(app) ? 'Tandai sudah kirim ulasan' : 'Tandai sudah kirim feedback')}</h2>
           {!already && (
-            <p className="lede">Feedback ditulis di Google Play, bukan di sini: buka halaman aplikasi di Play Store, beri rating dan tulis apa yang berjalan, apa yang rusak, dan apa yang perlu diperbaiki.</p>
+            <p className="lede">{isLiveApp(app)
+              ? 'Tulis ulasan publik di halaman Play Store (bintang + komentar dengan kata-kata Anda sendiri). Ulasan itu tampil untuk semua orang, bukan hanya Testing feedback.'
+              : 'Feedback ditulis di Google Play, bukan di sini: buka halaman aplikasi di Play Store, beri rating dan tulis apa yang berjalan, apa yang rusak, dan apa yang perlu diperbaiki.'}</p>
           )}
           {!already && (
             <a className="btn" style={{ justifySelf: 'start' }} href={playInstallUrl(app)} target="_blank" rel="noreferrer"><IconExternal />Buka {app.name} di Play</a>

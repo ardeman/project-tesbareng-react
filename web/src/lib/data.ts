@@ -372,10 +372,10 @@ export interface AppInput {
   feedbackGuide?: string
 }
 
-const appArgs = (input: AppInput & { testerMethod?: TesterMethod; testerSlots?: number }) => ({
+const appArgs = (input: AppInput & { testerMethod?: TesterMethod; testerSlots?: number; status?: string }) => ({
   p_name: input.name,
   p_description: input.description,
-  p_opt_in_url: input.optInUrl,
+  p_opt_in_url: input.optInUrl.trim() || null,
   p_store_url: input.storeUrl.trim() || null,
   p_package_name: input.packageName || null,
   p_test_start_date: input.testStartDate || null,
@@ -394,9 +394,23 @@ const instantFor = (iso: string) => {
 }
 
 export const api = {
-  createApp: async (input: AppInput & { groupConfirmed: boolean; testerMethod: TesterMethod; testerSlots: number }) =>
-    ({ appId: await rpc<string>('create_app', { ...appArgs(input), p_group_confirmed: input.groupConfirmed }) }),
-  joinAsTester: async (input: { appId: string; checklist: { joinedGroup?: true; optedIn: true; installed: true } }) => {
+  createApp: async (input: AppInput & {
+    groupConfirmed: boolean
+    testerMethod: TesterMethod
+    testerSlots: number
+    status?: 'recruiting' | 'live'
+  }) =>
+    ({
+      appId: await rpc<string>('create_app', {
+        ...appArgs(input),
+        p_group_confirmed: input.groupConfirmed,
+        p_status: input.status ?? 'recruiting',
+      }),
+    }),
+  joinAsTester: async (input: {
+    appId: string
+    checklist: { joinedGroup?: true; optedIn?: true; installed: true }
+  }) => {
     await rpc('join_as_tester', { p_app_id: input.appId, p_checklist: input.checklist })
     return { ok: true as const }
   },
