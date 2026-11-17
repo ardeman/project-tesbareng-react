@@ -106,11 +106,11 @@ function RingRule() {
 }
 
 const STEPS: { t: string; d: ReactNode }[] = [
-  { t: 'Gabung Google Group', d: <>Di halaman app, ketuk <b>Pilih akun &amp; buka grup</b> (atau buka <code className="ab-email">{COMMUNITY_GROUP}</code>). Google meminta pilih akun dulu — pakai akun yang sama dengan Play Store, lalu ketuk Bergabung / Join. Jangan ganti akun setelah halaman grup terbuka. Untuk app daftar email: tekan Minta ditambahkan, setujui email terlihat oleh creator, tunggu Sudah ditambahkan.</> },
-  { t: 'Buka Play Store dan pasang', d: 'Setelah gabung grup, buka halaman Play Store app itu (tombol di TesBareng). Di HP ketuk Install / Pasang, lalu buka sekali. Kalau creator belum mengisi link Play Store, TesBareng memakai link opt-in sebagai cadangan.' },
-  { t: 'Catat di TesBareng', d: 'Tekan Catat saya sebagai tester (atau Mulai uji app ini → ikuti panduan). Login Google hanya di langkah ini, supaya hari aktifmu terhitung.' },
-  { t: 'Pakai', d: 'Baca panduan feedback dari creator, lalu benar-benar pakai app-nya. Biarkan terpasang sampai app lulus 14 hari Google.' },
-  { t: 'Kirim feedback di Google Play', d: 'Rating plus komentar yang spesifik, dengan kata-katamu sendiri: apa yang jalan, apa yang rusak, apa yang perlu diperbaiki.' },
+  { t: 'Gabung Google Group (uji tertutup saja)', d: <>Untuk app closed test: di halaman app ketuk <b>Pilih akun &amp; buka grup</b> (atau buka <code className="ab-email">{COMMUNITY_GROUP}</code>). Google meminta pilih akun dulu — pakai akun yang sama dengan Play Store, lalu ketuk Bergabung / Join. Jangan ganti akun setelah halaman grup terbuka. App daftar email: tekan Minta ditambahkan, setujui email terlihat oleh creator, tunggu Sudah ditambahkan. App sudah rilis production: lewati langkah ini — langsung Play Store.</> },
+  { t: 'Buka Play Store dan pasang', d: 'Buka halaman Play Store app itu (tombol di TesBareng). Di HP ketuk Install / Pasang, lalu buka sekali. Untuk uji tertutup, kalau creator belum mengisi link Play Store, TesBareng memakai link opt-in sebagai cadangan.' },
+  { t: 'Catat di TesBareng', d: 'Tekan Catat saya sebagai tester / pengulas (atau Mulai uji app ini → ikuti panduan). Login Google hanya di langkah ini, supaya keikutsertaanmu terhitung.' },
+  { t: 'Pakai', d: 'Baca panduan feedback dari creator, lalu benar-benar pakai app-nya. Untuk uji tertutup, biarkan terpasang sampai app lulus 14 hari Google.' },
+  { t: 'Kirim feedback / ulasan di Google Play', d: 'Rating plus komentar yang spesifik, dengan kata-katamu sendiri. App rilis: tulis ulasan publik di halaman Play Store (tampil untuk semua orang). App uji tertutup: feedback di jalur tester.' },
   { t: 'Centang di TesBareng', d: 'Tekan Tandai sudah kirim di halaman app. Ringkasan singkat boleh ditambahkan, maksimal 500 karakter.' },
 ]
 
@@ -130,10 +130,10 @@ const SCHEDULE = [
 ]
 
 const CHECKS = [
-  { m: 'Opt-in', when: 'Hari 0–2', what: 'Gabung grup, pasang dari Play Store, lalu catat di setiap app tugasmu' },
-  { m: 'Sudah buka app', when: 'Mulai hari 5, paling lambat hari 7', what: 'Centang, lalu kirim feedback di Google Play' },
+  { m: 'Opt-in', when: 'Hari 0–2', what: 'Per app tugasmu: uji tertutup = gabung grup → pasang → catat; app rilis = pasang dari Play → catat' },
+  { m: 'Sudah buka app', when: 'Mulai hari 5, paling lambat hari 7', what: 'Centang, lalu kirim feedback / ulasan di Google Play' },
   { m: 'Sudah update', when: 'Dalam 3 hari setelah build baru', what: 'Update app-nya, coba lagi, lalu centang' },
-  { m: 'Masih opt-in', when: 'Mulai hari 12, paling lambat hari 13', what: 'Centang sekali lagi' },
+  { m: 'Masih opt-in', when: 'Mulai hari 12, paling lambat hari 13', what: 'Centang sekali lagi (utama untuk uji tertutup)' },
 ]
 
 const TIERS = [
@@ -305,7 +305,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
           </div>
         </Section>
 
-        <Section id="ngetes" n={2} title="Cara ngetes satu app" lede="Enam langkah. Intinya: gabung grup → pasang dari Play Store → catat di TesBareng. Langkah grup cukup sekali untuk semua app Google Group; app daftar email memintanya per app. Yang masih harus kamu kerjakan selalu ada di Tugas saya.">
+        <Section id="ngetes" n={2} title="Cara ngetes satu app" lede="Enam langkah. Uji tertutup: gabung grup → pasang dari Play Store → catat. App sudah rilis: lewati grup, pasang dari Play → catat → tulis ulasan publik. Langkah grup cukup sekali untuk semua app Google Group; app daftar email memintanya per app. Yang masih harus kamu kerjakan selalu ada di Tugas saya.">
           <ol className="ab-steps">
             {STEPS.map((s, i) => (
               <li key={s.t}>
@@ -349,7 +349,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
           </ol>
         </Section>
 
-        <Section id="tester-murni" n={4} title="Tester murni" lede="Belum punya app, atau sedang di antara dua app? Ikut cohort tanpa membawa app. Tanpa cohort pun bisa: pilih app di daftar → gabung grup → pasang dari Play Store → catat di TesBareng.">
+        <Section id="tester-murni" n={4} title="Tester murni" lede="Belum punya app, atau sedang di antara dua app? Ikut cohort tanpa membawa app. Tanpa cohort pun bisa: pilih app di daftar, ikuti panduan di halaman app (grup hanya untuk uji tertutup), pasang dari Play Store, lalu catat di TesBareng.">
           <ul className="ab-rule-list ab-rule-list--boxed">
             <li><b>Gabung sampai akhir hari 6</b><span>Selama cohort masih Forming, atau sudah berjalan sampai akhir hari ke-6 (tepat 7 × 24 jam setelah Hari 0). Batas ini menyisakan 14 hari sebelum cohort tutup di hari 21.</span></li>
             <li><b>14 app untukmu</b><span>Kamu ditugaskan 14 app (atau semua app kalau kurang dari itu), dimulai dari app yang paling kurang tester dibanding kebutuhannya.</span></li>
@@ -397,7 +397,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
           </ul>
         </Section>
 
-        <Section id="whatsapp" n={8} title="Grup WhatsApp cohort" lede="Opsional. Yang dibutuhkan hanya Google Group, atau persetujuan berbagi email untuk app dengan daftar email.">
+        <Section id="whatsapp" n={8} title="Grup WhatsApp cohort" lede="Opsional. Untuk uji tertutup yang dibutuhkan adalah Google Group (atau persetujuan berbagi email). App sudah rilis cukup Play Store.">
           <ul className="ab-bullets">
             <li>Link grup hanya tampil untuk anggota cohort itu, setelah masuk.</li>
             <li>Anggota grup bisa melihat nomor HP satu sama lain. Gabung hanya kalau kamu nyaman.</li>
@@ -434,7 +434,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
         <section className="ab-cta" aria-labelledby="ab-cta-h">
           <div className="ab-wrap">
             <h2 id="ab-cta-h">Siap ikut ngetes?</h2>
-            <p className="ab-lede">Mulai dari Google Group (pilih akun yang sama dengan Play Store), lalu buka app → pasang dari Play → catat di TesBareng. Atau tunggu cohort berikutnya.</p>
+            <p className="ab-lede">Untuk uji tertutup: mulai dari Google Group (akun yang sama dengan Play Store), lalu buka app → pasang → catat. Untuk app rilis: langsung Play Store → pasang → catat → ulasan publik. Atau tunggu cohort berikutnya.</p>
             <div className="ab-cta-row">
               <a className="ab-btn ab-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">
                 Gabung komunitas<span className="sr-only"> (Google Group, tab baru)</span><span aria-hidden="true"> ↗</span>

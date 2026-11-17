@@ -1244,7 +1244,13 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
         <div className="empty-pad">
           {/* ADR-001 §2.6: spot illustration for the empty tester list goes in Empty's `art` slot. */}
           <Empty title="Belum ada tester. Kursi pertama masih kosong.">
-            <p>{isCreator ? 'Bagikan halaman ini di grup WhatsApp cohort, atau tambahkan tester yang sudah opt-in lewat Tambah tester manual.' : 'Jadilah tester pertama: Mulai uji app ini → gabung grup → pasang dari Play → catat di TesBareng.'}</p>
+            <p>{isCreator
+              ? (isLiveApp(app)
+                ? 'Bagikan halaman ini di grup WhatsApp cohort, atau ajukan ke cohort agar anggota memasang dari Play dan menulis ulasan publik.'
+                : 'Bagikan halaman ini di grup WhatsApp cohort, atau tambahkan tester yang sudah opt-in lewat Tambah tester manual.')
+              : (isLiveApp(app)
+                ? 'Jadilah pengulas pertama: Mulai uji app ini → pasang dari Play → catat di TesBareng → tulis ulasan publik.'
+                : 'Jadilah tester pertama: Mulai uji app ini → gabung grup → pasang dari Play → catat di TesBareng.')}</p>
           </Empty>
         </div>
       )}

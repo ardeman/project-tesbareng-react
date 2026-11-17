@@ -579,12 +579,12 @@ function JoinDialog({ open, onClose, c, onDone }: { open: boolean; onClose: () =
             : 'Anda mendapat hingga 14 aplikasi saat admin memulai cohort (Hari 0).'}
         </p>
         <ol className="duties">
-          <li><b>Opt-in ke semua aplikasi yang ditugaskan dalam 48 jam:</b> gabung Google Group (pilih akun Play Store), pasang dari Play Store, lalu catat di TesBareng. Lewat dari itu, Anda tercatat tertinggal.</li>
-          <li><b>Check-in di setiap tahap:</b> “Sudah buka app” sampai hari ke-7, “Masih opt-in” di hari ke-13, dan “Sudah update” dalam 3 hari setiap ada build baru.</li>
-          <li><b>Kirim feedback di Google Play</b> sampai hari ke-7, dengan kata-kata Anda sendiri.</li>
+          <li><b>Opt-in ke semua aplikasi yang ditugaskan dalam 48 jam:</b> uji tertutup — gabung Google Group (pilih akun Play Store), pasang, lalu catat; app sudah rilis — pasang dari Play Store lalu catat (tanpa grup). Lewat dari itu, Anda tercatat tertinggal.</li>
+          <li><b>Check-in di setiap tahap:</b> “Sudah buka app” sampai hari ke-7, “Masih opt-in” di hari ke-13 (utama untuk uji tertutup), dan “Sudah update” dalam 3 hari setiap ada build baru.</li>
+          <li><b>Kirim feedback / ulasan di Google Play</b> sampai hari ke-7, dengan kata-kata Anda sendiri (ulasan publik untuk app rilis).</li>
         </ol>
         <p className="small muted">
-          Tanpa gabung <a className="link" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP}<span className="sr-only"> (tab baru)</span></a>, Install di Play biasanya tidak muncul.
+          Untuk app uji tertutup, tanpa gabung <a className="link" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP}<span className="sr-only"> (tab baru)</span></a>, Install di Play biasanya tidak muncul.
           Jika kewajiban belum selesai saat cohort ditutup, Anda ditandai Berutang dan tidak bisa ikut cohort berikutnya sampai admin menandai Lunas.
           {!active && ' Selama cohort belum dimulai, Anda masih bisa keluar.'}
         </p>
