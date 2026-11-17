@@ -477,7 +477,7 @@ function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
 
 type EmailGuideState = 'signed_out' | 'none' | 'waiting' | 'listed'
 
-/** Play-first path for social-share visitors: Group → Opt-in → Install → Catat (no login until Catat). */
+/** Play-first path for social-share visitors: Group → Play Store → Catat (no login until Catat). */
 const BeginnerGuide = forwardRef(function BeginnerGuide({
   app, progress, emailListed, onProgress, onRecord, onAskEmail, onOpenJoin,
 }: {
@@ -1180,7 +1180,7 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
         <div className="empty-pad">
           {/* ADR-001 §2.6: spot illustration for the empty tester list goes in Empty's `art` slot. */}
           <Empty title="Belum ada tester. Kursi pertama masih kosong.">
-            <p>{isCreator ? 'Bagikan halaman ini di grup WhatsApp cohort, atau tambahkan tester yang sudah opt-in lewat Tambah tester manual.' : 'Jadilah tester pertama lewat tombol Gabung sebagai tester.'}</p>
+            <p>{isCreator ? 'Bagikan halaman ini di grup WhatsApp cohort, atau tambahkan tester yang sudah opt-in lewat Tambah tester manual.' : 'Jadilah tester pertama: Mulai uji app ini → gabung grup → pasang dari Play → catat di TesBareng.'}</p>
           </Empty>
         </div>
       )}

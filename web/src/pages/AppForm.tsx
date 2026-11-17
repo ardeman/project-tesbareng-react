@@ -229,7 +229,7 @@ function Form({ existing }: { existing?: AppDoc }) {
             LIMITS.feedbackGuide
           )}
           <div className="preview-card" role="group" aria-label="Pratinjau untuk tester">
-            <span className="small muted">Yang dilihat tester di atas tombol Gabung sebagai tester:</span>
+            <span className="small muted">Yang dilihat tester di panduan “Cara dapat app ini”:</span>
             <span className="t">Yang ingin diuji creator</span>
             <p className="guide-quote">{v.feedbackGuide?.trim() || <span className="muted">Creator belum menulis panduan feedback.</span>}</p>
           </div>
@@ -254,7 +254,7 @@ function Form({ existing }: { existing?: AppDoc }) {
             <label className="check">
               <input type="radio" name="tester-method" value="google_group" checked={method === 'google_group'} onChange={() => setMethod('google_group')} />
               <span><span className="t">Google Group komunitas (disarankan)</span>
-                <span className="d">Anggota cukup gabung {COMMUNITY_GROUP}, lalu opt-in. Email mereka tetap tersamar.</span></span>
+                <span className="d">Anggota gabung {COMMUNITY_GROUP}, lalu buka halaman Play Store app Anda untuk memasang, dan mencatat di TesBareng. Email mereka tetap tersamar.</span></span>
             </label>
             <label className="check">
               <input type="radio" name="tester-method" value="email_list" checked={method === 'email_list'} onChange={() => setMethod('email_list')} disabled={emailListLocked} aria-describedby={emailListLocked ? 'f-email-lock' : undefined} />

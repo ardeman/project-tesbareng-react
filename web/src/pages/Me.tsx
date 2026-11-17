@@ -112,8 +112,8 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                 ? (
                   <Empty title="Mulai dari dua langkah.">
                     <ol className="first-run">
-                      <li><a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Gabung Google Group komunitas<span className="sr-only"> (tab baru)</span></a>. Tanpa ini opt-in Anda tidak terhitung di Play Console.</li>
-                      <li>Pilih aplikasi di <Link to="/apps">daftar aplikasi</Link>, lalu tekan Gabung sebagai tester. Tugasnya muncul di sini.</li>
+                      <li><a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Pilih akun &amp; buka Google Group<span className="sr-only"> (tab baru)</span></a> — akun yang sama dengan Play Store. Tanpa ini Install di Play biasanya tidak muncul.</li>
+                      <li>Pilih aplikasi di <Link to="/apps">daftar aplikasi</Link>. Ikuti panduan: buka Play Store → pasang → Catat saya sebagai tester. Tugasnya muncul di sini.</li>
                     </ol>
                   </Empty>
                 )
@@ -135,9 +135,9 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                       <Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
                       <span>
                         {kind === 'join'
-                          ? 'Ditugaskan melalui cohort. Opt-in dalam batas 48 jam.'
+                          ? 'Ditugaskan melalui cohort. Gabung grup → pasang dari Play → catat di TesBareng, dalam 48 jam.'
                           : kind === 'listed'
-                            ? 'Creator sudah menambahkan email Anda di Play Console. Sekarang opt-in, lalu daftar sebagai tester.'
+                            ? 'Creator sudah menambahkan email Anda. Sekarang buka Play / opt-in, pasang, lalu catat di TesBareng.'
                           : kind === 'emails'
                             ? `${count} tester menunggu emailnya Anda tambahkan di Play Console.`
                           : kind === 'build'
@@ -146,7 +146,7 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                       </span>
                     </span>
                     <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
-                      {kind === 'join' || kind === 'listed' ? 'Daftar sebagai tester' : kind === 'emails' ? 'Tambahkan email' : kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}
+                      {kind === 'join' || kind === 'listed' ? 'Lanjut uji app' : kind === 'emails' ? 'Tambahkan email' : kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}
                     </Link>
                   </li>
                 ))}

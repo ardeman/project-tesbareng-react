@@ -661,7 +661,7 @@ function MatrixDemo() {
 }
 
 const DAYS = [
-  { d: 0, title: 'Opt-in dan install', text: 'Daftar app tugasmu muncul di Tugas saya. Gabung Google Group, buka link opt-in tiap app, lalu install. Batasnya 48 jam.', chip: 'c-putih', chipText: '✓ Opt-in' },
+  { d: 0, title: 'Opt-in dan install', text: 'Daftar app tugasmu muncul di Tugas saya. Per app: gabung Google Group (pilih akun Play Store), buka Play Store → pasang, lalu catat di TesBareng. Batasnya 48 jam.', chip: 'c-putih', chipText: '✓ Opt-in' },
   { d: 2, title: 'Batas opt-in', text: 'Lewat 48 jam, yang belum opt-in tercatat Behind, dan app miliknya sendiri mendapat label Belum tes yang terlihat semua anggota.', chip: 'c-cabai', chipText: '! Belum tes' },
   { d: 7, title: 'Pakai, lalu kirim feedback', text: 'Buka app-nya dan centang Sudah buka app. Tulis feedback di Google Play dengan kata-katamu sendiri; creator menandai Verified setelah membacanya.', chip: 'c-pandan', chipText: '✓✓ Verified' },
   { d: 13, title: 'Masih opt-in?', text: 'Centang sekali lagi. Besoknya, app yang tester eligible-nya sudah memenuhi target siap diajukan ke production.', chip: 'c-langit', chipText: '✓ Masih opt-in' },
@@ -705,17 +705,17 @@ const TIERS = [
 ]
 
 const FAQ = [
-  { q: 'Harus punya app dulu untuk ikut?', a: 'Tidak. Kamu bisa ikut sebagai tester murni: gabung Google Group, masuk dengan Google, lalu pilih app di daftar app dan tekan Gabung sebagai tester. Mau tugas yang sudah dibagi? Gabung cohort sebagai tester, selama cohort masih Forming atau sampai akhir hari ke-6 setelah dimulai. Setiap app yang kamu tes sampai 14 hari dihitung untuk badge.' },
+  { q: 'Harus punya app dulu untuk ikut?', a: 'Tidak. Kamu bisa ikut sebagai tester murni: buka halaman app → gabung Google Group (pilih akun yang sama dengan Play Store) → pasang dari Play Store → catat di TesBareng. Login Google hanya saat mencatat. Mau tugas yang sudah dibagi? Gabung cohort sebagai tester, selama cohort masih Forming atau sampai akhir hari ke-6 setelah dimulai. Setiap app yang kamu tes sampai 14 hari dihitung untuk badge.' },
   { q: 'Wajib ikut cohort?', a: 'Tidak. Tanpa cohort kamu tetap bisa mendaftarkan app dan ngetes app mana saja, dan app yang kamu tes sampai 14 hari tetap dihitung untuk badge. Bedanya, tanpa cohort tidak ada jaminan app‑mu dites balik. Di cohort, tugas dibagi rata: kamu ngetes sebanyak tester yang diterima app‑mu.' },
   { q: 'App atau game saya sudah rilis di Play Store. Perlu ikut?', a: 'Kalau sudah rilis ke production, syarat 12 tester selama 14 hari sudah kamu lewati, jadi app itu tidak perlu didaftarkan. Kamu tetap boleh ikut sebagai tester untuk membantu creator lain. Kalau app-nya baru ada di closed testing, daftarkan dan ajukan ke cohort.' },
-  { q: 'Sudah daftar jadi tester. Lalu apa?', a: 'Tetap opt-in dan biarkan app terpasang sampai app itu lulus 14 hari Google. Buka app-nya sesekali, kirim feedback di Google Play dengan kata-katamu sendiri, lalu tekan Tandai sudah kirim di TesBareng. Kalau ada build baru, update app-nya. Semua yang masih harus kamu kerjakan ada di Tugas saya.' },
+  { q: 'Sudah daftar jadi tester. Lalu apa?', a: 'Biarkan app terpasang sampai app itu lulus 14 hari Google. Buka app-nya sesekali, kirim feedback di Google Play dengan kata-katamu sendiri, lalu tekan Tandai sudah kirim di TesBareng. Kalau ada build baru, update app-nya. Semua yang masih harus kamu kerjakan ada di Tugas saya.' },
   { q: 'Apakah TesBareng layanan resmi Google?', a: 'Bukan. TesBareng dibuat oleh komunitas creator Android Indonesia untuk saling membantu memenuhi syarat closed test Google Play.' },
   { q: 'Apakah TesBareng tersambung ke Play Console?', a: 'Tidak. Google tidak menyediakan data opt-in untuk aplikasi lain, jadi semua dicatat sendiri oleh anggota. Feedback yang ditandai Verified adalah bukti terkuat, karena creator mengeceknya langsung di Play Console.' },
   { q: 'Kenapa feedback harus dikirim di Google Play?', a: 'Feedback di Play masuk langsung ke Play Console milik creator, lengkap dengan nama pengirimnya. TesBareng hanya mencatat bahwa kamu sudah mengirimnya, lalu creator menandainya Verified. Tulis dengan kata-katamu sendiri: ulasan yang disalin dari banyak akun terlihat tidak asli.' },
   { q: 'Bagaimana kalau ada anggota yang tidak ikut ngetes?', a: 'Lewat 48 jam, app miliknya mendapat label Belum tes, dan admin bisa memindahkan slotnya ke anggota lain. Saat cohort ditutup, kewajiban yang belum selesai tercatat Owing. Dia tidak bisa ikut cohort berikutnya sampai admin menandainya Settled.' },
   { q: 'Wajib gabung grup WhatsApp cohort?', a: 'Tidak. Grup WhatsApp cohort opsional, dan anggota grup bisa melihat nomor HP satu sama lain. Status tetap dilaporkan di TesBareng, bukan di chat. Yang dibutuhkan hanya Google Group, karena Play Console memakainya sebagai daftar tester, atau persetujuan berbagi email untuk app yang memakai daftar email.' },
   { q: 'Siapa yang bisa melihat emailku?', a: 'Di semua halaman, email tampil disamarkan, misalnya bu*****@gmail.com. Alamat lengkap dipakai sistem untuk mengirim pengingat. Satu-satunya pengecualian: kalau app memakai daftar email dan kamu menekan Minta ditambahkan, creator app itu saja yang melihat alamat lengkapmu. Persetujuan itu bisa kamu tarik kapan saja.' },
-  { q: 'Closed track saya sudah memakai daftar email, bukan Google Group. Bisa ikut?', a: 'Di Play Console, satu track memakai Google Group atau daftar email, tidak bisa keduanya. Pilih Daftar email di form app; pilihan ini terbuka setelah kamu ngetes 3 app. Tester menekan Minta ditambahkan, kamu menempel email mereka di Play Console, lalu menandai Sudah ditambahkan. Setelah itu mereka bisa opt-in.' },
+  { q: 'Closed track saya sudah memakai daftar email, bukan Google Group. Bisa ikut?', a: 'Di Play Console, satu track memakai Google Group atau daftar email, tidak bisa keduanya. Pilih Daftar email di form app; pilihan ini terbuka setelah kamu ngetes 3 app. Tester menekan Minta ditambahkan, kamu menempel email mereka di Play Console, lalu menandai Sudah ditambahkan. Setelah itu mereka opt-in, pasang dari Play, dan mencatat di TesBareng.' },
   { q: 'Sudah punya sebagian tester sendiri. Tetap harus minta 12?', a: 'Isi berapa tester yang kamu butuhkan dari TesBareng (1–12) di form app. Sisanya dari luar komunitas, dilaporkan sendiri. Di cohort, app-mu dapat jumlah itu ditambah 2 cadangan, dan kamu ngetes sebanyak itu juga: butuh 3, biasanya kamu ngetes 5 app.' },
 ]
 
@@ -928,13 +928,13 @@ export function Landing() {
               <li>
                 <span className="n" aria-hidden="true">1</span>
                 <h3>Gabung Google Group</h3>
-                <p>Masuk ke <code className="email">{COMMUNITY_GROUP}</code> dengan akun Google yang ada di HP-mu. Creator memasang grup ini sebagai daftar tester di Play Console, jadi cukup sekali untuk semua app. Untuk app yang memakai daftar email, tekan Minta ditambahkan di halaman app-nya.</p>
+                <p>Ketuk tombol di bawah — Google meminta <b>pilih akun dulu</b>. Pakai akun yang sama dengan Play Store di HP-mu, lalu Bergabung / Join. Creator memasang <code className="email">{COMMUNITY_GROUP}</code> sebagai daftar tester, jadi cukup sekali untuk semua app. Jangan ganti akun setelah halaman grup terbuka. Untuk app daftar email, tekan Minta ditambahkan di halaman app-nya.</p>
                 <CopyEmail onCopied={() => say('Email grup tersalin')} />
               </li>
               <li>
                 <span className="n" aria-hidden="true">2</span>
-                <h3>Masuk dengan Google</h3>
-                <p>Daftarkan app-mu, atau langsung pilih app yang ingin kamu bantu tes. Melihat-lihat tidak perlu daftar.</p>
+                <h3>Pasang app, lalu catat</h3>
+                <p>Buka halaman app di TesBareng (boleh tanpa login). Ikuti panduan: buka Play Store → Install → baru <b>Catat saya sebagai tester</b> (login Google di langkah itu). Atau daftarkan app-mu sendiri lewat Masuk dengan Google.</p>
               </li>
               <li>
                 <span className="n" aria-hidden="true">3</span>
@@ -943,7 +943,7 @@ export function Landing() {
               </li>
             </ol>
             <div className="cta-row join-cta">
-              <a className="lp-btn lp-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Gabung Google Group<span className="sr-only"> (tab baru)</span></a>
+              <a className="lp-btn lp-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Pilih akun &amp; buka grup<span className="sr-only"> (Google Group, tab baru)</span></a>
               {signInBtn('lp-btn', true)}
               <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />Grup WhatsApp komunitas<span className="sr-only"> (tab baru)</span></a>
             </div>
@@ -951,7 +951,7 @@ export function Landing() {
             <div className="duty rv">
               <h3>Yang kamu janjikan saat ikut cohort</h3>
               <ul>
-                <li><b>Opt-in dalam 48 jam</b><span>Ke semua app yang ditugaskan padamu, dihitung dari Hari 0.</span></li>
+                <li><b>Opt-in dalam 48 jam</b><span>Ke semua app yang ditugaskan: gabung grup, pasang dari Play Store, catat di TesBareng — dihitung dari Hari 0.</span></li>
                 <li><b>Centang di titik cek</b><span>Sudah buka app di hari 7, Masih opt-in di hari 13, dan Sudah update dalam 3 hari setiap ada build baru.</span></li>
                 <li><b>Kirim feedback di Google Play</b><span>Dengan kata-katamu sendiri, lalu tekan Tandai sudah kirim di TesBareng.</span></li>
                 <li><b>Tetap opt-in sampai app lulus 14 hari</b><span>Keluar lebih awal bisa membuat hitungan 14 hari Google untuk app itu mulai lagi dari nol.</span></li>
