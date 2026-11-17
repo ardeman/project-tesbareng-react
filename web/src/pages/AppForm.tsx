@@ -103,7 +103,7 @@ function Form({ existing }: { existing?: AppDoc }) {
     setBusy(true); setFail(null)
     const clean: AppInput = {
       name: v.name.trim(), description: v.description.trim(), optInUrl: v.optInUrl.trim(),
-      storeUrl: v.storeUrl?.trim() || undefined, packageName: v.packageName?.trim() || undefined,
+      storeUrl: v.storeUrl.trim(), packageName: v.packageName?.trim() || undefined,
       testStartDate: v.testStartDate || undefined, feedbackGuide: v.feedbackGuide?.trim() || undefined,
     }
     try {
@@ -188,7 +188,7 @@ function Form({ existing }: { existing?: AppDoc }) {
         <div className="label-col"><h2>Link Google Play</h2><p>Link opt-in ada di Play Console → Uji tertutup → Penguji → “Gabung di web”.</p></div>
         <div className="form-panel">
           {field('optInUrl', 'Link opt-in uji tertutup', <input className="input" type="url" inputMode="url" placeholder={`${OPT_IN_PREFIX}nama.paket`} value={v.optInUrl} onChange={set('optInUrl')} {...aria('optInUrl', true)} />, `Diawali ${OPT_IN_PREFIX}`)}
-          {field('storeUrl', 'Link halaman Play Store (opsional)', <input className="input" type="url" inputMode="url" placeholder="https://play.google.com/store/apps/details?id=…" value={v.storeUrl} onChange={set('storeUrl')} {...aria('storeUrl', true)} />, 'Tester memakai halaman ini untuk menulis feedback.')}
+          {field('storeUrl', 'Link halaman Play Store', <input className="input" type="url" inputMode="url" placeholder="https://play.google.com/store/apps/details?id=…" value={v.storeUrl} onChange={set('storeUrl')} {...aria('storeUrl', true)} />, 'Wajib. Setelah gabung grup, tester dibuka ke halaman ini (terutama di HP) untuk memasang app dan menulis feedback.')}
         </div>
       </section>
 

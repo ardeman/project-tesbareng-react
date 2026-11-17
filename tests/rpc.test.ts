@@ -73,13 +73,24 @@ describe("create_app", () => {
   it("trims fields, stores empty optional fields as null, parses the start date", async () => {
     const appId = await createApp(creator, {
       p_name: "  Kas RT Digital  ",
-      p_store_url: "",
+      p_store_url: "  https://play.google.com/store/apps/details?id=id.rinadev.kasrt  ",
       p_package_name: "  ",
       p_feedback_guide: null,
       p_test_start_date: "2026-10-20",
     });
     const app = await must(anon().from("apps").select("*").eq("id", appId).single());
-    expect(app).toMatchObject({ name: "Kas RT Digital", store_url: null, package_name: null, feedback_guide: null, test_start_date: "2026-10-20" });
+    expect(app).toMatchObject({
+      name: "Kas RT Digital",
+      store_url: "https://play.google.com/store/apps/details?id=id.rinadev.kasrt",
+      package_name: null,
+      feedback_guide: null,
+      test_start_date: "2026-10-20",
+    });
+  });
+
+  it("requires a Play Store listing URL", async () => {
+    await expectCode(creator.db.rpc("create_app", appInput({ p_store_url: "" })), "invalid-argument", /Play Store|wajib/i);
+    await expectCode(creator.db.rpc("create_app", appInput({ p_store_url: null })), "invalid-argument", /Play Store|wajib/i);
   });
 
   it("requires group_confirmed === true", async () => {

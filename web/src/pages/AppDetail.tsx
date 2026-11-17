@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, forwardRef, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   Avatar, Badge, Bar, Chip, Dialog, Empty, ErrorBox, failToast, FeedbackChip, NotFound, OverflowMenu, RelTime, Seats, ShowAll, Skel,
@@ -10,9 +10,14 @@ import { BuildDialog, FeedbackDialog, JoinDialog, ManualTesterDialog, TesterDial
 import { AssignedChip } from '../components/cohortBits'
 import { useAuth } from '../lib/auth'
 import { useMyAssignedApps } from '../lib/cohorts'
+import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
 import { api, errorCode, markEmailListed, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useEmailListings, useMyEmailListing, useTesters } from '../lib/data'
 import { checkIn, milestones, useCheckIns, type CheckIn, type Milestone } from '../lib/checkins'
+import {
+  groupPlayStepsDone, hasStoreUrl, isLikelyMobile, markResumeJoin, openPlayInstall, playInstallUrl,
+  readGroupJoinProgress, takeResumeJoin, writeGroupJoinProgress, type GroupJoinProgress,
+} from '../lib/joinProgress'
 import {
   computeProgress, daysActive, fmtDate, fmtDateTime, fmtDayHeading, inDays, isNewBuild, isoDate, openSeats, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
   testerStatusLabel, type Progress,
@@ -49,6 +54,17 @@ export function AppDetail() {
   const emailFlow = !!app.data && app.data.testerMethod === 'email_list' && !!user && app.data.creatorUid !== user.uid && !isAdmin
   const myListing = useMyEmailListing(emailFlow ? id : undefined, user?.uid)
   const flow = useCheckInFlow(id, user && app.data && !app.data.deleted && app.data.creatorUid !== user.uid && !isAdmin ? ownActive : undefined, builds.data.map((b) => b.id).join(','))
+  const guideRef = useRef<HTMLElement>(null)
+  const [guideTick, setGuideTick] = useState(0)
+  const appId = app.data?.id
+  const groupProgress = useMemo(() => (appId ? readGroupJoinProgress(appId) : {}), [appId, guideTick])
+
+  // After Google OAuth, reopen the join wizard on this app.
+  useEffect(() => {
+    if (!user || !appId) return
+    const resume = takeResumeJoin()
+    if (resume === appId) setDialog('join')
+  }, [user, appId])
 
   if (app.error) return <ErrorBox text="Aplikasi gagal dimuat. Periksa koneksi, lalu coba lagi." onRetry={app.retry} />
   if (app.data === null || (app.data && app.data.deleted && !isAdmin)) return <NotFound what="Aplikasi" />
@@ -58,21 +74,33 @@ export function AppDetail() {
   const isCreator = !!user && (user.uid === a.creatorUid || isAdmin)
   const mine = user ? testers.data.find((t) => t.uid === user.uid) : undefined
   const loading = testers.loading || builds.loading
-  const playUrl = a.storeUrl ?? a.optInUrl
+  const playUrl = playInstallUrl(a)
   const optInUrl = a.optInUrl
+  const storeOk = hasStoreUrl(a)
+  const isBeginner = !isCreator && mine?.status !== 'active' && mine?.status !== 'removed'
 
   const needLogin = async (then: DialogKind) => {
     try {
-      if (!user) await signIn()
+      if (!user) {
+        if (then === 'join') markResumeJoin(a.id)
+        await signIn()
+      }
       setDialog(then)
     } catch (e) { toast(failToast(e)) }
   }
+
+  const focusGuide = () => {
+    guideRef.current?.scrollIntoView({ block: 'start' })
+    guideRef.current?.focus({ preventScroll: true })
+  }
+
+  const openJoinOrLogin = () => { void needLogin('join') }
 
   // ADR-009 §1: one primary per role, up to two secondary, the rest behind "…".
   const actions: Actions = (() => {
     if (isCreator) {
       const overflow: MenuItem[] = []
-      if (a.storeUrl) overflow.push({ label: 'Buka halaman Play', href: a.storeUrl })
+      if (storeOk) overflow.push({ label: 'Buka halaman Play', href: a.storeUrl! })
       overflow.push({ label: 'Buka link opt-in', href: a.optInUrl })
       overflow.push({ label: 'Bagikan ke WhatsApp', onSelect: () => shareToWhatsApp(a.name, openSeats(a), a.id) })
       return {
@@ -90,10 +118,10 @@ export function AppDetail() {
       const latest = builds.data[0]
       const buildWaiting = isNewBuild(a) && a.lastBuildAt != null && a.lastBuildAt > since && !(latest && flow.isDone('updated_build', latest.id))
       const leave: MenuItem = { label: 'Berhenti menguji', danger: true, onSelect: () => setDialog('leave') }
-      const play: Action = { label: 'Buka link opt-in', icon: <IconExternal />, href: optInUrl }
+      const play: Action = { label: storeOk ? 'Buka di Play Store' : 'Buka link opt-in', icon: <IconExternal />, href: playUrl }
       const editNote: Action = { label: 'Ubah catatan feedback', onClick: () => setDialog('feedback') }
       if (!mine.feedbackSent) return { primary: { label: 'Tandai sudah kirim', onClick: () => setDialog('feedback') }, secondary: [play], overflow: [leave] }
-      if (buildWaiting) return { primary: { label: 'Uji build baru di Play', icon: <IconExternal />, href: optInUrl }, secondary: [editNote], overflow: [leave] }
+      if (buildWaiting) return { primary: { label: 'Uji build baru di Play', icon: <IconExternal />, href: playUrl }, secondary: [editNote], overflow: [leave] }
       const next = flow.next
       if (next) {
         const primary: Action = { label: `Check-in: ${next.label}`, onClick: () => flow.run(next), busy: flow.pending === next.key, blocked: !!flow.pending && flow.pending !== next.key }
@@ -101,10 +129,11 @@ export function AppDetail() {
       }
       return { secondary: [play, editNote], overflow: [leave] }
     }
-    const optInAction: Action = { label: 'Buka link opt-in', icon: <IconExternal />, href: a.optInUrl }
-    const storeOverflow: MenuItem[] = a.storeUrl ? [{ label: 'Halaman Play Store', href: a.storeUrl }] : []
+    const playAction: Action = { label: storeOk ? 'Buka di Play Store' : 'Buka link opt-in', icon: <IconExternal />, href: playUrl }
+    const storeOverflow: MenuItem[] = []
+    if (storeOk) storeOverflow.push({ label: 'Link opt-in (cadangan)', href: optInUrl })
     storeOverflow.push({ label: 'Bagikan ke WhatsApp', onSelect: () => shareToWhatsApp(a.name, openSeats(a), a.id) })
-    if (mine?.status === 'removed') return { secondary: [optInAction], overflow: storeOverflow }
+    if (mine?.status === 'removed') return { secondary: [playAction], overflow: storeOverflow }
     if (a.testerMethod === 'email_list') {
       // The opt-in link only works once the creator has added this member's email in Play Console.
       const l = myListing.data
@@ -115,29 +144,40 @@ export function AppDetail() {
           secondary: [],
           overflow: storeOverflow,
           note: user
-            ? 'Link opt-in bisa dibuka setelah creator menambahkan email Anda di Play Console.'
-            : 'Anda diminta masuk dengan Google dulu. Link opt-in bisa dibuka setelah creator menambahkan email Anda.',
+            ? 'Setelah Anda minta, creator menambahkan email di Play Console. Baru kemudian bisa opt-in dan pasang.'
+            : 'Masuk dengan Google untuk membagikan email ke creator. Opt-in & pasang baru bisa setelah email ditambahkan.',
         }
       }
       if (l.listedAt == null) {
         return {
           secondary: [{ label: 'Lihat permintaan', onClick: () => setDialog('join') }],
           overflow: storeOverflow,
-          note: `Menunggu creator menambahkan email Anda · diminta ${fmtDate(l.requestedAt)}.`,
+          note: `Menunggu creator menambahkan email Anda · diminta ${fmtDate(l.requestedAt)}. Anda bisa tutup halaman ini dan kembali nanti.`,
         }
       }
       return {
-        primary: { label: 'Gabung sebagai tester', onClick: () => setDialog('join') },
-        secondary: [optInAction],
+        primary: { label: 'Lanjut: pasang di Play', onClick: () => setDialog('join') },
+        secondary: [playAction],
         overflow: storeOverflow,
-        note: 'Email Anda sudah ditambahkan. Opt-in dengan akun Google yang sama.',
+        note: 'Email sudah ditambahkan. Buka Play Store / opt-in dengan akun Google yang sama, lalu pasang.',
+      }
+    }
+    // Google Group: Play-first. Login only when recording on TesBareng.
+    if (groupPlayStepsDone(groupProgress)) {
+      return {
+        primary: { label: 'Catat saya sebagai tester', onClick: openJoinOrLogin },
+        secondary: [playAction],
+        overflow: storeOverflow,
+        note: user ? 'Langkah Play selesai. Catat di TesBareng supaya hari aktif terhitung.' : 'Langkah Play selesai. Masuk dengan Google untuk mencatat di TesBareng.',
       }
     }
     return {
-      primary: { label: 'Gabung sebagai tester', onClick: () => needLogin('join') },
-      secondary: [optInAction],
+      primary: { label: 'Mulai uji app ini', onClick: focusGuide },
+      secondary: [playAction],
       overflow: storeOverflow,
-      note: user ? undefined : 'Anda diminta masuk dengan Google dulu.',
+      note: storeOk
+        ? 'Tanpa login dulu: gabung grup → buka Play Store → pasang. Lalu catat di TesBareng.'
+        : 'Tanpa login dulu: gabung grup → buka link opt-in → pasang. Lalu catat di TesBareng.',
     }
   })()
 
@@ -158,6 +198,20 @@ export function AppDetail() {
       )}
 
       <div className="grid">
+        {/* Beginners: guide first so social-share visitors see how to install before the KPI board. */}
+        {isBeginner && (
+          <BeginnerGuide
+            ref={guideRef}
+            app={a}
+            progress={groupProgress}
+            emailListed={a.testerMethod === 'email_list' ? (myListing.data ? (myListing.data.listedAt ? 'listed' : 'waiting') : (user ? 'none' : 'signed_out')) : undefined}
+            onProgress={() => setGuideTick((n) => n + 1)}
+            onRecord={openJoinOrLogin}
+            onAskEmail={() => needLogin('join')}
+            onOpenJoin={() => setDialog('join')}
+          />
+        )}
+
         {/* KPIs move under the board only when the aside is clearly taller (few seats); otherwise full width below both. */}
         <div className="span-8 col-fill">
           <section className="panel" aria-labelledby="board-h" ref={kpiPlace.board}>
@@ -171,7 +225,7 @@ export function AppDetail() {
         </div>
 
         <aside className="span-4 col-fill" ref={kpiPlace.aside}>
-          <InfoPanel app={a} p={progress} mine={mine} isCreator={isCreator} flow={flow} />
+          <InfoPanel app={a} p={progress} mine={mine} isCreator={isCreator} flow={flow} beginnerGuideOutside={isBeginner} />
           <CreatorCard app={a} />
         </aside>
 
@@ -313,7 +367,9 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
 }
 
 /** Context for the role; the actions themselves live in the header zone. */
-function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress; mine?: TesterDoc; isCreator: boolean; flow: CheckInFlow }) {
+function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
+  app: AppDoc; p: Progress; mine?: TesterDoc; isCreator: boolean; flow: CheckInFlow; beginnerGuideOutside?: boolean
+}) {
   // Stamp the feedback chip only when "sent" flips on while this panel is open, not on every visit.
   const sentBefore = useRef(mine?.feedbackSent)
   const [stamp, setStamp] = useState(false)
@@ -398,17 +454,158 @@ function InfoPanel({ app, p, mine, isCreator, flow }: { app: AppDoc; p: Progress
     )
   }
 
+  // When BeginnerGuide sits above the board, this panel only keeps the feedback missions.
+  if (beginnerGuideOutside) {
+    return (
+      <section className="panel stack-16" aria-label="Setelah terpasang">
+        <h2>{mine?.status === 'left' ? 'Uji lagi aplikasi ini' : 'Setelah terpasang'}</h2>
+        {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi menghitung hari aktif Anda dari nol.</p>}
+        <p className="muted small">Ikuti panduan “Cara dapat app ini” di atas. Nanti, saat kirim feedback di Play:</p>
+        {guide}
+      </section>
+    )
+  }
+
   return (
     <section className="panel stack-16" aria-label="Ikut menguji">
       <h2>{mine?.status === 'left' ? 'Uji lagi aplikasi ini' : 'Ikut menguji'}</h2>
       {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi menghitung hari aktif Anda dari nol.</p>}
       {guide}
-      {app.testerMethod === 'email_list'
-        ? <p className="muted small">Aplikasi ini memakai daftar email: minta ditambahkan, tunggu creator menambahkan email Anda, lalu opt-in dan pasang aplikasinya. Mulai dari tombol di atas.</p>
-        : <p className="muted small">Butuh 3 langkah: gabung grup, buka link opt-in, pasang aplikasinya. Mulai dari tombol Gabung sebagai tester di atas.</p>}
     </section>
   )
 }
+
+type EmailGuideState = 'signed_out' | 'none' | 'waiting' | 'listed'
+
+/** Play-first path for social-share visitors: Group → Opt-in → Install → Catat (no login until Catat). */
+const BeginnerGuide = forwardRef(function BeginnerGuide({
+  app, progress, emailListed, onProgress, onRecord, onAskEmail, onOpenJoin,
+}: {
+  app: AppDoc
+  progress: GroupJoinProgress
+  emailListed?: EmailGuideState
+  onProgress: () => void
+  onRecord: () => void
+  onAskEmail: () => void
+  onOpenJoin: () => void
+}, ref: Ref<HTMLElement>) {
+  const playUrl = playInstallUrl(app)
+  const storeOk = hasStoreUrl(app)
+  const email = app.testerMethod === 'email_list'
+
+  const mark = (patch: GroupJoinProgress) => {
+    writeGroupJoinProgress(app.id, { ...progress, ...patch })
+    onProgress()
+  }
+
+  const afterGroup = () => {
+    mark({ group: true })
+    if (isLikelyMobile()) openPlayInstall(app)
+  }
+
+  if (email) {
+    const state = emailListed ?? 'signed_out'
+    return (
+      <section ref={ref} tabIndex={-1} className="panel stack-16 span-12 beginner-guide" aria-labelledby="beginner-h" id="cara-dapat-app">
+        <div>
+          <h2 id="beginner-h">Cara dapat app ini</h2>
+          <p className="muted">App ini memakai daftar email di Play Console. Creator harus menambahkan email Anda dulu — baru bisa opt-in dan pasang.</p>
+        </div>
+        <ol className="beginner-steps">
+          <li className={state !== 'signed_out' && state !== 'none' ? 'done' : state === 'signed_out' || state === 'none' ? 'current' : undefined}>
+            <span className="num" aria-hidden="true">{state !== 'signed_out' && state !== 'none' ? '✓' : '1'}</span>
+            <div className="beginner-step-body">
+              <p className="t">Minta ditambahkan</p>
+              <p className="d">Masuk dengan Google, setujui creator melihat email lengkap Anda (hanya untuk Play Console).</p>
+              {(state === 'signed_out' || state === 'none') && (
+                <button type="button" className="btn primary sm" onClick={onAskEmail}>Minta ditambahkan</button>
+              )}
+            </div>
+          </li>
+          <li className={state === 'listed' ? 'done' : state === 'waiting' ? 'current' : undefined}>
+            <span className="num" aria-hidden="true">{state === 'listed' ? '✓' : '2'}</span>
+            <div className="beginner-step-body">
+              <p className="t">Tunggu creator</p>
+              <p className="d">Creator menempel email di Play Console, lalu menandai “Sudah ditambahkan”. Boleh tutup halaman ini dulu.</p>
+              {state === 'waiting' && <button type="button" className="btn sm" onClick={onOpenJoin}>Lihat status permintaan</button>}
+            </div>
+          </li>
+          <li className={state === 'listed' ? 'current' : undefined}>
+            <span className="num" aria-hidden="true">3</span>
+            <div className="beginner-step-body">
+              <p className="t">Pasang di Play, lalu catat</p>
+              <p className="d">Setelah email ditambahkan: jadi penguji → Install di Play → catat di TesBareng.</p>
+              {state === 'listed' && (
+                <div className="beginner-step-actions">
+                  <a className="btn primary sm" href={storeOk ? playUrl : app.optInUrl} target="_blank" rel="noreferrer">
+                    <IconExternal />{storeOk ? 'Buka di Play Store' : 'Buka link opt-in'}
+                  </a>
+                  <button type="button" className="btn sm" onClick={onOpenJoin}>Lanjut di panduan</button>
+                </div>
+              )}
+            </div>
+          </li>
+        </ol>
+      </section>
+    )
+  }
+
+  const step = !progress.group ? 1 : !progress.installed ? 2 : 3
+
+  return (
+    <section ref={ref} tabIndex={-1} className="panel stack-16 span-12 beginner-guide" aria-labelledby="beginner-h" id="cara-dapat-app">
+      <div>
+        <h2 id="beginner-h">Cara dapat app ini</h2>
+        <p className="muted">Tanpa login dulu. Selesaikan di HP: gabung grup, buka Play Store, pasang. Akun Google Group dan Play Store harus sama.</p>
+      </div>
+      <ol className="beginner-steps">
+        <li className={progress.group ? 'done' : step === 1 ? 'current' : undefined}>
+          <span className="num" aria-hidden="true">{progress.group ? '✓' : '1'}</span>
+          <div className="beginner-step-body">
+            <p className="t">Gabung Google Group komunitas</p>
+            <p className="d">Tombol di bawah membuka <b>pilih akun Google</b> dulu. Pilih akun yang sama dengan Play Store, lalu ketuk Bergabung / Join. Jangan ganti akun setelah halaman grup terbuka — tombol Join sering hilang dan Anda mendarat di “Grup saya”.</p>
+            {step === 1 && (
+              <div className="beginner-step-actions">
+                <a className="btn primary sm" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer"><IconExternal />Pilih akun &amp; buka grup</a>
+                <button type="button" className="btn sm" onClick={afterGroup}>Sudah gabung</button>
+              </div>
+            )}
+            {progress.group && <p className="muted small addr">{COMMUNITY_GROUP}</p>}
+          </div>
+        </li>
+        <li className={progress.installed ? 'done' : step === 2 ? 'current' : undefined}>
+          <span className="num" aria-hidden="true">{progress.installed ? '✓' : '2'}</span>
+          <div className="beginner-step-body">
+            <p className="t">Buka Play Store dan pasang</p>
+            <p className="d">
+              {storeOk
+                ? <>Ketuk tombol di bawah. Di HP, ketuk <b>Install</b> / Pasang, lalu buka app sekali.</>
+                : <>Creator belum mengisi link Play Store. Sementara pakai link opt-in: ketuk <b>Jadi penguji</b>, lalu Install.</>}
+            </p>
+            {step === 2 && (
+              <div className="beginner-step-actions">
+                <a className="btn primary sm" href={playUrl} target="_blank" rel="noreferrer">
+                  <IconExternal />{storeOk ? 'Buka di Play Store' : 'Buka link opt-in'}
+                </a>
+                <button type="button" className="btn sm" onClick={() => mark({ installed: true })}>Sudah memasang</button>
+              </div>
+            )}
+          </div>
+        </li>
+        <li className={step === 3 ? 'current' : undefined}>
+          <span className="num" aria-hidden="true">3</span>
+          <div className="beginner-step-body">
+            <p className="t">Catat di TesBareng</p>
+            <p className="d">Supaya hari aktif Anda terhitung bersama komunitas. Perlu masuk dengan Google.</p>
+            {step === 3 && (
+              <button type="button" className="btn primary sm" onClick={onRecord}>Catat saya sebagai tester</button>
+            )}
+          </div>
+        </li>
+      </ol>
+    </section>
+  )
+})
 
 // ---------- milestone check-ins (PRD §6.10, FR-39–41): own Active entry only ----------
 

@@ -120,6 +120,7 @@ export function appInput(over: Record<string, unknown> = {}) {
     p_name: "Jadwal Sholat Widget",
     p_description: "Widget jadwal sholat ringan dengan pengingat adzan untuk kota-kota di Indonesia.",
     p_opt_in_url: `https://play.google.com/apps/testing/id.fajardev.sholat${n}`,
+    p_store_url: `https://play.google.com/store/apps/details?id=id.fajardev.sholat${n}`,
     p_package_name: `id.fajardev.sholat${n}`,
     p_feedback_guide: "Apakah widget tetap update setelah HP restart?",
     p_group_confirmed: true,

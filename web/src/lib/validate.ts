@@ -14,7 +14,8 @@ export function validateApp(v: AppInput, opts: { creating: boolean; groupConfirm
   else if (v.description.trim().length > LIMITS.description) e.description = `Maksimal ${LIMITS.description} karakter.`
   if (!v.optInUrl.trim().startsWith(OPT_IN_PREFIX) || v.optInUrl.trim().length <= OPT_IN_PREFIX.length)
     e.optInUrl = `Harus link opt-in uji tertutup, diawali ${OPT_IN_PREFIX}`
-  if (v.storeUrl?.trim() && !v.storeUrl.trim().startsWith(STORE_PREFIX)) e.storeUrl = `Harus diawali ${STORE_PREFIX}`
+  if (!v.storeUrl?.trim()) e.storeUrl = 'Link halaman Play Store wajib diisi.'
+  else if (!v.storeUrl.trim().startsWith(STORE_PREFIX)) e.storeUrl = `Harus diawali ${STORE_PREFIX}`
   if (v.packageName?.trim() && !/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/.test(v.packageName.trim())) e.packageName = 'Format nama paket seperti id.namadev.aplikasi'
   if ((v.feedbackGuide?.trim().length ?? 0) > LIMITS.feedbackGuide) e.feedbackGuide = `Maksimal ${LIMITS.feedbackGuide} karakter.`
   if (opts.creating && !opts.groupConfirmed) e.groupConfirmed = 'Centang dulu setelah grup ditambahkan di Play Console.'

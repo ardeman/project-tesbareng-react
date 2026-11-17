@@ -365,7 +365,8 @@ export interface AppInput {
   name: string
   description: string
   optInUrl: string
-  storeUrl?: string
+  /** Required on create/update (owner 2026-11-17). Older DB rows may still be null. */
+  storeUrl: string
   packageName?: string
   testStartDate?: string
   feedbackGuide?: string
@@ -375,7 +376,7 @@ const appArgs = (input: AppInput & { testerMethod?: TesterMethod; testerSlots?: 
   p_name: input.name,
   p_description: input.description,
   p_opt_in_url: input.optInUrl,
-  p_store_url: input.storeUrl || null,
+  p_store_url: input.storeUrl.trim() || null,
   p_package_name: input.packageName || null,
   p_test_start_date: input.testStartDate || null,
   p_feedback_guide: input.feedbackGuide || null,
