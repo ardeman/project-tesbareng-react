@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP_URL, WHATSAPP_URL } from '../lib/community'
-import { useI18n } from '../lib/i18n'
+import { useI18n, useT } from '../lib/i18n'
 import { useReducedMotion, useTheme } from '../lib/theme'
 import './story-chrome.css'
 
@@ -34,13 +34,9 @@ function MoonSun() {
   )
 }
 
-export const SECTIONS = [
-  { id: 'cara-kerja', label: 'Cara kerja' },
-  { id: 'transparansi', label: 'Transparansi' },
-  { id: 'badge', label: 'Badge' },
-  { id: 'faq', label: 'FAQ' },
-]
-const FOOT_SECTIONS = SECTIONS.filter((s) => s.id !== 'transparansi')
+export const SECTION_IDS = ['cara-kerja', 'transparansi', 'badge', 'faq'] as const
+export type SectionId = typeof SECTION_IDS[number]
+const FOOT_SECTION_IDS = SECTION_IDS.filter((id) => id !== 'transparansi')
 
 type HeaderProps = {
   page: 'home' | 'about'
@@ -60,6 +56,7 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
   const reduced = useReducedMotion()
   const { dark, toggle } = useTheme(reduced)
   const { locale, setLocale } = useI18n()
+  const t = useT()
   const { user, signInError, startSignIn } = signIn
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBtnRef = useRef<HTMLButtonElement>(null)
@@ -105,28 +102,35 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
     }
   }
 
+  const sectionLabel = (id: string) => {
+    if (id === 'cara-kerja') return t('nav_how')
+    if (id === 'transparansi') return t('nav_transparency')
+    if (id === 'badge') return t('nav_badge')
+    if (id === 'faq') return t('nav_faq')
+    return id
+  }
   const aboutProps = page === 'about' ? { 'aria-current': 'page' as const } : {}
   const signInBtn = user ? (
-    <Link className="lp-btn lp-btn--nav" to="/me">Tugas saya</Link>
+    <Link className="lp-btn lp-btn--nav" to="/me">{t('nav_tasks')}</Link>
   ) : (
-    <button type="button" className="lp-btn lp-btn--nav" onClick={startSignIn}><span>Masuk<span className="hide-xs"> dengan Google</span></span></button>
+    <button type="button" className="lp-btn lp-btn--nav" onClick={startSignIn}><span>{t('sign_in_short')}<span className="hide-xs"> {t('sign_in_suffix')}</span></span></button>
   )
 
   return (
     <div className="lp surface-story dark-ready story-chrome">
       <header className="lp-top" ref={barRef}>
         <div className="lp-wrap lp-top-row">
-          <Link to="/" className="lp-brand" aria-label="TesBareng, beranda" ref={brandRef}><span className="lp-brand-box" aria-hidden="true" />TesBareng</Link>
+          <Link to="/" className="lp-brand" aria-label={t('brand_home_label')} ref={brandRef}><span className="lp-brand-box" aria-hidden="true" />TesBareng</Link>
           <nav className="lp-nav" aria-label="Utama">
-            {SECTIONS.map((s) => home ? (
-              <a key={s.id} className={`nl sec-link${active === s.id ? ' active' : ''}`} href={`#${s.id}`} aria-current={active === s.id ? 'location' : undefined}>{s.label}</a>
+            {SECTION_IDS.map((id) => home ? (
+              <a key={id} className={`nl sec-link${active === id ? ' active' : ''}`} href={`#${id}`} aria-current={active === id ? 'location' : undefined}>{sectionLabel(id)}</a>
             ) : (
-              <Link key={s.id} className="nl sec-link" to={`/#${s.id}`}>{s.label}</Link>
+              <Link key={id} className="nl sec-link" to={`/#${id}`}>{sectionLabel(id)}</Link>
             ))}
-            <Link className={`nl${page === 'about' ? ' active' : ''}`} to="/about" {...aboutProps}>Aturan main</Link>
-            <Link className="nl" to="/apps">Daftar app</Link>
+            <Link className={`nl${page === 'about' ? ' active' : ''}`} to="/about" {...aboutProps}>{t('nav_about')}</Link>
+            <Link className="nl" to="/apps">{t('nav_apps')}</Link>
             <div className="nav-tools">
-              {!user && <button type="button" className="lp-sq theme-btn" aria-pressed={dark} aria-label="Mode gelap" onClick={toggle}><MoonSun /></button>}
+              {!user && <button type="button" className="lp-sq theme-btn" aria-pressed={dark} aria-label={dark ? t('dark_mode_on') : t('dark_mode_off')} onClick={toggle}><MoonSun /></button>}
               <button type="button" className="lp-sq theme-btn" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
                 title={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
                 aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
@@ -138,15 +142,15 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
           </nav>
         </div>
         <nav className="nav-sheet" id="lp-menu" aria-label="Menu" hidden={!menuOpen} onClick={onSheetClick}>
-          {SECTIONS.map((s) => home ? (
-            <a key={s.id} className={active === s.id ? 'active' : undefined} href={`#${s.id}`}>{s.label}</a>
+          {SECTION_IDS.map((id) => home ? (
+            <a key={id} className={active === id ? 'active' : undefined} href={`#${id}`}>{sectionLabel(id)}</a>
           ) : (
-            <Link key={s.id} to={`/#${s.id}`}>{s.label}</Link>
+            <Link key={id} to={`/#${id}`}>{sectionLabel(id)}</Link>
           ))}
-          <Link className={page === 'about' ? 'active' : undefined} to="/about" {...aboutProps}>Aturan main</Link>
-          <Link to="/apps">Daftar app</Link>
+          <Link className={page === 'about' ? 'active' : undefined} to="/about" {...aboutProps}>{t('nav_about')}</Link>
+          <Link to="/apps">{t('nav_apps')}</Link>
           {!user && <button type="button" className="sheet-theme" aria-pressed={dark} onClick={toggle}>
-            <span>Mode gelap <small className="mono">{dark ? 'Nyala' : 'Mati'}</small></span><MoonSun />
+            <span>{t('dark_mode_label')} <small className="mono">{dark ? t('dark_mode_on_short') : t('dark_mode_off_short')}</small></span><MoonSun />
           </button>}
           <button type="button" className="sheet-theme" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}>
             <span>{locale === 'id' ? 'Switch to English' : 'Ganti ke Indonesia'}</span>
@@ -155,7 +159,7 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
         </nav>
         {home && <div className="lp-scrollbar" aria-hidden="true"><i ref={fillRef} /></div>}
         {signInError && (
-          <p className="lp-wrap lp-alert" role="alert">Halaman masuk Google tidak bisa dibuka. Periksa koneksi, lalu coba lagi.</p>
+          <p className="lp-wrap lp-alert" role="alert">{t('sign_in_error')}</p>
         )}
       </header>
     </div>
@@ -164,16 +168,23 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
 
 export function StoryFooter({ page }: { page: 'home' | 'about' }) {
   const home = page === 'home'
+  const t = useT()
+  const sectionLabel = (id: string) => {
+    if (id === 'cara-kerja') return t('nav_how')
+    if (id === 'badge') return t('nav_badge')
+    if (id === 'faq') return t('nav_faq')
+    return id
+  }
   return (
     <div className="lp surface-story dark-ready story-chrome">
       <footer className="lp-wrap lp-foot">
         <p className="foot-word" aria-hidden="true">TesBareng</p>
         <div className="foot-row">
-          <span className="dim">Komunitas creator Android Indonesia. Bukan layanan resmi Google.</span>
+          <span className="dim">{t('footer_tagline')}</span>
           <nav aria-label="Kaki halaman">
-            {FOOT_SECTIONS.map((s) => home ? <a key={s.id} href={`#${s.id}`}>{s.label}</a> : <Link key={s.id} to={`/#${s.id}`}>{s.label}</Link>)}
-            <Link to="/about" aria-current={page === 'about' ? 'page' : undefined}>Aturan main</Link>
-            <Link to="/apps">Daftar app</Link>
+            {FOOT_SECTION_IDS.map((id) => home ? <a key={id} href={`#${id}`}>{sectionLabel(id)}</a> : <Link key={id} to={`/#${id}`}>{sectionLabel(id)}</Link>)}
+            <Link to="/about" aria-current={page === 'about' ? 'page' : undefined}>{t('nav_about')}</Link>
+            <Link to="/apps">{t('nav_apps')}</Link>
             <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Google Group<span className="sr-only"> (tab baru)</span></a>
             <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">WhatsApp<span className="sr-only"> (tab baru)</span></a>
           </nav>

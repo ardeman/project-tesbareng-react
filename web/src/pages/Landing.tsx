@@ -13,9 +13,6 @@ import './landing.css'
    rAF/IntersectionObserver loop (no animation library), switches off live under prefers-reduced-motion, and the
    markup always carries the final state, so nothing depends on an effect having run. */
 
-const TITLE = 'TesBareng: 12 tester, 14 hari, dikerjakan bareng'
-const DESCRIPTION =
-  'Komunitas creator Android Indonesia yang saling ngetes app: 12 tester opt-in selama 14 hari untuk closed test Google Play, dibagi rata lewat cohort.'
 
 const nf = new Intl.NumberFormat('id-ID')
 
@@ -217,11 +214,6 @@ const RING = (() => {
   return { ties, byOwner, total: ties.length, min: Math.min(...load), max: Math.max(...load) }
 })()
 
-const RING_DESC =
-  `Contoh cohort berisi ${N_APPS} app. ${N_APPS} creator, masing-masing membawa satu app, berbaris di lingkar luar sebagai kotak, ` +
-  `dan ${N_PURE} tester murni tanpa app ada di tengah sebagai lingkaran. Karena jumlah app antara 13 dan 16, setiap creator ngetes semua app lain, ` +
-  `yaitu ${N_APPS - 1} app. Setiap tester murni ngetes ${K} app, dimulai dari app yang testernya paling sedikit. ` +
-  `Totalnya ${RING.total} tugas, dan setiap app dites ${RING.min} sampai ${RING.max} orang.`
 
 /** Scrub (pin + draw) only where the pinned ring still gets a usable size: tall enough for the stacked layout on narrow
  *  screens, or side by side on wide ones. Landscape phones and short windows get the completed static ring. */
@@ -248,6 +240,7 @@ function deviceCanScrub() {
 }
 
 const Ring = memo(function Ring({ reduced }: { reduced: boolean }) {
+  const t = useT()
   const secRef = useRef<HTMLElement>(null)
   const figRef = useRef<HTMLElement>(null)
   const copyRef = useRef<HTMLDivElement>(null)
@@ -361,25 +354,24 @@ const Ring = memo(function Ring({ reduced }: { reduced: boolean }) {
     <section className="ring-scroll" ref={secRef} id="cohort" aria-labelledby="ring-h">
       <div className="lp-wrap ring-stage">
         <div className="ring-copy" ref={copyRef}>
-          <p className="lp-hud"><b aria-hidden="true">01</b>Contoh cohort</p>
-          <h2 id="ring-h">Tidak ada yang cuma minta dites.</h2>
+          <p className="lp-hud"><b aria-hidden="true">01</b>{t('landing_hud_cohort')}</p>
+          <h2 id="ring-h">{t('landing_h2_cohort')}</h2>
           <p className="lp-lede ring-lede">
-            Satu contoh cohort berisi {N_APPS} creator. Setiap creator ditugaskan ngetes {N_APPS - 1} app milik yang lain, dan {N_PURE} tester murni
-            tanpa app ikut ngetes {K} app masing-masing, dimulai dari app yang testernya paling sedikit. Begitu cohort dimulai, tugasnya terbagi rata.
+            {t('landing_lede_cohort', { n_apps: String(N_APPS), n_others: String(N_APPS - 1), n_pure: String(N_PURE), k: String(K) })}
           </p>
           {/* The scrubbed numbers are visual only; screen readers get the final values, and the closing line is never hidden from them. */}
           <div className="ring-status">
             <dl className="counters" ref={countersRef}>
-              <div><dt>Tugas terbagi</dt><dd><span aria-hidden="true"><span ref={drawnRef}>{nf.format(RING.total)}</span><span className="dim"> / {nf.format(RING.total)}</span></span><span className="sr-only">{nf.format(RING.total)} dari {nf.format(RING.total)}</span></dd></div>
-              <div><dt>Tester paling sedikit di satu app</dt><dd><span aria-hidden="true"><span ref={minRef}>{nf.format(RING.min)}</span><span className="dim"> orang</span></span><span className="sr-only">{nf.format(RING.min)} orang</span></dd></div>
+              <div><dt>{t('landing_counter_tasks')}</dt><dd><span aria-hidden="true"><span ref={drawnRef}>{nf.format(RING.total)}</span><span className="dim">{t('landing_counter_total_ratio', { total: nf.format(RING.total) })}</span></span><span className="sr-only">{t('landing_counter_sr_ratio', { drawn: nf.format(RING.total), total: nf.format(RING.total) })}</span></dd></div>
+              <div><dt>{t('landing_counter_min_testers')}</dt><dd><span aria-hidden="true"><span ref={minRef}>{nf.format(RING.min)}</span><span className="dim">{t('landing_counter_min_unit')}</span></span><span className="sr-only">{t('landing_counter_min_sr', { min: nf.format(RING.min) })}</span></dd></div>
             </dl>
-            <p className="ring-final theme-light" ref={finalRef}>Setiap app dites minimal {RING.min} orang. Setiap orang ikut ngetes.</p>
+            <p className="ring-final theme-light" ref={finalRef}>{t('landing_ring_final', { min: String(RING.min) })}</p>
           </div>
         </div>
         <figure className="ring-fig" ref={figRef}>
           <svg ref={svgRef} viewBox="0 0 600 600" width="600" height="600" role="img" aria-labelledby="ring-t ring-d">
-            <title id="ring-t">Cincin cohort</title>
-            <desc id="ring-d">{RING_DESC}</desc>
+            <title id="ring-t">{t('landing_ring_title')}</title>
+            <desc id="ring-d">{t('landing_ring_desc', { n_apps: String(N_APPS), n_pure: String(N_PURE), n_others: String(N_APPS - 1), k: String(K), total: String(RING.total), min: String(RING.min), max: String(RING.max) })}</desc>
             <g className="ties">
               {RING.ties.map((x, i) => (
                 <path key={i} className={x.pure ? 'tie tie--p' : 'tie tie--c'} data-o={x.o} pathLength={1} d={x.d} />
@@ -402,13 +394,13 @@ const Ring = memo(function Ring({ reduced }: { reduced: boolean }) {
             </g>
           </svg>
           <figcaption className="ring-legend" ref={legRef}>
-            <span><i className="lg-sq" aria-hidden="true" />Creator, membawa app</span>
-            <span><i className="lg-ci" aria-hidden="true" />Tester murni</span>
-            <span><i className="lg-line" aria-hidden="true" />Tugas tester murni</span>
-            <span><i className="lg-ok" aria-hidden="true">✓</i>Semua tugasnya terbagi</span>
+            <span><i className="lg-sq" aria-hidden="true" />{t('landing_ring_legend_creator')}</span>
+            <span><i className="lg-ci" aria-hidden="true" />{t('landing_ring_legend_pure')}</span>
+            <span><i className="lg-line" aria-hidden="true" />{t('landing_ring_legend_line')}</span>
+            <span><i className="lg-ok" aria-hidden="true">✓</i>{t('landing_ring_legend_done')}</span>
           </figcaption>
         </figure>
-        <p className="ring-hint" ref={hintRef} aria-hidden="true">Gulir <b>↓</b></p>
+        <p className="ring-hint" ref={hintRef} aria-hidden="true">{t('landing_scroll_hint')} <b>↓</b></p>
       </div>
     </section>
   )
@@ -441,42 +433,42 @@ function useOverflowTab<T extends HTMLElement>() {
   return [ref, over ? 0 : undefined] as const
 }
 
-/** Sample tester sheet for the hero (mockup v2). Same markup as the static hero in web/index.html: keep both in step. */
-const SHEET_ROWS: { who: string; email: string; days: string; chip: string; status: string }[] = [
-  { who: 'Budi S.', email: 'bu*****@gmail.com', days: '15', chip: 'c-pandan', status: '✓ Eligible' },
-  { who: 'Sari A.', email: 'sa*****@gmail.com', days: '14', chip: 'c-pandan', status: '✓ Eligible' },
-  { who: 'Dimas P.', email: 'di*****@studio.co.id', days: '9', chip: 'c-langit', status: '→ Aktif' },
-  { who: 'Wulan L.', email: 'wu*****@gmail.com', days: '3', chip: 'c-langit', status: '→ Aktif' },
-  { who: 'Rizky H.', email: 'ri*****@gmail.com', days: '—', chip: 'c-cabai', status: '! Belum tes' },
-]
 function HeroSheet() {
+  const t = useT()
   const [scRef, scTab] = useOverflowTab<HTMLDivElement>()
+  const sheetRows = [
+    { who: 'Budi S.', email: 'bu*****@gmail.com', days: '15', chip: 'c-pandan', status: t('landing_sheet_chip_eligible') },
+    { who: 'Sari A.', email: 'sa*****@gmail.com', days: '14', chip: 'c-pandan', status: t('landing_sheet_chip_eligible') },
+    { who: 'Dimas P.', email: 'di*****@studio.co.id', days: '9', chip: 'c-langit', status: t('landing_sheet_chip_active') },
+    { who: 'Wulan L.', email: 'wu*****@gmail.com', days: '3', chip: 'c-langit', status: t('landing_sheet_chip_active') },
+    { who: 'Rizky H.', email: 'ri*****@gmail.com', days: '—', chip: 'c-cabai', status: t('landing_sheet_chip_no_test') },
+  ]
   return (
     <div className="sheet hero-sheet" role="group" aria-labelledby="sheet-h">
       <div className="sheet-head"><strong id="sheet-h">Kopi Catat</strong><span className="lp-chip c-langit">Cohort #3</span></div>
-      <div className="scroller" ref={scRef} role="region" aria-label="Contoh daftar tester Kopi Catat" tabIndex={scTab}>
+      <div className="scroller" ref={scRef} role="region" aria-label={t('landing_sheet_region')} tabIndex={scTab}>
         <table className="tsheet">
-          <caption className="sr-only">Data contoh: daftar tester app Kopi Catat</caption>
-          <thead><tr><th scope="col">Tester</th><th scope="col">Email</th><th scope="col">Hari</th><th scope="col">Status</th></tr></thead>
+          <caption className="sr-only">{t('landing_sheet_caption')}</caption>
+          <thead><tr><th scope="col">{t('landing_sheet_col_tester')}</th><th scope="col">{t('landing_sheet_col_email')}</th><th scope="col">{t('landing_sheet_col_days')}</th><th scope="col">{t('landing_sheet_col_status')}</th></tr></thead>
           <tbody>
-            {SHEET_ROWS.map((r) => (
+            {sheetRows.map((r) => (
               <tr key={r.who}><th scope="row">{r.who}</th><td>{r.email}</td><td className="n">{r.days}</td><td><span className={`lp-chip ${r.chip}`}>{r.status}</span></td></tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="sheet-more">+7 tester lain, semuanya eligible</p>
+      <p className="sheet-more">{t('landing_sheet_more')}</p>
       <div className="sheet-ft">
         <div className="lp-meter">
-          <div className="meter-top"><span>Tester eligible</span><span>9 / 12</span></div>
+          <div className="meter-top"><span>{t('landing_sheet_meter_eligible')}</span><span>9 / 12</span></div>
           <Seg n={12} on={9} c="pandan" />
         </div>
         <div className="lp-meter">
-          <div className="meter-top"><span>Dimas P., hari ke-9 dari 14</span><span>5 hari lagi</span></div>
+          <div className="meter-top"><span>{t('landing_sheet_meter_days')}</span><span>{t('landing_sheet_days_left')}</span></div>
           <Seg n={14} on={9} c="kunyit" />
         </div>
       </div>
-      <p className="sample"><b>Data contoh.</b> Email selalu tampil disamarkan.</p>
+      <p className="sample"><b>{t('landing_sheet_sample')}</b></p>
     </div>
   )
 }
@@ -549,25 +541,26 @@ function useLiveStats() {
 
 /** Proof (ADR-010 §2.6, §4): real counts only. The whole section is left out when there is nothing real to show. */
 function Proof() {
+  const t = useT()
   const s = useLiveStats()
   if (!s) return null
   const items = [
-    { n: s.apps, l: 'app terdaftar' },
-    { n: s.members, l: 'anggota' },
-    { n: s.ready, l: 'app siap ajukan production' },
+    { n: s.apps, l: t('landing_proof_apps_label') },
+    { n: s.members, l: t('landing_proof_members_label') },
+    { n: s.ready, l: t('landing_proof_ready_label') },
   ].filter((x) => x.n > 0)
   if (!items.length) return null
   return (
     <section className="lp-sec" id="bukti" aria-labelledby="bukti-h">
       <div className="lp-wrap">
-        <p className="lp-hud"><b>Data</b>Langsung dari TesBareng</p>
-        <h2 id="bukti-h">Yang sudah tercatat.</h2>
+        <p className="lp-hud"><b>{t('landing_hud_proof')}</b>{t('landing_hud_proof_detail')}</p>
+        <h2 id="bukti-h">{t('landing_h2_proof')}</h2>
         <dl className="live-row">
           {items.map((x) => (
             <div key={x.l}><dt>{x.l}</dt><dd>{nf.format(x.n)}</dd></div>
           ))}
         </dl>
-        <p className="live-note">Dihitung langsung dari data TesBareng saat halaman ini dibuka.</p>
+        <p className="live-note">{t('landing_live_note')}</p>
       </div>
     </section>
   )
@@ -576,13 +569,6 @@ function Proof() {
 /* Matrix demo. Sample cohort, consistent with the hero: "Kamu" is the creator of Kopi Catat,
    and its column matches the hero sheet (Budi and Sari verified, Dimas active, Rizky late). "Aktif" uses → everywhere, as on the work surface; ✓✓ is verified. */
 type CellKind = 'ok2' | 'ok' | 'wait' | 'late' | 'own'
-const CELL: Record<CellKind, { glyph: string; short: string; label: string; cls: string }> = {
-  ok2: { glyph: '✓✓', short: 'Verified', label: 'Feedback sudah diverifikasi creator', cls: 'c-pandan' },
-  ok: { glyph: '→', short: 'Aktif', label: 'Sudah opt-in dan aktif', cls: 'c-langit' },
-  wait: { glyph: '—', short: 'Belum', label: 'Belum, masih dalam batas waktu', cls: 'none' },
-  late: { glyph: '!', short: 'Belum tes', label: 'Lewat batas opt-in (Belum tes)', cls: 'c-cabai' },
-  own: { glyph: '·', short: 'Sendiri', label: 'App sendiri, tidak ditugaskan', cls: 'own' },
-}
 const MATRIX_APPS = ['Kopi Catat', 'Resep Ibu', 'Angkot Kita', 'Hafalan', 'Jajan']
 const MATRIX_ROWS: { who: string; me?: boolean; cells: CellKind[] }[] = [
   { who: 'Budi S.', cells: ['ok2', 'own', 'ok2', 'ok', 'ok'] },
@@ -594,9 +580,17 @@ const MATRIX_ROWS: { who: string; me?: boolean; cells: CellKind[] }[] = [
 const FILTERS: CellKind[] = ['ok2', 'ok', 'wait', 'late']
 
 function MatrixDemo() {
+  const t = useT()
   const [filter, setFilter] = useState<CellKind | null>(null)
   const tblRef = useRef<HTMLTableElement>(null)
   const [scRef, scTab] = useOverflowTab<HTMLDivElement>()
+  const CELL: Record<CellKind, { glyph: string; short: string; label: string; cls: string }> = {
+    ok2: { glyph: '✓✓', short: t('landing_cell_ok2_short'), label: t('landing_cell_ok2_label'), cls: 'c-pandan' },
+    ok: { glyph: '→', short: t('landing_cell_ok_short'), label: t('landing_cell_ok_label'), cls: 'c-langit' },
+    wait: { glyph: '—', short: t('landing_cell_wait_short'), label: t('landing_cell_wait_label'), cls: 'none' },
+    late: { glyph: '!', short: t('landing_cell_late_short'), label: t('landing_cell_late_label'), cls: 'c-cabai' },
+    own: { glyph: '·', short: t('landing_cell_own_short'), label: t('landing_cell_own_label'), cls: 'own' },
+  }
   // Crosshair: highlight the hovered cell's row and column. Direct class toggles, no re-render per pointer move.
   const clearX = () => tblRef.current?.querySelectorAll('.x-col, .x-row, .x-hit').forEach((n) => n.classList.remove('x-col', 'x-row', 'x-hit'))
   const onOver = (e: React.PointerEvent<HTMLTableElement>) => {
@@ -613,9 +607,9 @@ function MatrixDemo() {
   return (
     <div className="matrix-wrap rv">
       <div className={`matrix ${filter ? 'filtering' : ''}`}>
-        <div className="scroller" ref={scRef} role="region" aria-label="Contoh matriks kewajiban cohort" tabIndex={scTab}>
+        <div className="scroller" ref={scRef} role="region" aria-label={t('landing_matrix_region')} tabIndex={scTab}>
           <table ref={tblRef} onPointerOver={onOver} onPointerLeave={clearX}>
-            <caption className="sr-only">Data contoh: baris adalah anggota, kolom adalah app yang ditugaskan</caption>
+            <caption className="sr-only">{t('landing_matrix_caption')}</caption>
             <thead>
               <tr><th scope="col">Anggota</th>{MATRIX_APPS.map((a) => <th key={a} scope="col">{a}</th>)}</tr>
             </thead>
@@ -637,10 +631,10 @@ function MatrixDemo() {
             </tbody>
           </table>
         </div>
-        <p className="matrix-note"><b>Data contoh.</b><span className="matrix-hint" aria-hidden="true"> Geser tabel ke samping untuk melihat semua app.</span> Nama anggota dan app di cohort sungguhan tampil di halaman cohort.</p>
+        <p className="matrix-note"><b>{t('landing_matrix_note')}</b><span className="matrix-hint" aria-hidden="true"> {t('landing_matrix_hint')}</span> {t('landing_matrix_real')}</p>
       </div>
       <div className="lp-legend">
-        <p className="lp-hud"><b>Filter</b>Ketuk status untuk menyorot</p>
+        <p className="lp-hud"><b>Filter</b>{t('landing_matrix_hud')}</p>
         {FILTERS.map((k) => (
           <button key={k} type="button" className="lg-btn" aria-pressed={filter === k} onClick={() => setFilter(filter === k ? null : k)}>
             <span className={`cell ${CELL[k].cls}`} aria-hidden="true">{CELL[k].glyph}</span>
@@ -652,31 +646,32 @@ function MatrixDemo() {
           <span>{CELL.own.label}</span>
         </p>
         <div className="privacy">
-          <strong>Emailmu tetap rahasia</strong>
+          <strong>{t('landing_privacy_title')}</strong>
           <span className="masked" aria-hidden="true" data-scramble="bu*****@gmail.com">bu*****@gmail.com</span>
-          <span className="sr-only">Contoh: bu*****@gmail.com</span>
-          <p>Di halaman mana pun, email tampil disamarkan seperti ini. Alamat lengkapmu dipakai untuk pengingat, dan hanya dibagikan ke creator kalau kamu setuju (app dengan daftar email).</p>
+          <span className="sr-only">{t('landing_privacy_example_sr')}</span>
+          <p>{t('landing_privacy_text')}</p>
         </div>
       </div>
     </div>
   )
 }
 
-const DAYS = [
-  { d: 0, title: 'Opt-in dan install', text: 'Daftar app tugasmu muncul di Tugas saya. Per app uji tertutup: gabung Google Group (pilih akun Play Store), buka Play Store → pasang, lalu catat. App sudah rilis: lewati grup — pasang dari Play → catat → tulis ulasan publik. Batasnya 48 jam.', chip: 'c-putih', chipText: '✓ Opt-in' },
-  { d: 2, title: 'Batas opt-in', text: 'Lewat 48 jam, yang belum opt-in tercatat Behind, dan app miliknya sendiri mendapat label Belum tes yang terlihat semua anggota.', chip: 'c-cabai', chipText: '! Belum tes' },
-  { d: 7, title: 'Pakai, lalu kirim feedback', text: 'Buka app-nya dan centang Sudah buka app. Tulis feedback di Google Play dengan kata-katamu sendiri; creator menandai Verified setelah membacanya.', chip: 'c-pandan', chipText: '✓✓ Verified' },
-  { d: 13, title: 'Masih opt-in?', text: 'Centang sekali lagi. Besoknya, app yang tester eligible-nya sudah memenuhi target siap diajukan ke production.', chip: 'c-langit', chipText: '✓ Masih opt-in' },
-]
 const RAIL: Record<number, string> = { 0: 'c-kunyit', 2: 'c-cabai', 7: 'c-pandan', 13: 'c-langit' }
 
 function Schedule() {
+  const t = useT()
   const [hot, setHot] = useState<number | null>(null)
+  const days = [
+    { d: 0, title: t('landing_day0_title'), text: t('landing_day0_text'), chip: 'c-putih', chipText: t('landing_day0_chip') },
+    { d: 2, title: t('landing_day2_title'), text: t('landing_day2_text'), chip: 'c-cabai', chipText: t('landing_day2_chip') },
+    { d: 7, title: t('landing_day7_title'), text: t('landing_day7_text'), chip: 'c-pandan', chipText: t('landing_day7_chip') },
+    { d: 13, title: t('landing_day13_title'), text: t('landing_day13_text'), chip: 'c-langit', chipText: t('landing_day13_chip') },
+  ]
   return (
     <>
-      <p className="sr-only">Jadwal cohort: hari 0 sampai 14. Cohort ditutup saat semua app siap diajukan, paling lambat hari ke-21.</p>
+      <p className="sr-only">{t('landing_schedule_sr')}</p>
       <div className="rail rv" aria-hidden="true">
-        <div className="rail-head"><span>Hari 0 → 14</span><span>Tutup <span className="long">paling lambat </span>hari 21</span></div>
+        <div className="rail-head"><span>{t('landing_rail_start')}</span><span>{t('landing_rail_close_start')}<span className="long">{t('landing_rail_close_long')}</span>{t('landing_rail_close_end')}</span></div>
         <div className="rail-cells">
           {Array.from({ length: 15 }, (_, d) => (
             <i key={d} className={`${d === 14 ? 'fin' : RAIL[d] ? `cp ${RAIL[d]}` : 'plain'}${hot === d ? ' hot' : ''}`}>{d}</i>
@@ -685,7 +680,7 @@ function Schedule() {
         </div>
       </div>
       <ol className="days rv">
-        {DAYS.map((x) => (
+        {days.map((x) => (
           <li className={`day${x.d === 0 ? ' now theme-light' : ''}`} key={x.d} onPointerEnter={() => setHot(x.d)} onPointerLeave={() => setHot(null)}>
             <p className="day-n"><small>Hari ke</small>{x.d}</p>
             <h3>{x.title}</h3>
@@ -694,35 +689,29 @@ function Schedule() {
           </li>
         ))}
       </ol>
-      <p className="build-strip rv"><span className="lp-chip c-kunyit">Build baru</span><span>Setiap kali creator mencatat build baru: update app-nya, coba lagi, lalu centang Sudah update dalam 3 hari.</span></p>
+      <p className="build-strip rv"><span className="lp-chip c-kunyit">{t('landing_build_chip')}</span><span>{t('landing_build_text')}</span></p>
     </>
   )
 }
 
-const TIERS = [
-  { name: 'Bronze', n: 3, cls: 't-bronze', note: 'app dites 14 hari' },
-  { name: 'Silver', n: 7, cls: 't-silver', note: 'app dites 14 hari' },
-  { name: 'Gold', n: 14, cls: 't-gold', note: 'satu cohort penuh' },
-  { name: 'Platinum', n: 25, cls: 't-platinum', note: 'app dites 14 hari' },
-]
-
-const FAQ = [
-  { q: 'Harus punya app dulu untuk ikut?', a: 'Tidak. Kamu bisa ikut sebagai tester murni: buka halaman app, ikuti panduannya (uji tertutup: gabung Google Group dengan akun Play Store dulu; app rilis: langsung Play Store), pasang, lalu catat di TesBareng. Login Google hanya saat mencatat. Mau tugas yang sudah dibagi? Gabung cohort sebagai tester, selama cohort masih Forming atau sampai akhir hari ke-6 setelah dimulai. Setiap app yang kamu tes sampai 14 hari dihitung untuk badge.' },
-  { q: 'Wajib ikut cohort?', a: 'Tidak. Tanpa cohort kamu tetap bisa mendaftarkan app dan ngetes app mana saja, dan app yang kamu tes sampai 14 hari tetap dihitung untuk badge. Bedanya, tanpa cohort tidak ada jaminan app‑mu dites balik. Di cohort, tugas dibagi rata: kamu ngetes sebanyak tester yang diterima app‑mu.' },
-  { q: 'App atau game saya sudah rilis di Play Store. Perlu ikut?', a: 'Syarat 12×14 closed test sudah tidak berlaku. Kalau kamu ingin ulasan publik di Play Store, daftarkan app dengan centang “App sudah rilis production”, lalu ajukan ke cohort — anggota memasang dari Play dan menulis ulasan publik. Kamu tetap wajib mengulas app anggota lain sebanyak slot yang kamu minta. Kalau app masih di closed testing, daftarkan seperti biasa tanpa centang itu.' },
-  { q: 'Sudah daftar jadi tester. Lalu apa?', a: 'Biarkan app terpasang sampai app itu lulus 14 hari Google. Buka app-nya sesekali, kirim feedback di Google Play dengan kata-katamu sendiri, lalu tekan Tandai sudah kirim di TesBareng. Kalau ada build baru, update app-nya. Semua yang masih harus kamu kerjakan ada di Tugas saya.' },
-  { q: 'Apakah TesBareng layanan resmi Google?', a: 'Bukan. TesBareng dibuat oleh komunitas creator Android Indonesia untuk saling membantu memenuhi syarat closed test Google Play.' },
-  { q: 'Apakah TesBareng tersambung ke Play Console?', a: 'Tidak. Google tidak menyediakan data opt-in untuk aplikasi lain, jadi semua dicatat sendiri oleh anggota. Feedback yang ditandai Verified adalah bukti terkuat, karena creator mengeceknya langsung di Play Console.' },
-  { q: 'Kenapa feedback harus dikirim di Google Play?', a: 'Feedback di Play masuk langsung ke Play Console milik creator, lengkap dengan nama pengirimnya. TesBareng hanya mencatat bahwa kamu sudah mengirimnya, lalu creator menandainya Verified. Tulis dengan kata-katamu sendiri: ulasan yang disalin dari banyak akun terlihat tidak asli.' },
-  { q: 'Bagaimana kalau ada anggota yang tidak ikut ngetes?', a: 'Lewat 48 jam, app miliknya mendapat label Belum tes, dan admin bisa memindahkan slotnya ke anggota lain. Saat cohort ditutup, kewajiban yang belum selesai tercatat Owing. Dia tidak bisa ikut cohort berikutnya sampai admin menandainya Settled.' },
-  { q: 'Wajib gabung grup WhatsApp cohort?', a: 'Tidak. Grup WhatsApp cohort opsional, dan anggota grup bisa melihat nomor HP satu sama lain. Status tetap dilaporkan di TesBareng, bukan di chat. Untuk uji tertutup yang dibutuhkan adalah Google Group (daftar tester di Play Console) atau persetujuan berbagi email. App sudah rilis production tidak perlu Google Group — cukup pasang dari Play Store.' },
-  { q: 'Siapa yang bisa melihat emailku?', a: 'Di semua halaman, email tampil disamarkan, misalnya bu*****@gmail.com. Alamat lengkap dipakai sistem untuk mengirim pengingat. Satu-satunya pengecualian: kalau app memakai daftar email dan kamu menekan Minta ditambahkan, creator app itu saja yang melihat alamat lengkapmu. Persetujuan itu bisa kamu tarik kapan saja.' },
-  { q: 'Closed track saya sudah memakai daftar email, bukan Google Group. Bisa ikut?', a: 'Di Play Console, satu track memakai Google Group atau daftar email, tidak bisa keduanya. Pilih Daftar email di form app; pilihan ini terbuka setelah kamu ngetes 3 app. Tester menekan Minta ditambahkan, kamu menempel email mereka di Play Console, lalu menandai Sudah ditambahkan. Setelah itu mereka opt-in, pasang dari Play, dan mencatat di TesBareng.' },
-  { q: 'Sudah punya sebagian tester sendiri. Tetap harus minta 12?', a: 'Isi berapa tester yang kamu butuhkan dari TesBareng (1–12) di form app. Sisanya dari luar komunitas, dilaporkan sendiri. Di cohort, app-mu dapat jumlah itu ditambah 2 cadangan, dan kamu ngetes sebanyak itu juga: butuh 3, biasanya kamu ngetes 5 app.' },
-]
 
 /** FAQ: animate the details height open and closed (owner decision; off under reduced motion). */
 function Faq({ reduced }: { reduced: boolean }) {
+  const t = useT()
+  const faq = [
+    { q: t('landing_faq_q1'), a: t('landing_faq_a1') },
+    { q: t('landing_faq_q2'), a: t('landing_faq_a2') },
+    { q: t('landing_faq_q3'), a: t('landing_faq_a3') },
+    { q: t('landing_faq_q4'), a: t('landing_faq_a4') },
+    { q: t('landing_faq_q5'), a: t('landing_faq_a5') },
+    { q: t('landing_faq_q6'), a: t('landing_faq_a6') },
+    { q: t('landing_faq_q7'), a: t('landing_faq_a7') },
+    { q: t('landing_faq_q8'), a: t('landing_faq_a8') },
+    { q: t('landing_faq_q9'), a: t('landing_faq_a9') },
+    { q: t('landing_faq_q10'), a: t('landing_faq_a10') },
+    { q: t('landing_faq_q11'), a: t('landing_faq_a11') },
+    { q: t('landing_faq_q12'), a: t('landing_faq_a12') },
+  ]
   const onSummary = (e: React.MouseEvent<HTMLElement>) => {
     const d = e.currentTarget.parentElement as HTMLDetailsElement | null
     if (!d || reduced || !('animate' in Element.prototype)) return
@@ -744,7 +733,7 @@ function Faq({ reduced }: { reduced: boolean }) {
   }
   return (
     <div className="faq rv">
-      {FAQ.map((x, i) => (
+      {faq.map((x, i) => (
         <details key={x.q}>
           <summary onClick={onSummary}><span className="q-n" aria-hidden="true">Q.{String(i + 1).padStart(2, '0')}</span><span className="q-t">{x.q}</span></summary>
           <p className="ans">{x.a}</p>
@@ -761,7 +750,13 @@ const OBSERVED = ['cohort', 'cara-kerja', 'transparansi', 'badge', 'bukti', 'gab
    --------------------------------------------------------------------------- */
 export function Landing() {
   const t = useT()
-  usePageMeta(TITLE, DESCRIPTION)
+  usePageMeta(t('landing_meta_title'), t('landing_meta_desc'))
+  const tiers = [
+    { name: 'Bronze', n: 3, cls: 't-bronze', note: t('landing_tier_note_apps') },
+    { name: 'Silver', n: 7, cls: 't-silver', note: t('landing_tier_note_apps') },
+    { name: 'Gold', n: 14, cls: 't-gold', note: t('landing_tier_note_full') },
+    { name: 'Platinum', n: 25, cls: 't-platinum', note: t('landing_tier_note_apps') },
+  ]
   const root = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLElement>(null)
   const fillRef = useRef<HTMLElement>(null)
@@ -849,13 +844,13 @@ export function Landing() {
       <main id="isi">
         <section className="lp-wrap hero" aria-labelledby="hero-h">
           <div className="hero-copy">
-            <p className="lp-hud"><b aria-hidden="true">00</b>Komunitas creator Android Indonesia</p>
-            <h1 id="hero-h"><span>12 tester.</span><span>14 hari.</span><span>Bareng.<i className="caret" aria-hidden="true" /></span></h1>
-            <p className="lp-lede">Syarat closed test Google Play untuk akun developer pribadi baru. Creator Android Indonesia saling ngetes lewat cohort: kamu tes app mereka, mereka tes app kamu. Belum punya app? Kamu tetap bisa ikut sebagai tester.</p>
+            <p className="lp-hud"><b aria-hidden="true">00</b>{t('landing_hud_hero')}</p>
+            <h1 id="hero-h"><span>{t('landing_h1_1')}</span><span>{t('landing_h1_2')}</span><span>{t('landing_h1_3')}<i className="caret" aria-hidden="true" /></span></h1>
+            <p className="lp-lede">{t('landing_lede_hero')}</p>
             <div className="cta-row">
               <a className="lp-btn lp-btn--primary" href="#gabung">{t('cta_join_community')}</a>
               <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />{t('cta_wa_group')}<span className="sr-only"> (tab baru)</span></a>
-              <a className="lp-btn" href="#cara-kerja">Lihat cara kerjanya</a>
+              <a className="lp-btn" href="#cara-kerja">{t('landing_cta_how')}</a>
             </div>
           </div>
           <HeroSheet />
@@ -866,8 +861,8 @@ export function Landing() {
         <section className="lp-sec" id="cara-kerja" aria-labelledby="cara-h">
           <div className="lp-wrap">
             <div className="sec-head">
-              <div><p className="lp-hud"><b aria-hidden="true">02</b>Cara kerja</p><h2 id="cara-h">Satu cohort, empat titik cek.</h2></div>
-              <p className="lp-lede dim">Tidak ada absen harian. Cukup centang di empat titik ini. Kalau ada yang terlewat, satu email ringkasan datang jam 19.00 WIB.</p>
+              <div><p className="lp-hud"><b aria-hidden="true">02</b>{t('landing_hud_how')}</p><h2 id="cara-h">{t('landing_h2_how')}</h2></div>
+              <p className="lp-lede dim">{t('landing_lede_how')}</p>
             </div>
             <Schedule />
           </div>
@@ -876,8 +871,8 @@ export function Landing() {
         <section className="lp-sec" id="transparansi" aria-labelledby="lembar-h">
           <div className="lp-wrap">
             <div className="sec-head">
-              <div><p className="lp-hud"><b aria-hidden="true">03</b>Transparansi</p><h2 id="lembar-h">Semua lihat lembar yang sama.</h2></div>
-              <p className="lp-lede dim">Siapa sudah ngetes siapa terlihat di matriks cohort. Tidak perlu menagih satu per satu di grup.</p>
+              <div><p className="lp-hud"><b aria-hidden="true">03</b>{t('landing_hud_transparency')}</p><h2 id="lembar-h">{t('landing_h2_transparency')}</h2></div>
+              <p className="lp-lede dim">{t('landing_lede_transparency')}</p>
             </div>
             <MatrixDemo />
           </div>
@@ -886,38 +881,38 @@ export function Landing() {
         <section className="lp-sec" id="badge" aria-labelledby="badge-h">
           <div className="lp-wrap">
             <div className="sec-head">
-              <div><p className="lp-hud"><b aria-hidden="true">04</b>Badge</p><h2 id="badge-h">Belum punya app? Ikut sebagai tester murni.</h2></div>
-              <p className="lp-lede dim">Gabung cohort sampai akhir hari ke-6. Setiap app yang kamu temani sampai 14 hari menambah badge di profilmu.</p>
+              <div><p className="lp-hud"><b aria-hidden="true">04</b>{t('landing_hud_badge')}</p><h2 id="badge-h">{t('landing_h2_badge')}</h2></div>
+              <p className="lp-lede dim">{t('landing_lede_badge')}</p>
             </div>
             <div className="badge-grid">
               <div className="badge-side">
                 <ul className="tiers rv">
-                  {TIERS.map((t) => (
-                    <li className="tier" key={t.name}>
-                      <span className={`pill ${t.cls}`}>{t.name}</span>
-                      <b data-count={t.n}>{nf.format(t.n)}</b>
-                      <small>{t.note}</small>
+                  {tiers.map((tier) => (
+                    <li className="tier" key={tier.name}>
+                      <span className={`pill ${tier.cls}`}>{tier.name}</span>
+                      <b data-count={tier.n}>{nf.format(tier.n)}</b>
+                      <small>{tier.note}</small>
                     </li>
                   ))}
                 </ul>
-                <p className="tier-note">Badge dihitung dari data, tidak bisa diklaim. Keluar sebelum 14 hari, dikeluarkan creator, atau app yang dihapus tidak dihitung.</p>
+                <p className="tier-note">{t('landing_tier_footer')}</p>
               </div>
               <article className="profile rv" aria-labelledby="wl-h">
                 <div className="who">
                   <span className="lp-avatar" aria-hidden="true">WL</span>
-                  <div><strong id="wl-h">Wulan L.</strong><span className="dim">Tester murni sejak Cohort #2</span></div>
+                  <div><strong id="wl-h">Wulan L.</strong><span className="dim">{t('landing_profile_since')}</span></div>
                   <span className="pill t-silver">Silver</span>
                 </div>
                 <div className="lp-meter">
-                  <div className="meter-top"><span>Menuju Gold</span><span>9 / 14 app</span></div>
+                  <div className="meter-top"><span>{t('landing_profile_toward_gold')}</span><span>{t('landing_profile_gold_count')}</span></div>
                   <Seg n={14} on={9} c="ubi" />
                 </div>
                 <dl className="stats">
-                  <div><dt>Sedang ngetes</dt><dd data-count={12}>12</dd></div>
-                  <div><dt>Tuntas 14 hari</dt><dd data-count={9}>9</dd></div>
-                  <div><dt>Feedback verified</dt><dd data-count={8}>8</dd></div>
+                  <div><dt>{t('landing_profile_stat_testing')}</dt><dd data-count={12}>12</dd></div>
+                  <div><dt>{t('landing_profile_stat_done')}</dt><dd data-count={9}>9</dd></div>
+                  <div><dt>{t('landing_profile_stat_verified')}</dt><dd data-count={8}>8</dd></div>
                 </dl>
-                <p className="sample-tag"><b>Data contoh.</b> Profil sungguhan tampil di halaman anggota.</p>
+                <p className="sample-tag">{t('landing_profile_sample')}</p>
               </article>
             </div>
           </div>
@@ -927,24 +922,24 @@ export function Landing() {
 
         <section className="lp-sec join theme-light" id="gabung" aria-labelledby="gabung-h">
           <div className="lp-wrap">
-            <p className="lp-hud"><b aria-hidden="true">05</b>Gabung</p>
-            <h2 id="gabung-h">Mulai dari tiga langkah.</h2>
-            <ol className="steps rv">
+            <p className=”lp-hud”><b aria-hidden=”true”>05</b>{t('landing_hud_join')}</p>
+            <h2 id=”gabung-h”>{t('landing_h2_join')}</h2>
+            <ol className=”steps rv”>
               <li>
-                <span className="n" aria-hidden="true">1</span>
-                <h3>Gabung Google Group (uji tertutup)</h3>
-                <p>Untuk closed test: ketuk tombol di bawah — Google meminta <b>pilih akun dulu</b>. Pakai akun yang sama dengan Play Store di HP-mu, lalu Bergabung / Join. Creator memasang <code className="email">{COMMUNITY_GROUP}</code> sebagai daftar tester, jadi cukup sekali untuk semua app uji tertutup. Jangan ganti akun setelah halaman grup terbuka. App daftar email: tekan Minta ditambahkan di halaman app-nya. App sudah rilis production: langkah ini tidak perlu.</p>
+                <span className=”n” aria-hidden=”true”>1</span>
+                <h3>{t('landing_step1_h')}</h3>
+                <p>{t('landing_step1_p1')}<b>{t('landing_step1_p_bold')}</b>{t('landing_step1_p2')}<code className=”email”>{COMMUNITY_GROUP}</code>{t('landing_step1_p3')}</p>
                 <CopyEmail onCopied={say} />
               </li>
               <li>
-                <span className="n" aria-hidden="true">2</span>
-                <h3>Pasang app, lalu catat</h3>
-                <p>Buka halaman app di TesBareng (boleh tanpa login). Ikuti panduan: buka Play Store → Install → baru <b>Catat saya sebagai tester</b> (login Google di langkah itu). App rilis: setelah catat, tulis ulasan publik di Play. Atau daftarkan app-mu sendiri lewat Masuk dengan Google (centang “App sudah rilis” kalau sudah production).</p>
+                <span className=”n” aria-hidden=”true”>2</span>
+                <h3>{t('landing_step2_h')}</h3>
+                <p>{t('landing_step2_p1')}<b>{t('landing_step2_p_bold')}</b>{t('landing_step2_p2')}</p>
               </li>
               <li>
-                <span className="n" aria-hidden="true">3</span>
-                <h3>Ikut cohort (opsional)</h3>
-                <p>Di cohort, tugas dibagi rata sehingga app‑mu pasti dites balik. Ajukan app‑mu lalu tunggu persetujuan admin, atau ikut sebagai tester murni. Tanpa cohort pun kamu tetap bisa mendaftarkan app dan ngetes app mana saja. Link grup WhatsApp cohort dibagikan setelah kamu masuk.</p>
+                <span className=”n” aria-hidden=”true”>3</span>
+                <h3>{t('landing_step3_h')}</h3>
+                <p>{t('landing_step3_p')}</p>
               </li>
             </ol>
             <div className="cta-row join-cta">
@@ -952,29 +947,29 @@ export function Landing() {
               {signInBtn('lp-btn', true)}
               <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />{t('cta_wa_community')}<span className="sr-only"> (tab baru)</span></a>
             </div>
-            <p className="wa-note">Grup WhatsApp komunitas adalah tempat diskusi utama. Opsional, dan nomor HP hanya terlihat sesama anggota grup.</p>
+            <p className="wa-note">{t('landing_wa_note')}</p>
             <div className="duty rv">
-              <h3>Yang kamu janjikan saat ikut cohort</h3>
+              <h3>{t('landing_duty_h')}</h3>
               <ul>
-                <li><b>Opt-in dalam 48 jam</b><span>Ke semua app yang ditugaskan: uji tertutup = gabung grup → pasang → catat; app rilis = pasang dari Play → catat — dihitung dari Hari 0.</span></li>
-                <li><b>Centang di titik cek</b><span>Sudah buka app di hari 7, Masih opt-in di hari 13 (uji tertutup), dan Sudah update dalam 3 hari setiap ada build baru.</span></li>
-                <li><b>Kirim feedback / ulasan di Google Play</b><span>Dengan kata-katamu sendiri (ulasan publik untuk app rilis), lalu tekan Tandai sudah kirim di TesBareng.</span></li>
-                <li><b>Tetap opt-in sampai app lulus 14 hari</b><span>Untuk uji tertutup: keluar lebih awal bisa membuat hitungan 14 hari Google mulai lagi dari nol. App rilis fokus pada ulasan publik.</span></li>
+                <li><b>{t('landing_duty1_title')}</b><span>{t('landing_duty1_text')}</span></li>
+                <li><b>{t('landing_duty2_title')}</b><span>{t('landing_duty2_text')}</span></li>
+                <li><b>{t('landing_duty3_title')}</b><span>{t('landing_duty3_text')}</span></li>
+                <li><b>{t('landing_duty4_title')}</b><span>{t('landing_duty4_text')}</span></li>
               </ul>
             </div>
             <div className="join-notes">
-              <p>Email selalu tampil disamarkan, misalnya bu*****@gmail.com. Nomor HP tidak pernah diminta di TesBareng.</p>
-              <p>Cuma mau lihat-lihat dulu? <Link to="/apps">Lihat daftar app</Link></p>
+              <p>{t('landing_join_note1')}</p>
+              <p>{t('landing_join_note2_pre')}<Link to="/apps">{t('landing_join_browse')}</Link></p>
             </div>
           </div>
         </section>
 
         <section className="lp-sec lp-sec--faq" id="faq" aria-labelledby="faq-h">
           <div className="lp-wrap">
-            <p className="lp-hud"><b aria-hidden="true">06</b>FAQ</p>
-            <h2 id="faq-h">Pertanyaan yang sering muncul.</h2>
+            <p className="lp-hud"><b aria-hidden="true">06</b>{t('landing_hud_faq')}</p>
+            <h2 id="faq-h">{t('landing_h2_faq')}</h2>
             <Faq reduced={reduced} />
-            <p className="faq-more">Aturan lengkapnya ada di <Link to="/about">halaman aturan main</Link>.</p>
+            <p className="faq-more">{t('landing_faq_more_pre')}<Link to="/about">{t('landing_faq_more_link')}</Link>{t('landing_faq_more_post')}</p>
           </div>
         </section>
       </main>

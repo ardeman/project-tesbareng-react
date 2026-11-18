@@ -818,5 +818,3 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
 .ci-status { display: inline-flex; }
 .ci-list .nw, .ci-head ~ p .nw { white-space: nowrap; }
 
-/* Theme toggle in the sidebar: a quiet bordered button; the icon shows the current mode, the text says it too. */
-.theme-toggle { justify-content: flex-start; margin-right: var(--sh); }

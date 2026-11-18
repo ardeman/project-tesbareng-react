@@ -82,12 +82,12 @@ export function Shell({ children }: { children: ReactNode }) {
 
         <div className="bottom">
           <div className="bottom-toggles">
-            <button type="button" className="btn-icon theme-toggle" onClick={toggleTheme} aria-pressed={dark}
+            <button type="button" className="lp-sq" onClick={toggleTheme} aria-pressed={dark}
               title={dark ? t('dark_mode_on') : t('dark_mode_off')} aria-label={dark ? t('dark_mode_on') : t('dark_mode_off')}>
               {dark ? <IconMoon /> : <IconSun />}
             </button>
             {/* Language toggle: aria-label is always in the target language so it's readable regardless of current locale */}
-            <button type="button" className="btn-icon" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
+            <button type="button" className="lp-sq" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
               title={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
               aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
               <span style={{ fontWeight: 800, fontSize: 'var(--fs-caption)', letterSpacing: '0.08em' }} aria-hidden="true">
