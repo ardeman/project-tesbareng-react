@@ -7,7 +7,7 @@ import {
   monogram,
   storeListingUrl,
   truncate,
-} from '../_lib/share'
+} from '../lib/share'
 
 export const config = { runtime: 'edge' }
 
