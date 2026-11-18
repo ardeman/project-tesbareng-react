@@ -42,7 +42,13 @@ export function AppDetail() {
   const [dialog, setDialog] = useState<DialogKind>(null)
   // Placed only once app, testers and builds are in, so the KPI block does not jump after first paint.
   const kpiPlace = useKpiPlacement(!!app.data && !testers.loading && !builds.loading)
-  usePageMeta(app.data && !app.data.deleted ? app.data.name : 'Aplikasi', app.data && !app.data.deleted ? app.data.description : undefined)
+  usePageMeta(
+    app.data && !app.data.deleted ? app.data.name : 'Aplikasi',
+    app.data && !app.data.deleted ? app.data.description : undefined,
+    app.data && !app.data.deleted && id
+      ? { image: `/api/og/app?id=${encodeURIComponent(id)}`, url: `/apps/${id}` }
+      : undefined,
+  )
 
   const progress = useMemo(
     () => (app.data ? computeProgress(app.data, testers.data, builds.data) : null),

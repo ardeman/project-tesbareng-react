@@ -276,7 +276,7 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
           <WizardStep
             title="Jadi penguji di Google Play"
             body={<>Buka link opt-in dengan akun yang emailnya Anda bagikan, lalu ketuk <b>Jadi penguji</b>.</>}
-            actionHref={app.optInUrl}
+            actionHref={app.optInUrl || playUrl || '#'}
             actionLabel="Buka link opt-in"
             onDone={() => {
               markPlay({ optedIn: true }, 'install')
