@@ -81,17 +81,20 @@ export function Shell({ children }: { children: ReactNode }) {
         )}
 
         <div className="bottom">
-          <button type="button" className="btn theme-toggle" onClick={toggleTheme} aria-pressed={dark}>
-            {dark ? <IconMoon /> : <IconSun />}<span>{dark ? t('dark_mode_on') : t('dark_mode_off')}</span>
-          </button>
-          {/* Language toggle: label is always in the target language so it's readable regardless of current locale */}
-          <button type="button" className="btn theme-toggle" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
-            aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
-            <span style={{ fontWeight: 800, fontSize: 'var(--fs-caption)', letterSpacing: '0.08em', minWidth: 20 }} aria-hidden="true">
-              {locale === 'id' ? 'EN' : 'ID'}
-            </span>
-            <span>{locale === 'id' ? 'Switch to English' : 'Ganti ke Indonesia'}</span>
-          </button>
+          <div className="bottom-toggles">
+            <button type="button" className="btn-icon theme-toggle" onClick={toggleTheme} aria-pressed={dark}
+              title={dark ? t('dark_mode_on') : t('dark_mode_off')} aria-label={dark ? t('dark_mode_on') : t('dark_mode_off')}>
+              {dark ? <IconMoon /> : <IconSun />}
+            </button>
+            {/* Language toggle: aria-label is always in the target language so it's readable regardless of current locale */}
+            <button type="button" className="btn-icon" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
+              title={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
+              aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
+              <span style={{ fontWeight: 800, fontSize: 'var(--fs-caption)', letterSpacing: '0.08em' }} aria-hidden="true">
+                {locale === 'id' ? 'EN' : 'ID'}
+              </span>
+            </button>
+          </div>
           {!ready ? null : user ? (
             <div className="user-row">
               <Link to={`/u/${user.uid}`} className="user-info">

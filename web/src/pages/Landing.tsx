@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { StoryHeader, StoryFooter, WaIcon, useReducedMotion, useSignIn } from '../components/StoryChrome'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL, WHATSAPP_URL } from '../lib/community'
 import { supabase } from '../lib/supabase'
+import { useT } from '../lib/i18n'
 import './landing.css'
 
 /* Story surface: the landing page at `/` (ADR-001 §2–§4, ADR-008 option A, ADR-010), rebuilt on the
@@ -480,7 +481,8 @@ function HeroSheet() {
   )
 }
 
-function CopyEmail({ onCopied }: { onCopied: () => void }) {
+function CopyEmail({ onCopied }: { onCopied: (msg: string) => void }) {
+  const t = useT()
   const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle')
   useEffect(() => {
     if (state === 'idle') return
@@ -491,7 +493,7 @@ function CopyEmail({ onCopied }: { onCopied: () => void }) {
     try {
       await navigator.clipboard.writeText(COMMUNITY_GROUP)
       setState('ok')
-      onCopied()
+      onCopied(t('copy_email_ok_status'))
     } catch {
       setState('fail')
     }
@@ -499,10 +501,10 @@ function CopyEmail({ onCopied }: { onCopied: () => void }) {
   return (
     <div className="copy-row">
       <button type="button" className={`copy ${state === 'ok' ? 'ok' : ''}`} onClick={copy}>
-        {state === 'ok' ? 'Tersalin ✓' : 'Salin email grup'}
+        {state === 'ok' ? t('copy_email_ok') : t('copy_email_btn')}
       </button>
       <span className="copy-status" role="status" aria-live="polite">
-        {state === 'fail' ? 'Tidak bisa menyalin otomatis. Pilih teks email di atas, lalu salin.' : ''}
+        {state === 'fail' ? t('copy_email_fail') : ''}
       </span>
     </div>
   )
@@ -758,6 +760,7 @@ const OBSERVED = ['cohort', 'cara-kerja', 'transparansi', 'badge', 'bukti', 'gab
    Page
    --------------------------------------------------------------------------- */
 export function Landing() {
+  const t = useT()
   usePageMeta(TITLE, DESCRIPTION)
   const root = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLElement>(null)
@@ -829,14 +832,16 @@ export function Landing() {
 
   const signInBtn = (cls: string, long: boolean) =>
     user ? (
-      <Link className={cls} to="/me">Tugas saya</Link>
+      <Link className={cls} to="/me">{t('nav_tasks')}</Link>
     ) : (
-      <button type="button" className={cls} onClick={startSignIn}><span>Masuk{long ? ' dengan Google' : <span className="hide-xs"> dengan Google</span>}</span></button>
+      <button type="button" className={cls} onClick={startSignIn}>
+        <span>{long ? t('sign_in_google') : <>{t('sign_in_short')}<span className="hide-xs"> {t('sign_in_suffix')}</span></>}</span>
+      </button>
     )
 
   return (
     <div className="lp surface-story dark-ready" ref={root}>
-      <a className="lp-skip" href="#isi">Langsung ke isi</a>
+      <a className="lp-skip" href="#isi">{t('skip_to_content')}</a>
 
       {/* Header: shared with /about (components/StoryChrome). Keep it in step with the static copy in web/index.html (same classes and text). */}
       <StoryHeader page="home" signIn={signIn} active={active ?? undefined} headerRef={headerRef} fillRef={fillRef} brandRef={brandRef} onAnchor={(id) => goTo(id, true)} />
@@ -848,8 +853,8 @@ export function Landing() {
             <h1 id="hero-h"><span>12 tester.</span><span>14 hari.</span><span>Bareng.<i className="caret" aria-hidden="true" /></span></h1>
             <p className="lp-lede">Syarat closed test Google Play untuk akun developer pribadi baru. Creator Android Indonesia saling ngetes lewat cohort: kamu tes app mereka, mereka tes app kamu. Belum punya app? Kamu tetap bisa ikut sebagai tester.</p>
             <div className="cta-row">
-              <a className="lp-btn lp-btn--primary" href="#gabung">Gabung komunitas</a>
-              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />Grup WhatsApp<span className="sr-only"> (tab baru)</span></a>
+              <a className="lp-btn lp-btn--primary" href="#gabung">{t('cta_join_community')}</a>
+              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />{t('cta_wa_group')}<span className="sr-only"> (tab baru)</span></a>
               <a className="lp-btn" href="#cara-kerja">Lihat cara kerjanya</a>
             </div>
           </div>
@@ -929,7 +934,7 @@ export function Landing() {
                 <span className="n" aria-hidden="true">1</span>
                 <h3>Gabung Google Group (uji tertutup)</h3>
                 <p>Untuk closed test: ketuk tombol di bawah — Google meminta <b>pilih akun dulu</b>. Pakai akun yang sama dengan Play Store di HP-mu, lalu Bergabung / Join. Creator memasang <code className="email">{COMMUNITY_GROUP}</code> sebagai daftar tester, jadi cukup sekali untuk semua app uji tertutup. Jangan ganti akun setelah halaman grup terbuka. App daftar email: tekan Minta ditambahkan di halaman app-nya. App sudah rilis production: langkah ini tidak perlu.</p>
-                <CopyEmail onCopied={() => say('Email grup tersalin')} />
+                <CopyEmail onCopied={say} />
               </li>
               <li>
                 <span className="n" aria-hidden="true">2</span>
@@ -943,9 +948,9 @@ export function Landing() {
               </li>
             </ol>
             <div className="cta-row join-cta">
-              <a className="lp-btn lp-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Pilih akun &amp; buka grup<span className="sr-only"> (Google Group, tab baru)</span></a>
+              <a className="lp-btn lp-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">{t('cta_open_group')}<span className="sr-only"> (Google Group, tab baru)</span></a>
               {signInBtn('lp-btn', true)}
-              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />Grup WhatsApp komunitas<span className="sr-only"> (tab baru)</span></a>
+              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />{t('cta_wa_community')}<span className="sr-only"> (tab baru)</span></a>
             </div>
             <p className="wa-note">Grup WhatsApp komunitas adalah tempat diskusi utama. Opsional, dan nomor HP hanya terlihat sesama anggota grup.</p>
             <div className="duty rv">
@@ -976,7 +981,7 @@ export function Landing() {
 
       <StoryFooter page="home" />
 
-      <button type="button" className="totop" ref={totopRef} aria-label="Kembali ke atas" onClick={toTop}><span aria-hidden="true">↑</span></button>
+      <button type="button" className="totop" ref={totopRef} aria-label={t('back_to_top')} onClick={toTop}><span aria-hidden="true">↑</span></button>
       <div className="lp-toast-region theme-light" role="status" aria-live="polite">
         <p className={`lp-toast${toastOn ? ' show' : ''}`}>{toast}</p>
       </div>

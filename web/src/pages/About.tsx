@@ -3,6 +3,7 @@ import { usePageMeta } from '../lib/pageMeta'
 import { Link } from 'react-router-dom'
 import { StoryHeader, StoryFooter, useSignIn } from '../components/StoryChrome'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
+import { useT } from '../lib/i18n'
 import './about.css'
 
 /* /about: the full rules and how it works, PRD v2.2 (§1, §5–§6, §8). Story surface, same system as the landing.
@@ -49,6 +50,7 @@ function Segments({ n, label }: { n: number; label: string }) {
 }
 
 function CopyEmail() {
+  const t = useT()
   const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle')
   useEffect(() => {
     if (state === 'idle') return
@@ -61,10 +63,10 @@ function CopyEmail() {
   return (
     <span className="ab-copy">
       <button type="button" className={`ab-btn ab-btn--sm ${state === 'ok' ? 'is-ok' : ''}`} onClick={copy}>
-        {state === 'ok' ? '✓ Tersalin' : 'Salin email grup'}
+        {state === 'ok' ? t('copy_email_ok') : t('copy_email_btn')}
       </button>
       <span className="ab-copy-status" role="status" aria-live="polite">
-        {state === 'fail' ? 'Tidak bisa menyalin otomatis. Pilih teks emailnya, lalu salin.' : state === 'ok' ? 'Email grup tersalin.' : ''}
+        {state === 'fail' ? t('copy_email_fail') : state === 'ok' ? t('copy_email_ok_status') : ''}
       </span>
     </span>
   )
@@ -254,6 +256,7 @@ function TocStrip({ gridRef }: { gridRef: React.RefObject<HTMLElement | null> })
 
 /** `embedded`: rendered inside the app shell for signed-in members, so the shell supplies the nav, skip link and <main>. */
 export function About({ embedded = false }: { embedded?: boolean }) {
+  const t = useT()
   usePageMeta(TITLE, DESCRIPTION)
   const signIn = useSignIn()
   const gridRef = useRef<HTMLElement>(null)
@@ -262,7 +265,7 @@ export function About({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className={`ab surface-story dark-ready${embedded ? ' ab--embedded' : ''}`}>
-      {!embedded && <a className="ab-skip" href="#isi">Langsung ke isi</a>}
+      {!embedded && <a className="ab-skip" href="#isi">{t('skip_to_content')}</a>}
 
       {!embedded && <StoryHeader page="about" signIn={signIn} />}
 
@@ -437,9 +440,9 @@ export function About({ embedded = false }: { embedded?: boolean }) {
             <p className="ab-lede">Untuk uji tertutup: mulai dari Google Group (akun yang sama dengan Play Store), lalu buka app → pasang → catat. Untuk app rilis: langsung Play Store → pasang → catat → ulasan publik. Atau tunggu cohort berikutnya.</p>
             <div className="ab-cta-row">
               <a className="ab-btn ab-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">
-                Gabung komunitas<span className="sr-only"> (Google Group, tab baru)</span><span aria-hidden="true"> ↗</span>
+                {t('cta_join_community')}<span className="sr-only"> (Google Group, tab baru)</span><span aria-hidden="true"> ↗</span>
               </a>
-              <Link className="ab-btn" to="/apps">Lihat daftar app</Link>
+              <Link className="ab-btn" to="/apps">{t('cta_see_apps')}</Link>
             </div>
           </div>
         </section>
