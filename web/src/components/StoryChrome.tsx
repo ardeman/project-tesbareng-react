@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP_URL, WHATSAPP_URL } from '../lib/community'
+import { useI18n } from '../lib/i18n'
 import { useReducedMotion, useTheme } from '../lib/theme'
 import './story-chrome.css'
 
@@ -58,6 +59,7 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
   const home = page === 'home'
   const reduced = useReducedMotion()
   const { dark, toggle } = useTheme(reduced)
+  const { locale, setLocale } = useI18n()
   const { user, signInError, startSignIn } = signIn
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBtnRef = useRef<HTMLButtonElement>(null)
@@ -125,6 +127,11 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
             <Link className="nl" to="/apps">Daftar app</Link>
             <div className="nav-tools">
               {!user && <button type="button" className="lp-sq theme-btn" aria-pressed={dark} aria-label="Mode gelap" onClick={toggle}><MoonSun /></button>}
+              <button type="button" className="lp-sq theme-btn" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
+                title={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
+                aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
+                <span style={{ fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em' }} aria-hidden="true">{locale === 'id' ? 'EN' : 'ID'}</span>
+              </button>
               {signInBtn}
               <button type="button" className="lp-sq menu-btn" ref={menuBtnRef} aria-expanded={menuOpen} aria-controls="lp-menu" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}><span /><span /><span /></button>
             </div>
@@ -141,6 +148,10 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
           {!user && <button type="button" className="sheet-theme" aria-pressed={dark} onClick={toggle}>
             <span>Mode gelap <small className="mono">{dark ? 'Nyala' : 'Mati'}</small></span><MoonSun />
           </button>}
+          <button type="button" className="sheet-theme" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}>
+            <span>{locale === 'id' ? 'Switch to English' : 'Ganti ke Indonesia'}</span>
+            <span style={{ fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em' }} aria-hidden="true">{locale === 'id' ? 'EN' : 'ID'}</span>
+          </button>
         </nav>
         {home && <div className="lp-scrollbar" aria-hidden="true"><i ref={fillRef} /></div>}
         {signInError && (
