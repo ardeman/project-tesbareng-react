@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   LANDING_DESC,
   LANDING_IMAGE,
@@ -9,13 +10,13 @@ import {
   truncate,
 } from '../lib/share'
 
-export const config = { runtime: 'edge' }
+export const config = { maxDuration: 5 }
 
-function landingHtml(origin: string, canonical: string): Response {
+function landingHtml(origin: string, canonical: string): string {
   const title = LANDING_TITLE
   const desc = LANDING_DESC
   const image = LANDING_IMAGE.startsWith('http') ? LANDING_IMAGE : `${origin}/og/landing.png`
-  return htmlResponse(shell({ title, desc, image, url: canonical }))
+  return shell({ title, desc, image, url: canonical })
 }
 
 function shell(o: { title: string; desc: string; image: string; url: string }): string {
@@ -53,24 +54,29 @@ function shell(o: { title: string; desc: string; image: string; url: string }): 
 </html>`
 }
 
-function htmlResponse(body: string): Response {
-  return new Response(body, {
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-    },
-  })
+function sendHtml(res: ServerResponse, body: string): void {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400')
+  res.statusCode = 200
+  res.end(body)
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  const origin = originFrom(req)
-  const id = new URL(req.url).searchParams.get('id')
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const origin = originFrom(req.headers as Record<string, string | string[] | undefined>)
+  const { searchParams } = new URL(req.url ?? '/', 'https://x')
+  const id = searchParams.get('id')
   const canonical = isAppId(id) ? `${origin}/apps/${id}` : `${origin}/`
 
-  if (!isAppId(id)) return landingHtml(origin, `${origin}/`)
+  if (!isAppId(id)) {
+    sendHtml(res, landingHtml(origin, `${origin}/`))
+    return
+  }
 
   const app = await loadShareApp(id)
-  if (!app) return landingHtml(origin, canonical)
+  if (!app) {
+    sendHtml(res, landingHtml(origin, canonical))
+    return
+  }
 
   const title = `${app.name} · TesBareng`
   const desc =
@@ -80,5 +86,5 @@ export default async function handler(req: Request): Promise<Response> {
       : `${app.name} di TesBareng — komunitas creator Android Indonesia.`)
   const image = `${origin}/api/og/app?id=${encodeURIComponent(app.id)}`
 
-  return htmlResponse(shell({ title, desc, image, url: canonical }))
+  sendHtml(res, shell({ title, desc, image, url: canonical }))
 }

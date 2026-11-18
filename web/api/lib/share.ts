@@ -29,11 +29,13 @@ export function isAppId(id: string | null | undefined): id is string {
   return !!id && UUID_RE.test(id)
 }
 
-export function originFrom(req: Request): string {
+export function originFrom(headers: Record<string, string | string[] | undefined>): string {
   const env = (typeof process !== 'undefined' && process.env.VITE_SITE_URL) || ''
   if (env) return env.replace(/\/$/, '')
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host')
-  const proto = req.headers.get('x-forwarded-proto') || 'https'
+  const rawHost = headers['x-forwarded-host'] || headers['host']
+  const host = Array.isArray(rawHost) ? rawHost[0] : rawHost
+  const rawProto = headers['x-forwarded-proto']
+  const proto = (Array.isArray(rawProto) ? rawProto[0] : rawProto) || 'https'
   if (host && !host.includes('localhost') && !host.startsWith('127.')) return `${proto}://${host}`
   return SITE
 }

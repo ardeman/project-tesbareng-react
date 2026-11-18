@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { ImageResponse } from '@vercel/og'
 import {
   STATUS_LABEL,
@@ -9,7 +10,7 @@ import {
   truncate,
 } from '../lib/share'
 
-export const config = { runtime: 'edge' }
+export const config = { maxDuration: 10 }
 
 const KERTAS = '#FFF6E3'
 const PUTIH = '#FFFFFF'
@@ -24,15 +25,22 @@ function statusFill(status: string): string {
   return KUNYIT
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  const id = new URL(req.url).searchParams.get('id')
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const rawUrl = req.url ?? '/'
+  const { searchParams } = new URL(rawUrl, 'https://x')
+  const id = searchParams.get('id')
+
   if (!isAppId(id)) {
-    return new Response('Not found', { status: 404 })
+    res.statusCode = 404
+    res.end('Not found')
+    return
   }
 
   const app = await loadShareApp(id)
   if (!app) {
-    return new Response('Not found', { status: 404 })
+    res.statusCode = 404
+    res.end('Not found')
+    return
   }
 
   const listing = storeListingUrl(app)
@@ -159,14 +167,12 @@ export default async function handler(req: Request): Promise<Response> {
         </div>
       </div>
     ),
-    {
-      width: 1200,
-      height: 630,
-      headers: {
-        'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800',
-      },
-    },
+    { width: 1200, height: 630 },
   )
 
-  return image
+  const buffer = await image.arrayBuffer()
+  res.setHeader('Content-Type', 'image/png')
+  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800')
+  res.statusCode = 200
+  res.end(Buffer.from(buffer))
 }
