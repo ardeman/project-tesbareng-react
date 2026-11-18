@@ -1,7 +1,5 @@
 /** Shared helpers for bot share HTML and OG image APIs (per-app social previews). */
 
-import { createClient } from '@supabase/supabase-js'
-
 export const SITE = 'https://tesbareng.vercel.app'
 export const LANDING_TITLE = 'TesBareng: 12 tester, 14 hari, dikerjakan bareng'
 export const LANDING_DESC =
@@ -50,15 +48,28 @@ export async function loadShareApp(id: string): Promise<ShareApp | null> {
   if (!isAppId(id)) return null
   const { url, key } = supabaseEnv()
   if (!url || !key) return null
-  const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
-  const { data, error } = await sb
-    .from('apps')
-    .select('id, name, description, status, store_url, package_name, creator:profiles!apps_creator_id_fkey(display_name)')
-    .eq('id', id)
-    .eq('deleted', false)
-    .maybeSingle()
-  if (error || !data) return null
-  const creator = data.creator as { display_name?: string } | { display_name?: string }[] | null
+  const endpoint =
+    `${url}/rest/v1/apps` +
+    `?select=id,name,description,status,store_url,package_name,creator:profiles!apps_creator_id_fkey(display_name)` +
+    `&id=eq.${encodeURIComponent(id)}` +
+    `&deleted=eq.false` +
+    `&limit=1`
+  const res = await fetch(endpoint, {
+    headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+  })
+  if (!res.ok) return null
+  const rows = (await res.json()) as Array<{
+    id: string
+    name: string
+    description: string | null
+    status: string
+    store_url: string | null
+    package_name: string | null
+    creator: { display_name?: string } | { display_name?: string }[] | null
+  }>
+  const data = rows[0]
+  if (!data) return null
+  const creator = data.creator
   const creatorName = Array.isArray(creator)
     ? (creator[0]?.display_name ?? '')
     : (creator?.display_name ?? '')
