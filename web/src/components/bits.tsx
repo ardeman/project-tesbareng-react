@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { appStatusLabel, fmtDateTime, initial, relDay, relTime, TARGET_DAYS, TARGET_TESTERS, testerStatusLabel } from '../lib/progress'
+import { fmtDateTime, initial, relDay, relTime, TARGET_DAYS, TARGET_TESTERS } from '../lib/progress'
 import { IconClose, IconExternal, IconMore } from './icons'
 import { errorText } from '../lib/data'
 import { BADGE_LABELS, BADGE_MIN, nextTier } from '../lib/badges'
 import type { AppStatus, BadgeTier, TesterDoc } from '../lib/types'
+import { useT } from '../lib/i18n'
 
 /** Google photo inside an ink circle; otherwise the initial on white (no generated colours, ADR-001 §2.6). */
 export function Avatar({ name, photo, size }: { name: string; photo?: string | null; id?: string; size?: 'lg' }) {
@@ -35,36 +36,44 @@ const APP_TONE: Record<AppStatus, [Tone, string]> = {
   applied: ['pandan', '✓'],
   live: ['pandan', '✓✓'],
 }
-export const StatusPill = ({ status }: { status: AppStatus }) => (
-  <Chip tone={APP_TONE[status][0]} glyph={APP_TONE[status][1]}>{appStatusLabel[status]}</Chip>
-)
+export const StatusPill = ({ status }: { status: AppStatus }) => {
+  const t = useT()
+  return (
+    <Chip tone={APP_TONE[status][0]} glyph={APP_TONE[status][1]}>
+      {t(`app_status_${status}` as Parameters<typeof t>[0])}
+    </Chip>
+  )
+}
 
 /** Tester status: eligible (14+ days) is pandan, active is langit (opted in), the rest stay white.
  *  A tester's own 14 days (badges, reciprocity) can end before the app's counted 14 days (all seats at once),
  *  so "Lulus" is said only once the app passed too; before that the chip asks them to stay. `appPassed`
  *  undefined (admin list, no app clock at hand) shows the plain day mark. */
-export function TesterChip({ t, days, appPassed }: { t: TesterDoc; days: number; appPassed?: boolean }) {
-  if (t.status === 'active' && days >= TARGET_DAYS) {
-    const label = appPassed === undefined ? '14 hari' : appPassed ? 'Lulus 14 hari' : '14 hari · tetap ikut'
+export function TesterChip({ t: tester, days, appPassed }: { t: TesterDoc; days: number; appPassed?: boolean }) {
+  const tr = useT()
+  if (tester.status === 'active' && days >= TARGET_DAYS) {
+    const label = appPassed === undefined ? tr('tester_14_days') : appPassed ? tr('tester_passed_14_days') : tr('tester_14_days_stay')
     return <Chip tone="pandan" glyph="✓">{label}</Chip>
   }
-  if (t.status === 'active') return <Chip tone="langit" glyph="→">{testerStatusLabel.active}</Chip>
-  return <Chip glyph={t.status === 'removed' ? '×' : '—'}>{testerStatusLabel[t.status]}</Chip>
+  if (tester.status === 'active') return <Chip tone="langit" glyph="→">{tr('tester_status_active')}</Chip>
+  return <Chip glyph={tester.status === 'removed' ? '×' : '—'}>{tr(`tester_status_${tester.status}` as Parameters<typeof tr>[0])}</Chip>
 }
 
 /** Feedback state: none / sent / verified (PRD DR-3). */
-export function FeedbackChip({ t, className }: { t: Pick<TesterDoc, 'feedbackSent' | 'feedbackVerified'>; className?: string }) {
-  if (t.feedbackVerified) return <Chip tone="pandan" glyph="✓✓" className={className}>Terverifikasi</Chip>
-  if (t.feedbackSent) return <Chip tone="langit" glyph="✓" className={className}>Terkirim</Chip>
-  return <Chip glyph="—" className={className}>Belum</Chip>
+export function FeedbackChip({ t: tester, className }: { t: Pick<TesterDoc, 'feedbackSent' | 'feedbackVerified'>; className?: string }) {
+  const tr = useT()
+  if (tester.feedbackVerified) return <Chip tone="pandan" glyph="✓✓" className={className}>{tr('feedback_verified')}</Chip>
+  if (tester.feedbackSent) return <Chip tone="langit" glyph="✓" className={className}>{tr('feedback_sent')}</Chip>
+  return <Chip glyph="—" className={className}>{tr('feedback_none')}</Chip>
 }
 
 // ---------- progress: counted cells, not a smooth bar ----------
 
 /** One cell per tester slot (12 by default, ADR-012): eligible (≥14 days) pandan, active langit, empty white. */
 export function Seats({ active, eligible = 0, total = TARGET_TESTERS, label, className }: { active: number; eligible?: number; total?: number; label?: string; className?: string }) {
+  const t = useT()
   return (
-    <span className={`seats ${className ?? ''}`} style={{ '--n': total } as CSSProperties} role="img" aria-label={label ?? `${active} dari ${total} tester aktif`}>
+    <span className={`seats ${className ?? ''}`} style={{ '--n': total } as CSSProperties} role="img" aria-label={label ?? t('seats_label', { active, total })}>
       {Array.from({ length: total }, (_, i) => (
         <i key={i} className={i < Math.min(eligible, total) ? 'full' : i < Math.min(active, total) ? 'on' : ''} />
       ))}
@@ -75,6 +84,7 @@ export function Seats({ active, eligible = 0, total = TARGET_TESTERS, label, cla
 /** A ruled track of `max` cells (12 testers, 14 days, a tier threshold). Langit while counting,
  *  pandan once complete; `tone="ubi"` for badge progress only. Optional tabular "X / max" readout. */
 export function Bar({ value, max, label, tone, readout = false }: { value: number; max: number; label: string; tone?: 'ubi'; readout?: boolean }) {
+  const t = useT()
   const v = Math.max(0, Math.min(value, max))
   const done = v >= max
   const segmented = max <= 30
@@ -83,7 +93,7 @@ export function Bar({ value, max, label, tone, readout = false }: { value: numbe
       <div
         className={`cells ${segmented ? '' : 'solid'} ${done && tone !== 'ubi' ? 'done' : ''} ${tone ?? ''}`}
         style={{ ['--n' as string]: segmented ? max : 1 }}
-        role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={v} aria-valuetext={`${v} dari ${max}`}
+        role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={v} aria-valuetext={t('progress_x_of_y', { v, max })}
       >
         {segmented
           ? Array.from({ length: max }, (_, i) => <i key={i} className={i < v ? 'on' : ''} />)
@@ -99,10 +109,11 @@ const BADGE_MARK: Record<Exclude<BadgeTier, 'none'>, string> = { bronze: 'I', si
 
 /** Reciprocity badge (PRD FR-27g–l): pill, ink border, tier fill from --tier-*, tier name in text. */
 export function Badge({ tier, size }: { tier: BadgeTier | undefined; size?: 'sm' }) {
+  const t = useT()
   if (!tier || tier === 'none') return null
   const label = BADGE_LABELS[tier]
   return (
-    <span className={`badge ${tier} ${size ?? ''}`} title={`Badge ${label}: ${BADGE_MIN[tier]}+ aplikasi diuji 14 hari`}>
+    <span className={`badge ${tier} ${size ?? ''}`} title={t('badge_title', { label, min: BADGE_MIN[tier] })}>
       <span className="badge-mark" aria-hidden="true">{BADGE_MARK[tier]}</span>
       <span className="sr-only">Badge </span>{label}
     </span>
@@ -111,15 +122,16 @@ export function Badge({ tier, size }: { tier: BadgeTier | undefined; size?: 'sm'
 
 /** Progress from the apps-tested count to the next tier threshold (FR-27k). */
 export function TierProgress({ count, tier, nextAt }: { count: number; tier: BadgeTier; nextAt: number | null }) {
+  const t = useT()
   const next = nextTier(tier)
   if (!next || nextAt === null) {
-    return <p className="small muted" style={{ marginTop: 'var(--s-2)' }}>{count} aplikasi diuji 14+ hari. Platinum adalah tingkat tertinggi.</p>
+    return <p className="small muted" style={{ marginTop: 'var(--s-2)' }}>{t('tier_progress_platinum', { count })}</p>
   }
   const label = BADGE_LABELS[next]
   return (
     <div className="tier-progress">
-      <Bar value={Math.min(count, nextAt)} max={nextAt} label={`Progres menuju badge ${label}`} tone="ubi" />
-      <p className="small muted num"><span className="tier-count">{count} / {nextAt}</span> aplikasi menuju {label}</p>
+      <Bar value={Math.min(count, nextAt)} max={nextAt} label={t('tier_progress_bar_label', { tier: label })} tone="ubi" />
+      <p className="small muted num"><span className="tier-count">{count} / {nextAt}</span> {t('tier_progress_suffix', { tier: label })}</p>
     </div>
   )
 }
@@ -144,9 +156,10 @@ export function Dialog({ open, onClose, children, label }: { open: boolean; onCl
 export function Field({ id, label, optional, hint, error, count, children }: {
   id: string; label: ReactNode; optional?: boolean; hint?: ReactNode; error?: string; count?: ReactNode; children: ReactNode
 }) {
+  const t = useT()
   return (
     <div className="field">
-      <label htmlFor={id}>{label}{optional && <span className="opt"> (opsional)</span>}</label>
+      <label htmlFor={id}>{label}{optional && <span className="opt">{t('field_optional')}</span>}</label>
       {children}
       {hint && <span className="hint" id={`${id}-hint`}>{hint}</span>}
       <span className={error ? 'hint err' : 'sr-only'} id={`${id}-err`} aria-live="polite">{error}</span>
@@ -162,11 +175,12 @@ export const fieldAria = (id: string, opts: { hint?: boolean; error?: string }) 
 })
 
 export function ErrorBox({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  const t = useT()
   return (
     <div className="error-box" role="alert">
       <span className="g" aria-hidden="true">!</span>
       <span>{text}</span>
-      {onRetry && <button type="button" className="text-action" onClick={onRetry}>Coba lagi</button>}
+      {onRetry && <button type="button" className="text-action" onClick={onRetry}>{t('retry')}</button>}
     </div>
   )
 }
@@ -188,12 +202,12 @@ export const Skel = ({ w, h = 14 }: { w: number | string; h?: number }) => (
 )
 
 export function NotFound({ what }: { what: string }) {
-  // ADR-001 §2.6: 404 spot illustration goes above the title when assets exist.
+  const t = useT()
   return (
     <div className="state-page">
-      <h1 className="page-title">{what} tidak ditemukan</h1>
-      <p>Mungkin sudah dihapus pembuatnya, atau tautannya salah ketik.</p>
-      <Link className="btn primary" to="/apps">Kembali ke daftar aplikasi</Link>
+      <h1 className="page-title">{what} {t('not_found')}</h1>
+      <p>{t('not_found_desc')}</p>
+      <Link className="btn primary" to="/apps">{t('back_to_apps')}</Link>
     </div>
   )
 }
@@ -233,6 +247,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 function Toast({ t, onClose }: { t: ToastItem; onClose: () => void }) {
+  const tr = useT()
   const ms = t.duration ?? (t.tone === 'error' || t.action ? null : SUCCESS_MS)
   const [paused, setPaused] = useState(false)
   const left = useRef(ms ?? 0)
@@ -254,7 +269,7 @@ function Toast({ t, onClose }: { t: ToastItem; onClose: () => void }) {
         <button type="button" className="text-action" onClick={() => { t.action!.onClick(); onClose() }}>{t.action.label}</button>
       )}
       {(ms == null || t.action) && (
-        <button type="button" className="toast-close" aria-label="Tutup pemberitahuan" onClick={onClose}><IconClose /></button>
+        <button type="button" className="toast-close" aria-label={tr('close_notification')} onClick={onClose}><IconClose /></button>
       )}
     </div>
   )
@@ -276,9 +291,10 @@ export function RelTime({ t, day = false }: { t: number; day?: boolean }) {
 
 /** "Lihat semua (N)" / "Tampilkan lebih sedikit" for long related lists (ADR-009 §4). */
 export function ShowAll({ open, total, onToggle, controls }: { open: boolean; total: number; onToggle: () => void; controls: string }) {
+  const t = useT()
   return (
     <button type="button" className="text-action show-all num" aria-expanded={open} aria-controls={controls} onClick={onToggle}>
-      {open ? 'Tampilkan lebih sedikit' : `Lihat semua (${total})`}
+      {open ? t('show_less') : t('show_all', { total })}
     </button>
   )
 }
@@ -286,7 +302,9 @@ export function ShowAll({ open, total, onToggle, controls }: { open: boolean; to
 // ---------- overflow menu ("…"): button + menu, Escape closes, arrow keys move (ADR-009 §7) ----------
 export interface MenuItem { label: string; onSelect?: () => void; href?: string; to?: string; danger?: boolean }
 
-export function OverflowMenu({ items, label = 'Aksi lain' }: { items: MenuItem[]; label?: string }) {
+export function OverflowMenu({ items, label }: { items: MenuItem[]; label?: string }) {
+  const t = useT()
+  const menuLabel = label ?? t('more_actions')
   const [open, setOpen] = useState(false)
   const [align, setAlign] = useState<'right' | 'left'>('right')
   const btn = useRef<HTMLButtonElement>(null)
@@ -294,7 +312,6 @@ export function OverflowMenu({ items, label = 'Aksi lain' }: { items: MenuItem[]
   const id = useId()
   const close = useCallback((focusBack = true) => { setOpen(false); if (focusBack) btn.current?.focus() }, [])
 
-  // Keep the menu on screen: open leftwards when the button sits too close to the left edge (375 px phones).
   useLayoutEffect(() => {
     if (!open || !btn.current || !menu.current) return
     const w = menu.current.getBoundingClientRect().width
@@ -326,14 +343,14 @@ export function OverflowMenu({ items, label = 'Aksi lain' }: { items: MenuItem[]
   return (
     <span className="menu-host">
       <button
-        ref={btn} type="button" className="btn icon" aria-label={label} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
+        ref={btn} type="button" className="btn icon" aria-label={menuLabel} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={(e) => { if (e.key === 'ArrowDown' && !open) { e.preventDefault(); setOpen(true) } }}
       >
         <IconMore />
       </button>
       {open && (
-        <div ref={menu} id={id} className="menu" data-align={align} role="menu" aria-label={label} onKeyDown={onKey}>
+        <div ref={menu} id={id} className="menu" data-align={align} role="menu" aria-label={menuLabel} onKeyDown={onKey}>
           {items.map((it) => {
             const cls = `menu-item ${it.danger ? 'danger' : ''}`
             const done = () => close(false)

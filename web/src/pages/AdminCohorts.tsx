@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react'
+﻿import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Avatar, Bar, Chip, Dialog, Empty, ErrorBox, failToast, Field, fieldAria, ShowAll, Skel, useToast } from '../components/bits'
 import { IconExternal, IconPlus, IconSearch } from '../components/icons'
@@ -6,9 +6,10 @@ import { errorText, rows, useFetch, type Row } from '../lib/data'
 import {
   addCohortMember, approveCohortRequest, closeCohort, REQUEST_REASON_MAX, rejectCohortRequest, usePendingRequestCounts, usePendingRequests, type CohortRequest, CLOSE_DAY, cohortDay, createCohort, fmtWib, LAST_JOIN_DAY, MIN_APPS, pinnedMessage,
   reassignSlot, removeCohortMember, resetCohort, setCohortLink, settleMember, startCohort,
-  useAssignmentStatus, useCohort, useCohortLink, useCohorts, useMemberCandidates, useObligations,
-  type Candidate, type CohortDetail, type CohortDoc, type CohortMember, type CohortStatus,
+  useAssignmentStatus, useCohort, useCohortLink, useCohorts, useMemberCandidates, useAppCandidates, useObligations,
+  type Candidate, type AppCandidate, type CohortDetail, type CohortDoc, type CohortMember, type CohortStatus,
 } from '../lib/cohorts'
+import { useT } from '../lib/i18n'
 import { supabase } from '../lib/supabase'
 import { CohortChip, StandingChip, useFocusAfterClose } from '../components/cohortBits'
 import { fmtDate, fmtDateTime } from '../lib/progress'
@@ -162,7 +163,7 @@ function CreateCohort({ count, onCreated }: { count: number; onCreated: (id: str
   const [err, setErr] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const v = name.trim()
-  const fieldErr = !v ? 'Isi nama cohort, misalnya “Cohort #' + (count + 1) + '”.' : v.length > NAME_MAX ? `Nama paling panjang ${NAME_MAX} karakter.` : undefined
+  const fieldErr = !v ? 'Isi nama cohort, misalnya "Cohort #' + (count + 1) + '".' : v.length > NAME_MAX ? `Nama paling panjang ${NAME_MAX} karakter.` : undefined
   const shownErr = touched ? fieldErr : undefined
 
   const submit = async (e: FormEvent) => {
@@ -584,7 +585,7 @@ function RejectForm({ r, c, onClose, onDone }: { r: CohortRequest; c: CohortDeta
           <h2>Tolak permintaan?</h2>
           <p className="lede"><b>{nameOf(r)}</b> dengan <b>{r.appName}</b> untuk {c.name}. Anggota melihat penolakan dan alasannya, lalu bisa mengajukan lagi.</p>
         </div>
-        <Field id="rj-reason" label="Alasan" optional hint="Singkat dan jelas, misalnya “Cohort ini sudah penuh, coba cohort berikutnya.”" error={fieldErr} count={`${reason.trim().length}/${REQUEST_REASON_MAX}`}>
+        <Field id="rj-reason" label="Alasan" optional hint={'Singkat dan jelas, misalnya “Cohort ini sudah penuh, coba cohort berikutnya.”'} error={fieldErr} count={`${reason.trim().length}/${REQUEST_REASON_MAX}`}>
           <textarea ref={area} className="input" rows={3} autoComplete="off" value={reason}
             onChange={(e) => { setReason(e.target.value); setErr(null) }} {...fieldAria('rj-reason', { hint: true, error: fieldErr })} />
         </Field>
@@ -600,12 +601,13 @@ function RejectForm({ r, c, onClose, onDone }: { r: CohortRequest; c: CohortDeta
 
 // ---------- add member: search, pick, choose app or pure tester ----------
 
-type Opt = { value: string; label: string; disabled?: string }
+/** `inCohort`: undefined = available; null = in unnamed open cohort; string = that cohort's name. */
+type Opt = { value: string; label: string; inCohort?: string | null }
 
 function optionsFor(cand: Candidate): Opt[] {
   return [
-    ...cand.apps.map((a) => ({ value: a.id, label: a.name, disabled: a.inCohort != null ? `Sudah di ${a.inCohort || 'cohort lain yang belum ditutup'}.` : undefined })),
-    { value: 'pure', label: 'Tanpa aplikasi (tester murni)' },
+    ...cand.apps.map((a) => ({ value: a.id, label: a.name, inCohort: a.inCohort !== null ? (a.inCohort ?? null) : undefined })),
+    { value: 'pure', label: '' },
   ]
 }
 /** Opinionated default: the only free app, else pure tester when there is no free app; otherwise ask. */
@@ -613,30 +615,59 @@ function defaultChoice(cand: Candidate) {
   const free = cand.apps.filter((a) => a.inCohort == null)
   return free.length === 1 ? free[0].id : free.length === 0 ? 'pure' : ''
 }
+const isOptDisabled = (o: Opt) => o.inCohort !== undefined
+
+type AddTab = 'member' | 'app'
 
 function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () => void; onAdded: () => void }) {
+  const t = useT()
   const toast = useToast()
+
+  // shared
+  const [added, setAdded] = useState<string[]>([])
+  const [err, setErr] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<AddTab>('member')
+  const members = useMemo(() => new Set([...c.members.map((m) => m.userId), ...added]), [c.members, added])
+
+  // --- member tab ---
   const [q, setQ] = useState('')
   const [term, setTerm] = useState('')
   useEffect(() => {
-    const t = window.setTimeout(() => setTerm(q.trim()), 250)
-    return () => window.clearTimeout(t)
+    const id = window.setTimeout(() => setTerm(q.trim()), 250)
+    return () => window.clearTimeout(id)
   }, [q])
-  const res = useMemberCandidates(term, true)
+  const res = useMemberCandidates(term, activeTab === 'member')
   const [pick, setPick] = useState<Candidate | null>(null)
   const [choice, setChoice] = useState('')
   const [showErr, setShowErr] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-  const [added, setAdded] = useState<string[]>([])
   const search = useRef<HTMLInputElement>(null)
   const firstOpt = useRef<HTMLInputElement>(null)
-  const members = useMemo(() => new Set([...c.members.map((m) => m.userId), ...added]), [c.members, added])
   const searching = !!q.trim() && (res.loading || term !== q.trim())
 
+  // --- app tab ---
+  const [appQ, setAppQ] = useState('')
+  const [appTerm, setAppTerm] = useState('')
+  useEffect(() => {
+    const id = window.setTimeout(() => setAppTerm(appQ.trim()), 250)
+    return () => window.clearTimeout(id)
+  }, [appQ])
+  const appRes = useAppCandidates(appTerm, activeTab === 'app')
+  const [busyAppId, setBusyAppId] = useState<string | null>(null)
+  const appSearchRef = useRef<HTMLInputElement>(null)
+  const appSearching = !!appQ.trim() && (appRes.loading || appTerm !== appQ.trim())
+
+  const switchTab = (tab: AddTab) => {
+    setActiveTab(tab)
+    setErr(null)
+    if (tab === 'member') window.setTimeout(() => search.current?.focus(), 0)
+    else window.setTimeout(() => appSearchRef.current?.focus(), 0)
+  }
+
+  // --- member tab handlers ---
   const blockedWhy = (cand: Candidate) =>
-    members.has(cand.userId) ? 'Sudah anggota cohort ini.'
-      : cand.owing ? 'Masih berutang di cohort sebelumnya. Tandai lunas dulu sebelum bisa ditambah.'
+    members.has(cand.userId) ? t('already_member')
+      : cand.owing ? t('creator_owing')
         : null
 
   const choose = (cand: Candidate) => {
@@ -649,9 +680,8 @@ function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () =
     window.setTimeout(() => search.current?.focus(), 0)
   }
 
-  // Disabled radios cannot take focus: aim at the first one that can.
-  const firstEnabled = pick ? optionsFor(pick).find((o) => !o.disabled)?.value : undefined
-  const choiceErr = !choice ? 'Pilih aplikasi yang dibawa, atau tester murni.' : undefined
+  const firstEnabled = pick ? optionsFor(pick).find((o) => !isOptDisabled(o))?.value : undefined
+  const choiceErr = !choice ? t('pick_app_error') : undefined
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (busy || !pick) return
@@ -661,10 +691,11 @@ function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () =
     try {
       await addCohortMember(c.id, pick.userId, appId)
       const app = pick.apps.find((a) => a.id === appId)
-      toast(app ? `${nameOf(pick)} ditambahkan dengan ${app.name}.` : `${nameOf(pick)} ditambahkan sebagai tester murni.`)
+      toast(app
+        ? t('toast_added_with_app', { name: nameOf(pick), app: app.name })
+        : t('toast_added_pure', { name: nameOf(pick) }))
       setAdded((xs) => [...xs, pick.userId])
       onAdded()
-      // Stay open for the next member: admins add a dozen creators in one go.
       setPick(null); setQ(''); setTerm('')
       window.setTimeout(() => search.current?.focus(), 0)
     } catch (x) {
@@ -674,93 +705,196 @@ function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () =
     }
   }
 
-  const status = !q.trim() ? '' : searching ? 'Mencari…' : res.error ? '' : res.data.length === 0
-    ? `Tidak ada anggota yang cocok dengan “${term}”.`
-    : `${res.data.length} anggota cocok${res.data.length >= 20 ? '. Hanya 20 pertama yang tampil; persempit pencarian.' : '.'}`
+  const memberStatus = !q.trim() ? '' : searching ? t('searching') : res.error ? '' : res.data.length === 0
+    ? t('search_no_results', { term })
+    : res.data.length >= 20
+      ? t('search_members_count_max', { n: res.data.length })
+      : t('search_members_count', { n: res.data.length })
+
+  // --- app tab handlers ---
+  const appBlockedWhy = (cand: AppCandidate) =>
+    members.has(cand.creatorId) ? t('creator_already_member')
+      : cand.inCohort !== null ? t('already_in_cohort', { cohort: cand.inCohort || 'cohort lain yang belum ditutup' })
+        : cand.creatorOwing ? t('creator_owing')
+          : null
+
+  const addApp = async (cand: AppCandidate) => {
+    if (busyAppId) return
+    setBusyAppId(cand.appId); setErr(null)
+    try {
+      await addCohortMember(c.id, cand.creatorId, cand.appId)
+      toast(t('toast_added_app', { name: cand.creatorName || t('member_fallback'), app: cand.appName }))
+      setAdded((xs) => [...xs, cand.creatorId])
+      onAdded()
+    } catch (x) {
+      setErr(errorText(x))
+    } finally {
+      setBusyAppId(null)
+    }
+  }
+
+  const appStatus = !appQ.trim() ? '' : appSearching ? t('searching') : appRes.error ? '' : appRes.data.length === 0
+    ? t('search_no_app_results', { term: appTerm })
+    : appRes.data.length >= 20
+      ? t('search_apps_count_max', { n: appRes.data.length })
+      : t('search_apps_count', { n: appRes.data.length })
 
   return (
     <form onSubmit={submit} noValidate>
       <div className="sheet-body">
         <div>
-          <h2>Tambah anggota</h2>
-          <p className="lede">ke <b>{c.name}</b> · <span className="num">{c.appCount}/{MIN_APPS}</span> aplikasi</p>
+          <h2>{t('add_member_title')}</h2>
+          <p className="lede">{t('add_member_to')} <b>{c.name}</b> · <span className="num">{c.appCount}/{MIN_APPS}</span> {t('add_member_apps_suffix')}</p>
         </div>
 
-        {!pick ? (
-          <>
-            <div className="field">
-              <label htmlFor="am-q">Cari anggota</label>
-              <span className="search">
-                <IconSearch aria-hidden="true" />
-                <input id="am-q" ref={search} className="input ch-search" type="search" enterKeyHint="search" autoComplete="off" spellCheck={false} maxLength={50}
-                  value={q} onChange={(e) => setQ(e.target.value)} aria-describedby="am-q-hint am-q-status"
-                  onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }} />
-              </span>
-              <span className="hint" id="am-q-hint">Nama atau email tersamar, misalnya “bu”. Anggota harus sudah pernah masuk ke TesBareng.</span>
-            </div>
-            <p className="meta num" id="am-q-status" role="status" aria-live="polite">{status}</p>
-            {res.error ? <ErrorBox text="Pencarian gagal." onRetry={res.retry} /> : q.trim() && !searching && res.data.length > 0 && (
-              <ul className="ch-cands" aria-label="Hasil pencarian">
-                {res.data.map((cand) => {
-                  const why = blockedWhy(cand)
-                  const free = cand.apps.filter((a) => a.inCohort == null).length
-                  return (
-                    <li key={cand.userId}>
-                      <button type="button" className="ch-cand" aria-disabled={why ? true : undefined} onClick={() => choose(cand)}
-                        aria-describedby={`cand-${cand.userId}`}>
-                        <Avatar name={nameOf(cand)} photo={cand.photoURL} />
-                        <span className="cell-2 grow">
-                          <b>{nameOf(cand)}</b>
-                          <span>{cand.maskedEmail}</span>
-                          <span id={`cand-${cand.userId}`} className="ch-cand-why">
-                            {why ? <><span className="ch-glyph" aria-hidden="true">{cand.owing && !members.has(cand.userId) ? '!' : '✓'}</span>{why}</>
-                              : cand.apps.length === 0 ? 'Belum punya aplikasi: masuk sebagai tester murni.'
-                                : `${cand.apps.length} aplikasi${free < cand.apps.length ? `, ${free} bisa dibawa` : ''}.`}
+        <div className="tabs" role="tablist" aria-label={t('add_member_title')}>
+          <button type="button" className="tab" role="tab" id="am-tab-member" aria-selected={activeTab === 'member'}
+            aria-controls="am-panel-member" onClick={() => switchTab('member')}>
+            {t('tab_members')}
+          </button>
+          <button type="button" className="tab" role="tab" id="am-tab-app" aria-selected={activeTab === 'app'}
+            aria-controls="am-panel-app" onClick={() => switchTab('app')}>
+            {t('tab_apps')}
+          </button>
+        </div>
+
+        {/* ---- member tab panel ---- */}
+        <div id="am-panel-member" role="tabpanel" aria-labelledby="am-tab-member" hidden={activeTab !== 'member'}>
+          {!pick ? (
+            <>
+              <div className="field">
+                <label htmlFor="am-q">{t('search_member_label')}</label>
+                <span className="search">
+                  <IconSearch aria-hidden="true" />
+                  <input id="am-q" ref={search} className="input ch-search" type="search" enterKeyHint="search" autoComplete="off" spellCheck={false} maxLength={50}
+                    value={q} onChange={(e) => setQ(e.target.value)} aria-describedby="am-q-hint am-q-status"
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }} />
+                </span>
+                <span className="hint" id="am-q-hint">{t('search_member_hint')}</span>
+              </div>
+              <p className="meta num" id="am-q-status" role="status" aria-live="polite">{memberStatus}</p>
+              {res.error ? <ErrorBox text={t('search_failed')} onRetry={res.retry} /> : q.trim() && !searching && res.data.length > 0 && (
+                <ul className="ch-cands" aria-label={t('search_results_label')}>
+                  {res.data.map((cand) => {
+                    const why = blockedWhy(cand)
+                    const free = cand.apps.filter((a) => a.inCohort == null).length
+                    return (
+                      <li key={cand.userId}>
+                        <button type="button" className="ch-cand" aria-disabled={why ? true : undefined} onClick={() => choose(cand)}
+                          aria-describedby={`cand-${cand.userId}`}>
+                          <Avatar name={nameOf(cand)} photo={cand.photoURL} />
+                          <span className="cell-2 grow">
+                            <b>{nameOf(cand)}</b>
+                            <span>{cand.maskedEmail}</span>
+                            <span id={`cand-${cand.userId}`} className="ch-cand-why">
+                              {why ? <><span className="ch-glyph" aria-hidden="true">{cand.owing && !members.has(cand.userId) ? '!' : '✓'}</span>{why}</>
+                                : cand.apps.length === 0 ? t('no_apps_pure_tester')
+                                  : free < cand.apps.length
+                                    ? t('cand_apps_count_some_free', { total: cand.apps.length, free })
+                                    : t('cand_apps_count', { total: cand.apps.length })}
+                            </span>
                           </span>
-                        </span>
-                        {!why && <span className="ch-cand-go" aria-hidden="true">Pilih</span>}
-                      </button>
-                    </li>
+                          {!why && <span className="ch-cand-go" aria-hidden="true">{t('select_cand')}</span>}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              {q.trim() && !searching && !res.error && res.data.length === 0 && (
+                <Empty title={t('empty_no_members_title', { term })}>
+                  <p>{t('empty_no_members_body')}</p>
+                </Empty>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="ch-picked">
+                <Avatar name={nameOf(pick)} photo={pick.photoURL} />
+                <span className="cell-2 grow"><b>{nameOf(pick)}</b><span>{pick.maskedEmail}</span></span>
+                <button type="button" className="text-action" onClick={back}>{t('change_member')}</button>
+              </div>
+              <fieldset className="fieldset ch-opts" aria-describedby={showErr && choiceErr ? 'am-opt-err' : 'am-opt-hint'}>
+                <legend>{t('join_as_legend')}</legend>
+                <p className="hint ch-opt-hint" id="am-opt-hint">{t('one_app_per_member_hint')}</p>
+                {optionsFor(pick).map((o) => {
+                  const disabled = isOptDisabled(o)
+                  const disabledReason = disabled
+                    ? t('already_in_cohort', { cohort: o.inCohort ?? t('in_unnamed_cohort') })
+                    : undefined
+                  return (
+                    <label key={o.value} className={`ch-opt ${disabled ? 'off' : ''}`}>
+                      <input ref={o.value === firstEnabled ? firstOpt : undefined} type="radio" name="am-app" value={o.value} checked={choice === o.value} disabled={disabled}
+                        onChange={() => { setChoice(o.value); setShowErr(false) }} aria-describedby={disabled ? `opt-${o.value}` : undefined} />
+                      <span className="cell-2">
+                        <b>{o.value === 'pure' ? t('pure_tester_option') : o.label}</b>
+                        {disabled && <span id={`opt-${o.value}`}>{disabledReason}</span>}
+                      </span>
+                    </label>
                   )
                 })}
-              </ul>
-            )}
-            {q.trim() && !searching && !res.error && res.data.length === 0 && (
-              <Empty title={`Tidak ada anggota dengan nama atau email “${term}”.`}>
-                <p>Calon anggota perlu masuk ke TesBareng sekali dengan akun Google sebelum bisa ditambahkan.</p>
-              </Empty>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="ch-picked">
-              <Avatar name={nameOf(pick)} photo={pick.photoURL} />
-              <span className="cell-2 grow"><b>{nameOf(pick)}</b><span>{pick.maskedEmail}</span></span>
-              <button type="button" className="text-action" onClick={back}>Ganti anggota</button>
-            </div>
-            <fieldset className="fieldset ch-opts" aria-describedby={showErr && choiceErr ? 'am-opt-err' : 'am-opt-hint'}>
-              <legend>Ikut sebagai</legend>
-              <p className="hint ch-opt-hint" id="am-opt-hint">Satu aplikasi per anggota. Aplikasi yang sudah ada di cohort lain yang belum ditutup tidak bisa dibawa.</p>
-              {optionsFor(pick).map((o) => (
-                <label key={o.value} className={`ch-opt ${o.disabled ? 'off' : ''}`}>
-                  <input ref={o.value === firstEnabled ? firstOpt : undefined} type="radio" name="am-app" value={o.value} checked={choice === o.value} disabled={!!o.disabled}
-                    onChange={() => { setChoice(o.value); setShowErr(false) }} aria-describedby={o.disabled ? `opt-${o.value}` : undefined} />
-                  <span className="cell-2">
-                    <b>{o.label}</b>
-                    {o.disabled && <span id={`opt-${o.value}`}>{o.disabled}</span>}
-                  </span>
-                </label>
-              ))}
-              <span className={showErr && choiceErr ? 'hint err' : 'sr-only'} id="am-opt-err" aria-live="polite">{showErr ? choiceErr : ''}</span>
-            </fieldset>
-          </>
-        )}
+                <span className={showErr && choiceErr ? 'hint err' : 'sr-only'} id="am-opt-err" aria-live="polite">{showErr ? choiceErr : ''}</span>
+              </fieldset>
+            </>
+          )}
+        </div>
+
+        {/* ---- app tab panel ---- */}
+        <div id="am-panel-app" role="tabpanel" aria-labelledby="am-tab-app" hidden={activeTab !== 'app'}>
+          <div className="field">
+            <label htmlFor="am-app-q">{t('search_app_label')}</label>
+            <span className="search">
+              <IconSearch aria-hidden="true" />
+              <input id="am-app-q" ref={appSearchRef} className="input ch-search" type="search" enterKeyHint="search" autoComplete="off" spellCheck={false} maxLength={50}
+                value={appQ} onChange={(e) => setAppQ(e.target.value)} aria-describedby="am-app-q-hint am-app-q-status"
+                onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }} />
+            </span>
+            <span className="hint" id="am-app-q-hint">{t('search_app_hint')}</span>
+          </div>
+          <p className="meta num" id="am-app-q-status" role="status" aria-live="polite">{appStatus}</p>
+          {appRes.error ? <ErrorBox text={t('search_app_failed')} onRetry={appRes.retry} /> : appQ.trim() && !appSearching && appRes.data.length > 0 && (
+            <ul className="ch-cands" aria-label={t('search_app_results_label')}>
+              {appRes.data.map((cand) => {
+                const why = appBlockedWhy(cand)
+                const isBusy = busyAppId === cand.appId
+                return (
+                  <li key={cand.appId}>
+                    <div className="ch-cand" style={{ cursor: 'default' }} aria-disabled={why ? true : undefined}>
+                      <Avatar name={cand.appName} photo={null} />
+                      <span className="cell-2 grow">
+                        <b>{cand.appName}</b>
+                        <span>{cand.creatorName || t('member_fallback')} · {cand.creatorMaskedEmail}</span>
+                        {why && (
+                          <span className="ch-cand-why">
+                            <span className="ch-glyph" aria-hidden="true">!</span>{why}
+                          </span>
+                        )}
+                      </span>
+                      {!why && (
+                        <button type="button" className="btn sm" aria-busy={isBusy || undefined}
+                          onClick={() => addApp(cand)} disabled={!!busyAppId}>
+                          {isBusy ? t('adding_app') : t('add_app')}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          {appQ.trim() && !appSearching && !appRes.error && appRes.data.length === 0 && (
+            <Empty title={t('empty_no_apps_title', { term: appTerm })}>
+              <p>{t('empty_no_apps_body')}</p>
+            </Empty>
+          )}
+        </div>
+
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        {added.length > 0 && <span className="why num">{added.length} anggota ditambahkan</span>}
-        <button type="button" className="btn" onClick={onClose}>{added.length > 0 ? 'Selesai' : 'Tutup'}</button>
-        {pick && <button className="btn primary" aria-busy={busy || undefined}>{busy ? 'Menambahkan…' : 'Tambahkan ke cohort'}</button>}
+        {added.length > 0 && <span className="why num">{t('members_added', { n: added.length })}</span>}
+        <button type="button" className="btn" onClick={onClose}>{added.length > 0 ? t('done') : t('close')}</button>
+        {activeTab === 'member' && pick && <button className="btn primary" aria-busy={busy || undefined}>{busy ? t('adding') : t('add_to_cohort')}</button>}
       </div>
     </form>
   )
@@ -1136,7 +1270,7 @@ function ReminderPanel({ c }: { c: CohortDetail }) {
 function waError(v: string): string | undefined {
   const t = v.trim()
   if (!t) return undefined
-  if (!t.startsWith(WA_PREFIX)) return `Link harus diawali ${WA_PREFIX}. Salin dari “Undang ke grup lewat link” di WhatsApp.`
+  if (!t.startsWith(WA_PREFIX)) return `Link harus diawali ${WA_PREFIX}. Salin dari "Undang ke grup lewat link" di WhatsApp.`
   if (t.length <= WA_PREFIX.length || /\s/.test(t)) return 'Link belum lengkap. Salin ulang link undangan grupnya.'
   return undefined
 }

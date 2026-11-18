@@ -6,6 +6,7 @@ import { useMyTodos } from '../lib/todos'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { Avatar, useToast } from './bits'
 import { useReducedMotion, useTheme } from '../lib/theme'
+import { useI18n, useT } from '../lib/i18n'
 import { IconAdmin, IconApps, IconBook, IconClose, IconCohort, IconMenu, IconSignOut, IconSun, IconMoon, IconTodo, IconUser, Mark } from './icons'
 
 export function Shell({ children }: { children: ReactNode }) {
@@ -14,17 +15,17 @@ export function Shell({ children }: { children: ReactNode }) {
   const { user, isAdmin, ready, signIn, signOut } = useAuth()
   const toast = useToast()
   const mine = useAppsBy(user?.uid)
-  // Same list as Tugas saya, so the badge and the page always agree.
   const owed = useMyTodos(user?.uid, isAdmin).total
   const menuBtn = useRef<HTMLButtonElement>(null)
   const closeBtn = useRef<HTMLButtonElement>(null)
   const wasOpen = useRef(false)
   const { dark, toggle: toggleTheme } = useTheme(useReducedMotion())
+  const { locale, setLocale } = useI18n()
+  const t = useT()
 
   useEffect(() => setOpen(false), [pathname])
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
-    // Drawer focus (WCAG 2.4.3): into the drawer on open, back to the menu button on close.
     if (open) closeBtn.current?.focus()
     else if (wasOpen.current) menuBtn.current?.focus()
     wasOpen.current = open
@@ -40,37 +41,36 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="app dark-ready">
-      <a className="btn skip-link" href="#main" inert={open}>Langsung ke isi</a>
-      {/* While the drawer is open, everything behind it is inert, so focus cannot slip under it (WCAG 2.4.11). */}
+      <a className="btn skip-link" href="#main" inert={open}>{t('skip_to_content')}</a>
       <header className="topbar" inert={open}>
         <Link to="/" className="brand"><Mark />TesBareng</Link>
         <span className="spacer" />
-        <button ref={menuBtn} className="menu-toggle" aria-label="Buka menu" aria-expanded={open} aria-controls="nav" onClick={() => setOpen(true)}>
+        <button ref={menuBtn} className="menu-toggle" aria-label={t('open_menu')} aria-expanded={open} aria-controls="nav" onClick={() => setOpen(true)}>
           <IconMenu />
         </button>
       </header>
 
-      <aside id="nav" className={`sidebar ${open ? 'open' : ''}`} aria-label="Navigasi">
+      <aside id="nav" className={`sidebar ${open ? 'open' : ''}`} aria-label={t('nav_main_label')}>
         <div className="sidebar-head">
           <Link to="/" className="brand"><Mark />TesBareng</Link>
           <span className="spacer" />
-          <button ref={closeBtn} className="menu-toggle close" aria-label="Tutup menu" onClick={() => setOpen(false)}><IconClose /></button>
+          <button ref={closeBtn} className="menu-toggle close" aria-label={t('close_menu')} onClick={() => setOpen(false)}><IconClose /></button>
         </div>
-        <p className="scope">Komunitas <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP.replace('@googlegroups.com', '')}</a></p>
+        <p className="scope">{t('nav_community')} <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP.replace('@googlegroups.com', '')}</a></p>
 
-        <nav className="nav-list primary" aria-label="Menu utama">
-          <NavLink to="/apps" end className="nav-item"><IconApps /><span className="label">Aplikasi</span></NavLink>
-          <NavLink to="/cohorts" className="nav-item"><IconCohort /><span className="label">Cohort</span></NavLink>
-          <NavLink to="/me" className="nav-item"><IconTodo /><span className="label">Tugas saya</span>{owed > 0 && <span className="count num">{owed > 99 ? '99+' : owed}<span className="sr-only"> tugas tertunda</span></span>}</NavLink>
-          {user && <NavLink to={`/u/${user.uid}`} className="nav-item"><IconUser /><span className="label">Profil saya</span></NavLink>}
-          <NavLink to="/about" className="nav-item"><IconBook /><span className="label">Aturan main</span></NavLink>
-          {isAdmin && <NavLink to="/admin" className="nav-item"><IconAdmin /><span className="label">Admin</span></NavLink>}
+        <nav className="nav-list primary" aria-label={t('nav_main_label')}>
+          <NavLink to="/apps" end className="nav-item"><IconApps /><span className="label">{t('nav_apps')}</span></NavLink>
+          <NavLink to="/cohorts" className="nav-item"><IconCohort /><span className="label">{t('nav_cohort')}</span></NavLink>
+          <NavLink to="/me" className="nav-item"><IconTodo /><span className="label">{t('nav_tasks')}</span>{owed > 0 && <span className="count num">{owed > 99 ? '99+' : owed}<span className="sr-only"> {t('nav_tasks_pending', { n: owed })}</span></span>}</NavLink>
+          {user && <NavLink to={`/u/${user.uid}`} className="nav-item"><IconUser /><span className="label">{t('nav_profile')}</span></NavLink>}
+          <NavLink to="/about" className="nav-item"><IconBook /><span className="label">{t('nav_about')}</span></NavLink>
+          {isAdmin && <NavLink to="/admin" className="nav-item"><IconAdmin /><span className="label">{t('nav_admin')}</span></NavLink>}
         </nav>
 
         {mine.data.length > 0 && (
           <>
-            <p className="group-label">Aplikasi saya</p>
-            <nav className="nav-list" aria-label="Aplikasi saya">
+            <p className="group-label">{t('my_apps_group')}</p>
+            <nav className="nav-list" aria-label={t('my_apps_nav_label')}>
               {mine.data.map((a) => (
                 <NavLink key={a.id} to={`/apps/${a.id}`} className="nav-item">
                   <span className="label">{a.name}</span>
@@ -82,20 +82,28 @@ export function Shell({ children }: { children: ReactNode }) {
 
         <div className="bottom">
           <button type="button" className="btn theme-toggle" onClick={toggleTheme} aria-pressed={dark}>
-            {dark ? <IconMoon /> : <IconSun />}<span>{dark ? 'Mode gelap: nyala' : 'Mode gelap: mati'}</span>
+            {dark ? <IconMoon /> : <IconSun />}<span>{dark ? t('dark_mode_on') : t('dark_mode_off')}</span>
+          </button>
+          {/* Language toggle: label is always in the target language so it's readable regardless of current locale */}
+          <button type="button" className="btn theme-toggle" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
+            aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
+            <span style={{ fontWeight: 800, fontSize: 'var(--fs-caption)', letterSpacing: '0.08em', minWidth: 20 }} aria-hidden="true">
+              {locale === 'id' ? 'EN' : 'ID'}
+            </span>
+            <span>{locale === 'id' ? 'Switch to English' : 'Ganti ke Indonesia'}</span>
           </button>
           {!ready ? null : user ? (
             <div className="user-row">
               <Link to={`/u/${user.uid}`} className="user-info">
                 <Avatar name={user.displayName ?? '?'} photo={user.photoURL} />
-                <span className="who"><b>{user.displayName ?? 'Anggota'}</b><span>Lihat profil</span></span>
+                <span className="who"><b>{user.displayName ?? t('member_fallback')}</b><span>{t('view_profile')}</span></span>
               </Link>
-              <button className="btn-icon" onClick={() => signOut()} aria-label="Keluar" title="Keluar">
+              <button className="btn-icon" onClick={() => signOut()} aria-label={t('sign_out')} title={t('sign_out')}>
                 <IconSignOut />
               </button>
             </div>
           ) : (
-            <button className="btn block" onClick={login}>Masuk dengan Google</button>
+            <button className="btn block" onClick={login}>{t('sign_in_google')}</button>
           )}
         </div>
       </aside>

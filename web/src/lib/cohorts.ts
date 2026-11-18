@@ -272,6 +272,64 @@ export const useMemberCandidates = (query: string, enabled: boolean) => {
   )
 }
 
+export interface AppCandidate {
+  appId: string
+  appName: string
+  creatorId: string
+  creatorName: string
+  creatorPhotoURL: string | null
+  creatorMaskedEmail: string
+  /** null = not in any open cohort */
+  inCohort: string | null
+  /** creator is Owing in some cohort */
+  creatorOwing: boolean
+}
+
+/**
+ * Admin: apps matching a name, with creator info and open-cohort state, for the "Tambah aplikasi" tab.
+ * Max 20 rows. The server re-checks every rule.
+ */
+export const useAppCandidates = (query: string, enabled: boolean) => {
+  const term = query.replace(/[,()*%\\:"']/g, ' ').trim().slice(0, 50)
+  return useFetch(
+    enabled && term
+      ? async () => {
+          const apps = await rows<Row[]>(
+            supabase.from('apps')
+              .select('id, name, creator_id, profile:profiles!apps_creator_id_fkey(display_name, photo_url, masked_email)')
+              .ilike('name', `*${term}*`)
+              .eq('deleted', false)
+              .order('name')
+              .limit(20),
+          )
+          if (apps.length === 0) return [] as AppCandidate[]
+          const appIds = apps.map((a) => a.id as string)
+          const creatorIds = [...new Set(apps.map((a) => a.creator_id as string))]
+          const [memberships, owingRows] = await Promise.all([
+            rows<Row[]>(supabase.from('cohort_members').select('app_id, cohort:cohorts(name, status)').in('app_id', appIds)),
+            rows<Row[]>(supabase.from('cohort_members').select('user_id').in('user_id', creatorIds).eq('standing', 'owing')),
+          ])
+          const openCohortOf = new Map<string, string>()
+          for (const m of memberships) {
+            if (m.app_id && m.cohort?.status !== 'closed') openCohortOf.set(m.app_id as string, m.cohort?.name ?? '')
+          }
+          const owing = new Set(owingRows.map((r) => r.user_id as string))
+          return apps.map((a): AppCandidate => ({
+            appId: a.id,
+            appName: a.name,
+            creatorId: a.creator_id,
+            creatorName: a.profile?.display_name ?? '',
+            creatorPhotoURL: a.profile?.photo_url ?? null,
+            creatorMaskedEmail: a.profile?.masked_email ?? '',
+            inCohort: openCohortOf.get(a.id as string) ?? null,
+            creatorOwing: owing.has(a.creator_id as string),
+          }))
+        }
+      : null,
+    [] as AppCandidate[], [term, enabled],
+  )
+}
+
 // ---------- writes (RPC only; errors carry the contract code in `hint`, show errorText()) ----------
 
 export const createCohort = (name: string) => rpc<string>('create_cohort', { p_name: name.trim() })

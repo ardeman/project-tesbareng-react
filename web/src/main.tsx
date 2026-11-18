@@ -6,6 +6,7 @@ import './styles.css'
 import { NotFound, ToastProvider } from './components/bits'
 import { Shell } from './components/Shell'
 import { AuthProvider, useAuth } from './lib/auth'
+import { I18nProvider } from './lib/i18n'
 import { usePageMeta } from './lib/pageMeta'
 // Each screen loads on demand (the landing never pays for work screens) to keep the main chunk under 150 KB gzip (ADR-001 budget).
 const AppList = lazy(() => import('./pages/AppList').then((m) => ({ default: m.AppList })))
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <ScrollToTop />
+      <I18nProvider>
       <AuthProvider>
         <ToastProvider>
           <Routes>
@@ -48,6 +50,7 @@ createRoot(document.getElementById('root')!).render(
           </Routes>
         </ToastProvider>
       </AuthProvider>
+      </I18nProvider>
     </BrowserRouter>
   </StrictMode>,
 )
