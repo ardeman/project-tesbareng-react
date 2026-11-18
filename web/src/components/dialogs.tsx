@@ -1,8 +1,12 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { api, cancelEmailListing, errorText, requestEmailListing, updateTesterAsCreator, useMyEmailListing } from '../lib/data'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
+import {
+  clearJoinProgress, emailPlayStepsDone, groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, openPlayInstall,
+  playInstallUrl, readEmailJoinProgress, readGroupJoinProgress, writeEmailJoinProgress, writeGroupJoinProgress,
+} from '../lib/joinProgress'
 import { fmtDate, isoDate, todayIso } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 import { BUILD_LIMITS, MANUAL_LIMITS, validateBuild, validateManual, type BuildInput, type ManualInput } from '../lib/validate'
@@ -23,146 +27,345 @@ function useSubmit(onDone: () => void) {
 
 export function JoinDialog({ open, onClose, app, rejoin }: { open: boolean; onClose: () => void; app: AppDoc; rejoin?: boolean }) {
   return (
-    <Dialog open={open} onClose={onClose} label={`Gabung sebagai tester ${app.name}`}>
-      {app.testerMethod === 'email_list'
-        ? <EmailJoinForm app={app} rejoin={rejoin} onClose={onClose} />
-        : <JoinForm app={app} rejoin={rejoin} onClose={onClose} />}
+    <Dialog open={open} onClose={onClose} label={isLiveApp(app) ? `Ulas ${app.name}` : `Gabung sebagai tester ${app.name}`}>
+      {isLiveApp(app)
+        ? <LiveJoinForm app={app} rejoin={rejoin} onClose={onClose} />
+        : app.testerMethod === 'email_list'
+          ? <EmailJoinForm app={app} rejoin={rejoin} onClose={onClose} />
+          : <JoinForm app={app} rejoin={rejoin} onClose={onClose} />}
     </Dialog>
   )
 }
 
-function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
+/** Production apps: Play Store install → catat (public review comes after join). */
+function LiveJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
   const toast = useToast()
-  const [c, setC] = useState({ joinedGroup: false, optedIn: false, installed: false })
-  const { busy, err, run } = useSubmit(() => { toast(`Anda tercatat sebagai tester ${app.name}. Hari aktif Anda dihitung mulai hari ini.`); onClose() })
-  const all = c.joinedGroup && c.optedIn && c.installed
+  const [done, setDone] = useState(() => readGroupJoinProgress(app.id))
+  const [step, setStep] = useState<'play' | 'confirm'>(() => (readGroupJoinProgress(app.id).installed ? 'confirm' : 'play'))
+  const { busy, err, run } = useSubmit(() => {
+    clearJoinProgress(app.id)
+    toast(`Anda tercatat mengulas ${app.name}. Tulis ulasan publik di Play Store, lalu tandai sudah kirim.`)
+    onClose()
+  })
+  const playUrl = playInstallUrl(app)
+
+  const markInstalled = () => {
+    const merged = { ...done, installed: true, group: true }
+    setDone(merged)
+    writeGroupJoinProgress(app.id, merged)
+    setStep('confirm')
+  }
+
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (!all) return
-    run(() => api.joinAsTester({ appId: app.id, checklist: { joinedGroup: true, optedIn: true, installed: true } }))
+    if (step !== 'confirm' || !done.installed) return
+    run(() => api.joinAsTester({ appId: app.id, checklist: { installed: true } }))
   }
+
   return (
-      <form onSubmit={submit}>
-        <div className="sheet-body">
-          <h2>Gabung sebagai tester {app.name}</h2>
-          {rejoin && <p className="muted">Hari aktif Anda dihitung lagi dari nol mulai hari ini.</p>}
-          <p className="lede">Google hanya menghitung tester yang benar-benar opt-in. Selesaikan tiga langkah ini di HP Anda dulu.</p>
-          <div>
-            <label className="check">
-              <input type="checkbox" checked={c.joinedGroup} onChange={(e) => setC({ ...c, joinedGroup: e.target.checked })} />
-              <span><span className="t">Saya sudah gabung grup {COMMUNITY_GROUP}</span>
-                <span className="d"><a className="link" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Buka Google Group</a> dengan akun Google yang sama.</span></span>
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={c.optedIn} onChange={(e) => setC({ ...c, optedIn: e.target.checked })} />
-              <span><span className="t">Saya sudah buka link opt-in dan ketuk “Jadi penguji”</span>
-                <span className="d"><a className="link" href={app.optInUrl} target="_blank" rel="noreferrer">Buka link opt-in</a> di Google Play.</span></span>
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={c.installed} onChange={(e) => setC({ ...c, installed: e.target.checked })} />
-              <span><span className="t">Saya sudah memasang aplikasinya</span>
-                <span className="d">Biarkan terpasang sampai app ini lulus 14 hari Google, dihitung sejak semua kursi terisi.</span></span>
-            </label>
+    <form onSubmit={submit}>
+      <div className="sheet-body">
+        <h2>Ulas {app.name} di Play Store</h2>
+        {rejoin && <p className="muted">Hari aktif Anda dihitung lagi dari nol mulai hari ini.</p>}
+        <p className="lede">App ini sudah rilis production. Pasang dari Play Store, lalu catat di TesBareng. Setelah itu tulis ulasan publik di halaman Play.</p>
+        <WizardProgress labels={['Pasang di Play', 'Catat']} current={step === 'play' ? 0 : 1} doneFlags={[!!done.installed, false]} />
+        {step === 'play' ? (
+          <WizardStep
+            title="1. Buka Play Store dan pasang"
+            body={<>Ketuk tombol di bawah, pasang app-nya, lalu buka sekali. Akun Google di Play harus sama dengan yang Anda pakai di TesBareng.</>}
+            actionHref={playUrl}
+            actionLabel="Buka di Play Store"
+            onDone={markInstalled}
+            doneLabel="Sudah memasang"
+          />
+        ) : (
+          <div className="stack-12">
+            <p className="strong">2. Catat di TesBareng</p>
+            <p className="muted">Supaya creator melihat Anda di daftar. Setelah ini, tulis ulasan publik di Play Store (bintang + komentar dengan kata-kata Anda sendiri), lalu tekan Tandai sudah kirim.</p>
+            <button type="button" className="text-action" onClick={() => setStep('play')}>Kembali ke langkah pasang</button>
           </div>
-          {app.feedbackGuide && (
-            <div className="stack-8">
-              <p className="strong">Nanti, saat kirim feedback di Play</p>
-              <p className="guide-quote">{app.feedbackGuide}</p>
-              <p className="muted small">Tulis dengan kata-kata Anda sendiri. Ulasan yang sama persis dari banyak akun bisa dianggap tidak asli oleh Google.</p>
-            </div>
-          )}
-          {err && <ErrorBox text={err} />}
-        </div>
-        <div className="sheet-foot">
-          {!all && <span className="why" id="join-why">Centang ketiga langkah untuk lanjut.</span>}
-          <button type="button" className="btn" onClick={onClose}>Batal</button>
-          <button className="btn primary" disabled={!all || busy} aria-describedby={!all ? 'join-why' : undefined}>{busy ? 'Menyimpan…' : 'Gabung sebagai tester'}</button>
-        </div>
-      </form>
+        )}
+        {err && <ErrorBox text={err} />}
+      </div>
+      <div className="sheet-foot">
+        <button type="button" className="btn" onClick={onClose}>Batal</button>
+        {step === 'confirm' && (
+          <button className="btn primary" disabled={busy || !done.installed}>
+            {busy ? 'Menyimpan…' : 'Catat saya sebagai pengulas'}
+          </button>
+        )}
+      </div>
+    </form>
   )
 }
 
+type GroupStep = 'group' | 'play' | 'confirm'
+const GROUP_STEPS: GroupStep[] = ['group', 'play', 'confirm']
+
+function initialGroupStep(appId: string): GroupStep {
+  const p = readGroupJoinProgress(appId)
+  if (!p.group) return 'group'
+  if (!p.installed) return 'play'
+  return 'confirm'
+}
+
+/** One step at a time: Group → Play Store (install) → confirm on TesBareng. */
+function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
+  const toast = useToast()
+  const [step, setStep] = useState<GroupStep>(() => initialGroupStep(app.id))
+  const [done, setDone] = useState(() => readGroupJoinProgress(app.id))
+  const { busy, err, run } = useSubmit(() => {
+    clearJoinProgress(app.id)
+    toast(`Anda tercatat sebagai tester ${app.name}. Hari aktif Anda dihitung mulai hari ini.`)
+    onClose()
+  })
+  const playUrl = playInstallUrl(app)
+  const storeOk = hasStoreUrl(app)
+  const idx = GROUP_STEPS.indexOf(step)
+
+  const mark = (patch: typeof done, next: GroupStep) => {
+    const merged = { ...done, ...patch }
+    setDone(merged)
+    writeGroupJoinProgress(app.id, merged)
+    setStep(next)
+  }
+
+  const afterGroup = () => {
+    mark({ group: true }, 'play')
+    // On mobile, open Play Store right away so the user lands on Install.
+    if (isLikelyMobile()) openPlayInstall(app)
+  }
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (step !== 'confirm' || !groupPlayStepsDone(done)) return
+    // Play Store path implies they can install (= opted in via the community group).
+    run(() => api.joinAsTester({ appId: app.id, checklist: { joinedGroup: true, optedIn: true, installed: true } }))
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <div className="sheet-body">
+        <h2>Gabung sebagai tester {app.name}</h2>
+        {rejoin && <p className="muted">Hari aktif Anda dihitung lagi dari nol mulai hari ini.</p>}
+        <p className="lede">Paling mudah di HP. Gabung grup dulu, lalu buka Play Store dan pasang. Login TesBareng hanya di langkah terakhir.</p>
+        <WizardProgress
+          labels={['Gabung grup', 'Pasang di Play', 'Catat']}
+          current={idx}
+          doneFlags={[!!done.group, !!done.installed, false]}
+        />
+        {step === 'group' && (
+          <WizardStep
+            title="1. Gabung Google Group komunitas"
+            body={<>Ketuk tombol di bawah — Google akan minta <b>pilih akun dulu</b>. Pilih akun yang sama dengan Play Store, lalu di halaman grup ketuk <b>Bergabung</b> / Join. Jangan ganti akun setelah grup terbuka (tombol Join bisa hilang).</>}
+            actionHref={COMMUNITY_GROUP_URL}
+            actionLabel="Pilih akun & buka grup"
+            actionHint={COMMUNITY_GROUP}
+            onDone={afterGroup}
+            doneLabel="Sudah gabung grup"
+          />
+        )}
+        {step === 'play' && (
+          <WizardStep
+            title="2. Buka Play Store dan pasang"
+            body={storeOk
+              ? <>Ketuk tombol di bawah. Di HP, ketuk <b>Install</b> / Pasang, lalu buka app sekali. Kalau tombol Install belum muncul, tunggu sebentar atau buka ulang halaman Play.</>
+              : <>App ini belum punya link Play Store. Sementara pakai link opt-in: ketuk <b>Jadi penguji</b>, lalu Install.</>}
+            actionHref={playUrl}
+            actionLabel={storeOk ? 'Buka di Play Store' : 'Buka link opt-in'}
+            onBack={() => setStep('group')}
+            onDone={() => mark({ installed: true }, 'confirm')}
+            doneLabel="Sudah memasang"
+          />
+        )}
+        {step === 'confirm' && (
+          <div className="stack-12">
+            <p className="strong">3. Catat di TesBareng</p>
+            <p className="muted">Supaya hari aktif Anda terhitung bersama komunitas. Biarkan app terpasang selama uji 14 hari Google berjalan.</p>
+            <button type="button" className="text-action" onClick={() => setStep('play')}>Kembali ke langkah pasang</button>
+          </div>
+        )}
+        {err && <ErrorBox text={err} />}
+      </div>
+      <div className="sheet-foot">
+        <button type="button" className="btn" onClick={onClose}>Batal</button>
+        {step === 'confirm' && (
+          <button className="btn primary" disabled={busy || !groupPlayStepsDone(done)}>
+            {busy ? 'Menyimpan…' : 'Catat saya sebagai tester'}
+          </button>
+        )}
+      </div>
+    </form>
+  )
+}
+
+type EmailPhase = 'ask' | 'wait' | 'optin' | 'install' | 'confirm'
+
 /**
- * Email-list apps (ADR-011): Play Console takes this app's testers by email, not through
- * the community group. Three states: ask (with consent) → wait for the creator → opt in.
+ * Email-list apps (ADR-011): ask (consent) → wait → opt-in → install → confirm.
+ * Play steps are one screen at a time once the creator has listed the email.
  */
 function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
   const toast = useToast()
   const { user } = useAuth()
   const listing = useMyEmailListing(app.id, user?.uid)
-  // The full address lives only in the member's own session (ADR-005); profiles hold the masked one.
   const [email, setEmail] = useState<string | null>(null)
   useEffect(() => { supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null)) }, [])
   const [consent, setConsent] = useState(false)
-  const [c, setC] = useState({ optedIn: false, installed: false })
+  const [play, setPlay] = useState(() => readEmailJoinProgress(app.id))
+  const [playStep, setPlayStep] = useState<'optin' | 'install' | 'confirm'>(() => {
+    const p = readEmailJoinProgress(app.id)
+    if (!p.optedIn) return 'optin'
+    if (!p.installed) return 'install'
+    return 'confirm'
+  })
   const asked = useSubmit(() => listing.refresh())
-  const joined = useSubmit(() => { toast(`Anda tercatat sebagai tester ${app.name}. Hari aktif Anda dihitung mulai hari ini.`); onClose() })
+  const joined = useSubmit(() => {
+    clearJoinProgress(app.id)
+    toast(`Anda tercatat sebagai tester ${app.name}. Hari aktif Anda dihitung mulai hari ini.`)
+    onClose()
+  })
   const l = listing.data
-  const step = !l ? 'ask' : l.listedAt == null ? 'wait' : 'join'
-  const all = c.optedIn && c.installed
+  const phase: EmailPhase = !l ? 'ask' : l.listedAt == null ? 'wait' : playStep
+  const playUrl = playInstallUrl(app)
+  const storeOk = hasStoreUrl(app)
+
+  const markPlay = (patch: typeof play, next: 'optin' | 'install' | 'confirm') => {
+    const merged = { ...play, ...patch }
+    setPlay(merged)
+    writeEmailJoinProgress(app.id, merged)
+    setPlayStep(next)
+  }
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (step === 'ask' && consent) asked.run(async () => { await requestEmailListing(app.id); toast('Permintaan terkirim. Creator akan menambahkan email Anda.') })
-    if (step === 'join' && all) joined.run(() => api.joinAsTester({ appId: app.id, checklist: { optedIn: true, installed: true } }))
+    if (phase === 'ask' && consent) asked.run(async () => { await requestEmailListing(app.id); toast('Permintaan terkirim. Creator akan menambahkan email Anda.') })
+    if (phase === 'confirm' && emailPlayStepsDone(play)) {
+      joined.run(() => api.joinAsTester({ appId: app.id, checklist: { optedIn: true, installed: true } }))
+    }
   }
   const withdraw = () => asked.run(async () => { await cancelEmailListing(app.id); toast('Permintaan dibatalkan. Creator tidak lagi melihat email Anda.') })
   const err = asked.err ?? joined.err ?? listing.error
   const busy = asked.busy || joined.busy
 
+  const overviewIdx = phase === 'ask' ? 0 : phase === 'wait' ? 1 : phase === 'optin' ? 2 : phase === 'install' ? 3 : 4
+
   return (
-      <form onSubmit={submit}>
-        <div className="sheet-body">
-          <h2>Gabung sebagai tester {app.name}</h2>
-          {rejoin && <p className="muted">Hari aktif Anda dihitung lagi dari nol mulai hari ini.</p>}
-          <p className="lede">Aplikasi ini memakai daftar email di Play Console, bukan Google Group. Creator perlu menambahkan email Anda dulu sebelum Anda bisa opt-in.</p>
-          <ol className="steps" aria-label="Langkah">
-            <li aria-current={step === 'ask' ? 'step' : undefined}><span className="num" aria-hidden="true">{step !== 'ask' ? '✓' : '1'}</span><span>Minta ditambahkan{step !== 'ask' && <span className="muted small"> · selesai</span>}</span></li>
-            <li aria-current={step === 'wait' ? 'step' : undefined}><span className="num" aria-hidden="true">{step === 'join' ? '✓' : '2'}</span><span>Creator menambahkan email Anda{step === 'join' && <span className="muted small"> · selesai</span>}</span></li>
-            <li aria-current={step === 'join' ? 'step' : undefined}><span className="num" aria-hidden="true">3</span><span>Opt-in dan pasang aplikasinya</span></li>
-          </ol>
-          {listing.loading ? <p className="muted">Memuat…</p> : step === 'ask' ? (
-            <label className="check">
-              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-              <span><span className="t">Saya setuju creator {app.name} melihat email lengkap akun Google saya</span>
-                {email && <span className="d addr">{email}</span>}
-                <span className="d">Hanya creator aplikasi ini yang melihatnya, untuk ditempel di Play Console. Pastikan ini akun yang sama dengan akun Play Store di HP Anda. Anda bisa membatalkan kapan saja.</span></span>
-            </label>
-          ) : step === 'wait' ? (
-            <div className="notice info" role="status">
-              <span>Menunggu creator menambahkan email Anda · diminta <span className="num">{fmtDate(l!.requestedAt)}</span>. Anda akan bisa opt-in setelah ditandai “Sudah ditambahkan”.</span>
-            </div>
-          ) : (
-            <div>
-              <label className="check">
-                <input type="checkbox" checked={c.optedIn} onChange={(e) => setC({ ...c, optedIn: e.target.checked })} />
-                <span><span className="t">Saya sudah buka link opt-in dan ketuk “Jadi penguji”</span>
-                  <span className="d"><a className="link" href={app.optInUrl} target="_blank" rel="noreferrer">Buka link opt-in</a> di Google Play, dengan akun yang emailnya Anda bagikan.</span></span>
-              </label>
-              <label className="check">
-                <input type="checkbox" checked={c.installed} onChange={(e) => setC({ ...c, installed: e.target.checked })} />
-                <span><span className="t">Saya sudah memasang aplikasinya</span>
-                  <span className="d">Biarkan terpasang sampai app ini lulus 14 hari Google, dihitung sejak semua kursi terisi.</span></span>
-              </label>
-            </div>
-          )}
-          {err && <ErrorBox text={err} />}
-        </div>
-        <div className="sheet-foot">
-          {step !== 'ask' && !listing.loading && (
-            <button type="button" className="text-action quiet" style={{ marginRight: 'auto' }} disabled={busy} onClick={withdraw}>Batalkan permintaan</button>
-          )}
-          {step === 'ask' && !consent && <span className="why" id="join-why">Centang persetujuan untuk lanjut.</span>}
-          {step === 'join' && !all && <span className="why" id="join-why">Centang kedua langkah untuk lanjut.</span>}
-          <button type="button" className="btn" onClick={onClose}>{step === 'wait' ? 'Tutup' : 'Batal'}</button>
-          {step === 'ask' && (
-            <button className="btn primary" disabled={!consent || busy || listing.loading} aria-describedby={!consent ? 'join-why' : undefined}>{busy ? 'Mengirim…' : 'Minta ditambahkan'}</button>
-          )}
-          {step === 'join' && (
-            <button className="btn primary" disabled={!all || busy} aria-describedby={!all ? 'join-why' : undefined}>{busy ? 'Menyimpan…' : 'Gabung sebagai tester'}</button>
-          )}
-        </div>
-      </form>
+    <form onSubmit={submit}>
+      <div className="sheet-body">
+        <h2>Gabung sebagai tester {app.name}</h2>
+        {rejoin && <p className="muted">Hari aktif Anda dihitung lagi dari nol mulai hari ini.</p>}
+        <p className="lede">App ini memakai daftar email di Play Console (bukan Google Group). Creator harus menambahkan email Anda dulu, baru Anda bisa opt-in.</p>
+        <WizardProgress
+          labels={['Minta', 'Tunggu', 'Opt-in', 'Pasang', 'Catat']}
+          current={overviewIdx}
+          doneFlags={[!!l, !!(l && l.listedAt), !!play.optedIn, !!play.installed, false]}
+        />
+        {listing.loading ? <p className="muted">Memuat…</p> : phase === 'ask' ? (
+          <label className="check">
+            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+            <span><span className="t">Saya setuju creator {app.name} melihat email lengkap akun Google saya</span>
+              {email && <span className="d addr">{email}</span>}
+              <span className="d">Hanya creator app ini yang melihatnya, untuk ditempel di Play Console. Pastikan sama dengan akun Play Store di HP. Bisa dibatalkan kapan saja.</span></span>
+          </label>
+        ) : phase === 'wait' ? (
+          <div className="notice info" role="status" style={{ marginBottom: 0 }}>
+            <span>Menunggu creator menambahkan email Anda · diminta <span className="num">{fmtDate(l!.requestedAt)}</span>. Biasanya lewat grup WhatsApp atau TesBareng. Anda bisa menutup halaman ini dan kembali nanti.</span>
+          </div>
+        ) : phase === 'optin' ? (
+          <WizardStep
+            title="Jadi penguji di Google Play"
+            body={<>Buka link opt-in dengan akun yang emailnya Anda bagikan, lalu ketuk <b>Jadi penguji</b>.</>}
+            actionHref={app.optInUrl || playUrl || '#'}
+            actionLabel="Buka link opt-in"
+            onDone={() => {
+              markPlay({ optedIn: true }, 'install')
+              if (isLikelyMobile() && storeOk) openPlayInstall(app)
+            }}
+            doneLabel="Sudah jadi penguji"
+          />
+        ) : phase === 'install' ? (
+          <WizardStep
+            title="Pasang aplikasinya"
+            body={storeOk
+              ? <>Ketuk <b>Buka di Play Store</b>, lalu Install / Pasang dan buka sekali.</>
+              : <>Setelah jadi penguji, tombol Install muncul. Pakai link opt-in jika halaman Play belum tersedia.</>}
+            actionHref={playUrl}
+            actionLabel={storeOk ? 'Buka di Play Store' : 'Buka lagi link opt-in'}
+            onBack={() => setPlayStep('optin')}
+            onDone={() => markPlay({ installed: true }, 'confirm')}
+            doneLabel="Sudah memasang"
+          />
+        ) : (
+          <div className="stack-12">
+            <p className="strong">Catat di TesBareng</p>
+            <p className="muted">Supaya hari aktif Anda terhitung. Biarkan app terpasang selama uji berlangsung.</p>
+            <button type="button" className="text-action" onClick={() => setPlayStep('install')}>Kembali ke langkah pasang</button>
+          </div>
+        )}
+        {err && <ErrorBox text={err} />}
+      </div>
+      <div className="sheet-foot">
+        {phase !== 'ask' && !listing.loading && (
+          <button type="button" className="text-action quiet" style={{ marginRight: 'auto' }} disabled={busy} onClick={withdraw}>Batalkan permintaan</button>
+        )}
+        {phase === 'ask' && !consent && <span className="why" id="join-why">Centang persetujuan untuk lanjut.</span>}
+        <button type="button" className="btn" onClick={onClose}>{phase === 'wait' ? 'Tutup' : 'Batal'}</button>
+        {phase === 'ask' && (
+          <button className="btn primary" disabled={!consent || busy || listing.loading} aria-describedby={!consent ? 'join-why' : undefined}>{busy ? 'Mengirim…' : 'Minta ditambahkan'}</button>
+        )}
+        {phase === 'confirm' && (
+          <button className="btn primary" disabled={busy || !emailPlayStepsDone(play)}>{busy ? 'Menyimpan…' : 'Catat saya sebagai tester'}</button>
+        )}
+      </div>
+    </form>
+  )
+}
+
+function WizardProgress({ labels, current, doneFlags }: { labels: string[]; current: number; doneFlags: boolean[] }) {
+  return (
+    <ol className="steps wizard-steps" aria-label="Langkah">
+      {labels.map((label, i) => {
+        const done = doneFlags[i] || i < current
+        const here = i === current
+        return (
+          <li key={label} aria-current={here ? 'step' : undefined}>
+            <span className="num" aria-hidden="true">{done && !here ? '✓' : String(i + 1)}</span>
+            <span>{label}{done && !here && <span className="muted small"> · selesai</span>}</span>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+function WizardStep({
+  title, body, actionHref, actionLabel, actionHint, onDone, doneLabel, onBack,
+}: {
+  title: string
+  body: ReactNode
+  actionHref: string
+  actionLabel: string
+  actionHint?: string
+  onDone: () => void
+  doneLabel: string
+  onBack?: () => void
+}) {
+  return (
+    <div className="stack-12 wizard-step">
+      <div className="stack-8">
+        <p className="strong">{title}</p>
+        <p className="muted">{body}</p>
+        {actionHint && <p className="muted small addr">{actionHint}</p>}
+      </div>
+      <a className="btn primary" href={actionHref} target="_blank" rel="noreferrer" style={{ justifySelf: 'start' }}>
+        <IconExternal />{actionLabel}
+      </a>
+      <div className="wizard-step-actions">
+        {onBack && <button type="button" className="btn" onClick={onBack}>Kembali</button>}
+        <button type="button" className="btn" onClick={onDone}>{doneLabel}</button>
+      </div>
+    </div>
   )
 }
 
@@ -204,12 +407,14 @@ function FeedbackForm({ onClose, app, entry }: { onClose: () => void; app: AppDo
   return (
       <form onSubmit={save}>
         <div className="sheet-body">
-          <h2>{already ? 'Catatan feedback Anda' : 'Tandai sudah kirim feedback'}</h2>
+          <h2>{already ? 'Catatan feedback Anda' : (isLiveApp(app) ? 'Tandai sudah kirim ulasan' : 'Tandai sudah kirim feedback')}</h2>
           {!already && (
-            <p className="lede">Feedback ditulis di Google Play, bukan di sini: buka halaman aplikasi di Play Store, beri rating dan tulis apa yang berjalan, apa yang rusak, dan apa yang perlu diperbaiki.</p>
+            <p className="lede">{isLiveApp(app)
+              ? 'Tulis ulasan publik di halaman Play Store (bintang + komentar dengan kata-kata Anda sendiri). Ulasan itu tampil untuk semua orang, bukan hanya Testing feedback.'
+              : 'Feedback ditulis di Google Play, bukan di sini: buka halaman aplikasi di Play Store, beri rating dan tulis apa yang berjalan, apa yang rusak, dan apa yang perlu diperbaiki.'}</p>
           )}
           {!already && (
-            <a className="btn" style={{ justifySelf: 'start' }} href={app.storeUrl ?? app.optInUrl} target="_blank" rel="noreferrer"><IconExternal />Buka {app.name} di Play</a>
+            <a className="btn" style={{ justifySelf: 'start' }} href={playInstallUrl(app)} target="_blank" rel="noreferrer"><IconExternal />Buka {app.name} di Play</a>
           )}
           <div className="field">
             <label htmlFor="fb-device">Tipe HP / Versi Android <span className="opt">(opsional)</span></label>

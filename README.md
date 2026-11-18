@@ -109,8 +109,13 @@ For local Google OAuth, configure credentials in `supabase/.env` using
 ## Deploy
 
 The site is hosted on Vercel from `web/`. Set `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_ANON_KEY` in the Vercel project settings. `web/vercel.json`
-rewrites every route to `index.html` for client-side routing.
+`VITE_SUPABASE_ANON_KEY` in the Vercel project settings (optional
+`VITE_SITE_URL` for the canonical Open Graph origin). `web/vercel.json`
+rewrites non-`/api` routes to `index.html`. Social crawlers hitting
+`/apps/:id` are rewritten by `web/middleware.ts` to `/api/share/app`, which
+emits per-app Open Graph tags and a dynamic card at `/api/og/app`. After
+deploy, re-scrape a shared app link in Facebook’s Sharing Debugger or by
+pasting into WhatsApp.
 
 ## Repository layout
 

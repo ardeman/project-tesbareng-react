@@ -8,6 +8,7 @@ import { usePageMeta } from '../lib/pageMeta'
 import { errorText, setEmailReminders, usePublicProfile } from '../lib/data'
 import { useMyObligations } from '../lib/cohorts'
 import { useMyTodos } from '../lib/todos'
+import { isLiveApp } from '../lib/joinProgress'
 import { daysActive, relDay, openSeats, TARGET_DAYS } from '../lib/progress'
 
 export function Me() {
@@ -35,7 +36,7 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
   const suggestions = useMemo(() => {
     const mineIds = new Set(entries.data.map((e) => e.appId))
     return apps.data
-      .filter((a) => (a.status === 'recruiting' || a.status === 'testing') && a.creatorUid !== uid && !mineIds.has(a.id) && openSeats(a) > 0)
+      .filter((a) => (a.status === 'recruiting' || a.status === 'testing' || a.status === 'live') && a.creatorUid !== uid && !mineIds.has(a.id) && openSeats(a) > 0)
       .sort((a, b) => openSeats(b) - openSeats(a))
       .slice(0, 3)
   }, [apps.data, entries.data, uid])
@@ -112,8 +113,8 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                 ? (
                   <Empty title="Mulai dari dua langkah.">
                     <ol className="first-run">
-                      <li><a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Gabung Google Group komunitas<span className="sr-only"> (tab baru)</span></a>. Tanpa ini opt-in Anda tidak terhitung di Play Console.</li>
-                      <li>Pilih aplikasi di <Link to="/apps">daftar aplikasi</Link>, lalu tekan Gabung sebagai tester. Tugasnya muncul di sini.</li>
+                      <li><a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Pilih akun &amp; buka Google Group<span className="sr-only"> (tab baru)</span></a> — untuk app uji tertutup, akun yang sama dengan Play Store. App sudah rilis tidak perlu langkah ini.</li>
+                      <li>Pilih aplikasi di <Link to="/apps">daftar aplikasi</Link>. Ikuti panduan di halaman app: Play Store → pasang → catat (lalu ulasan publik kalau app sudah rilis). Tugasnya muncul di sini.</li>
                     </ol>
                   </Empty>
                 )
@@ -135,18 +136,20 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                       <Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
                       <span>
                         {kind === 'join'
-                          ? 'Ditugaskan melalui cohort. Opt-in dalam batas 48 jam.'
+                          ? (isLiveApp(app)
+                            ? 'Ditugaskan melalui cohort. App sudah rilis: pasang dari Play → catat di TesBareng → tulis ulasan publik, dalam 48 jam.'
+                            : 'Ditugaskan melalui cohort. Gabung grup → pasang dari Play → catat di TesBareng, dalam 48 jam.')
                           : kind === 'listed'
-                            ? 'Creator sudah menambahkan email Anda di Play Console. Sekarang opt-in, lalu daftar sebagai tester.'
+                            ? 'Creator sudah menambahkan email Anda. Sekarang buka Play / opt-in, pasang, lalu catat di TesBareng.'
                           : kind === 'emails'
                             ? `${count} tester menunggu emailnya Anda tambahkan di Play Console.`
                           : kind === 'build'
                             ? `Build baru dirilis ${relDay(app.lastBuildAt)}. Perbarui dari Play Store lalu uji lagi.`
-                            : `Hari ke-${daysActive(entry!)}. Feedback di Play belum Anda tandai terkirim.`}
+                            : `Hari ke-${daysActive(entry!)}. ${isLiveApp(app) ? 'Ulasan publik di Play' : 'Feedback di Play'} belum Anda tandai terkirim.`}
                       </span>
                     </span>
                     <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
-                      {kind === 'join' || kind === 'listed' ? 'Daftar sebagai tester' : kind === 'emails' ? 'Tambahkan email' : kind === 'build' ? 'Uji build baru' : 'Kirim feedback'}
+                      {kind === 'join' || kind === 'listed' ? 'Lanjut uji app' : kind === 'emails' ? 'Tambahkan email' : kind === 'build' ? 'Uji build baru' : (isLiveApp(app) ? 'Kirim ulasan' : 'Kirim feedback')}
                     </Link>
                   </li>
                 ))}

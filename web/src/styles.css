@@ -377,6 +377,29 @@ select.input { cursor: pointer; accent-color: var(--ink); }
 .steps li { display: flex; align-items: center; gap: var(--s-2); color: var(--muted); }
 .steps li .num { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; border: var(--bw) solid currentColor; border-radius: var(--r-full); font-size: var(--fs-small); font-weight: 700; }
 .steps li[aria-current="step"] { color: var(--ink); font-weight: 700; }
+.wizard-steps { gap: var(--s-2); }
+.wizard-step-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+
+/* Beginner Play-first guide on app detail (cold visitors from social shares) */
+.beginner-guide:focus { outline: none; }
+.beginner-guide:focus-visible { outline: 3px solid var(--kunyit); outline-offset: 2px; }
+.beginner-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border: var(--bw) solid var(--ink); background: var(--putih); }
+.beginner-steps > li {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-3); align-items: start;
+  padding: var(--s-3); border-top: var(--bw) solid var(--ink); color: var(--muted);
+}
+.beginner-steps > li:first-child { border-top: 0; }
+.beginner-steps > li .num {
+  flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; margin-top: 2px;
+  border: var(--bw) solid currentColor; border-radius: var(--r-full); font-size: var(--fs-small); font-weight: 800;
+}
+.beginner-steps > li.current { color: var(--ink); background: var(--kertas); }
+.beginner-steps > li.done { color: var(--ink); }
+.beginner-steps > li.done .num { background: var(--pandan); border-color: var(--ink); color: var(--on-fill); }
+.beginner-step-body { display: grid; gap: var(--s-2); min-width: 0; }
+.beginner-step-body .t { font-weight: 800; margin: 0; color: var(--ink); }
+.beginner-step-body .d { margin: 0; font-size: var(--fs-small); line-height: 1.4; }
+.beginner-step-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
 .email-list { list-style: none; margin: 0; padding: 0; }
 .email-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-1) var(--s-3); align-items: center; padding: var(--s-2) 0; border-top: var(--bw-row) solid var(--ink); }
 .email-list li:first-child { border-top: 0; }
