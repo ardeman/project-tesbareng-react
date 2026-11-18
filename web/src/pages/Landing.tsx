@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+﻿import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { usePageMeta } from '../lib/pageMeta'
 import { Link } from 'react-router-dom'
 import { StoryHeader, StoryFooter, WaIcon, useReducedMotion, useSignIn } from '../components/StoryChrome'
@@ -922,22 +922,22 @@ export function Landing() {
 
         <section className="lp-sec join theme-light" id="gabung" aria-labelledby="gabung-h">
           <div className="lp-wrap">
-            <p className=”lp-hud”><b aria-hidden=”true”>05</b>{t('landing_hud_join')}</p>
-            <h2 id=”gabung-h”>{t('landing_h2_join')}</h2>
-            <ol className=”steps rv”>
+            <p className="lp-hud"><b aria-hidden="true">05</b>{t('landing_hud_join')}</p>
+            <h2 id="gabung-h">{t('landing_h2_join')}</h2>
+            <ol className="steps rv">
               <li>
-                <span className=”n” aria-hidden=”true”>1</span>
+                <span className="n" aria-hidden="true">1</span>
                 <h3>{t('landing_step1_h')}</h3>
-                <p>{t('landing_step1_p1')}<b>{t('landing_step1_p_bold')}</b>{t('landing_step1_p2')}<code className=”email”>{COMMUNITY_GROUP}</code>{t('landing_step1_p3')}</p>
+                <p>{t('landing_step1_p1')}<b>{t('landing_step1_p_bold')}</b>{t('landing_step1_p2')}<code className="email">{COMMUNITY_GROUP}</code>{t('landing_step1_p3')}</p>
                 <CopyEmail onCopied={say} />
               </li>
               <li>
-                <span className=”n” aria-hidden=”true”>2</span>
+                <span className="n" aria-hidden="true">2</span>
                 <h3>{t('landing_step2_h')}</h3>
                 <p>{t('landing_step2_p1')}<b>{t('landing_step2_p_bold')}</b>{t('landing_step2_p2')}</p>
               </li>
               <li>
-                <span className=”n” aria-hidden=”true”>3</span>
+                <span className="n" aria-hidden="true">3</span>
                 <h3>{t('landing_step3_h')}</h3>
                 <p>{t('landing_step3_p')}</p>
               </li>
