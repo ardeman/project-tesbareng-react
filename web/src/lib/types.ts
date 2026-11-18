@@ -25,7 +25,8 @@ export interface AppDoc {
   id: string
   name: string
   description: string
-  optInUrl: string
+  /** Closed-test opt-in; null for live (production) apps that only need public reviews. */
+  optInUrl: string | null
   storeUrl?: string | null
   packageName?: string | null
   creatorUid: string

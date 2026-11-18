@@ -15,7 +15,7 @@
     </script>
     <meta name="color-scheme" content="light dark" />
 
-    <!-- Open Graph (ADR-010 §8). The SPA serves this one file for every route, so link previews always show the landing card. -->
+    <!-- Open Graph default (ADR-010 §8). Per-app previews: Vercel middleware rewrites crawler hits on /apps/:id to /api/share/app. -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://tesbareng.vercel.app/" />
     <meta property="og:site_name" content="TesBareng" />
