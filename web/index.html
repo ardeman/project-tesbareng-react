@@ -83,7 +83,8 @@
 
       /* Buttons: the touchable things carry the hard shadow */
       .lp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 14px 24px; font: 700 var(--t-button)/1.1 var(--font-text); color: var(--ink); text-decoration: none; white-space: nowrap; background: var(--putih); border: var(--rule); border-radius: var(--r-sm); box-shadow: var(--sh) var(--sh) 0 0 var(--ink); cursor: pointer; transition: transform var(--t-hover) var(--ease), box-shadow var(--t-hover) var(--ease); }
-      .lp-btn svg { flex: none; fill: currentColor; }
+      .lp-btn svg { flex: none; }
+      .lp-btn svg:not([data-brand="google"]) { fill: currentColor; }
       .lp .lp-btn--primary { background: var(--kunyit); color: var(--on-fill); }
       .lp .lp-btn--ink { background: var(--ink); color: var(--kertas); }
       .lp .lp-btn--wa { background: #25d366; color: var(--on-fill); }

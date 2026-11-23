@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge, Bar, Chip, Empty, ErrorBox, FeedbackChip, Seats, Skel, StatusPill, TierProgress, useToast } from '../components/bits'
-import { IconPlus } from '../components/icons'
+import { IconGoogle, IconPlus } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
@@ -24,7 +24,7 @@ export function Me() {
       <div className="state-page">
         <h1 className="page-title">{t('me_meta_title')}</h1>
         <p>{t('me_sign_in_body')}</p>
-        <button className="btn primary" onClick={() => signIn().catch((e) => toast(errorText(e, t)))}>{t('sign_in_google')}</button>
+        <button type="button" className="btn primary google-signin" onClick={() => signIn().catch((e) => toast(errorText(e, t)))}><IconGoogle />{t('sign_in_google')}</button>
       </div>
     )
   }

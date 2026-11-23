@@ -2,6 +2,7 @@
 import { usePageMeta } from '../lib/pageMeta'
 import { Link } from 'react-router-dom'
 import { StoryHeader, StoryFooter, WaIcon, useReducedMotion, useSignIn } from '../components/StoryChrome'
+import { IconGoogle } from '../components/icons'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL, WHATSAPP_URL } from '../lib/community'
 import { supabase } from '../lib/supabase'
 import { useT } from '../lib/i18n'
@@ -833,6 +834,7 @@ export function Landing() {
       <Link className={cls} to="/me">{t('nav_tasks')}</Link>
     ) : (
       <button type="button" className={cls} onClick={startSignIn}>
+        {long && <IconGoogle />}
         <span>{long ? t('sign_in_google') : <>{t('sign_in_short')}<span className="hide-xs"> {t('sign_in_suffix')}</span></>}</span>
       </button>
     )

@@ -4,10 +4,10 @@ import { useAuth } from '../lib/auth'
 import { useAppsBy, errorText } from '../lib/data'
 import { useMyTodos } from '../lib/todos'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
-import { Avatar, useToast } from './bits'
+import { Avatar, OverflowMenu, useToast } from './bits'
 import { useReducedMotion, useTheme } from '../lib/theme'
 import { useI18n, useT } from '../lib/i18n'
-import { IconAdmin, IconApps, IconBook, IconClose, IconCohort, IconMenu, IconSignOut, IconSun, IconMoon, IconTodo, IconUser, Mark } from './icons'
+import { IconAdmin, IconApps, IconBook, IconClose, IconCohort, IconGoogle, IconMenu, IconSun, IconMoon, IconTodo, IconUser, Mark } from './icons'
 
 export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -101,12 +101,19 @@ export function Shell({ children }: { children: ReactNode }) {
                 <Avatar name={user.displayName ?? '?'} photo={user.photoURL} />
                 <span className="who"><b>{user.displayName ?? t('member_fallback')}</b><span>{t('view_profile')}</span></span>
               </Link>
-              <button className="btn-icon" onClick={() => signOut()} aria-label={t('sign_out')} title={t('sign_out')}>
-                <IconSignOut />
-              </button>
+              <OverflowMenu
+                label={t('more_actions')}
+                items={[
+                  { label: t('view_profile'), to: `/u/${user.uid}` },
+                  { label: t('sign_out'), danger: true, onSelect: () => { void signOut() } },
+                ]}
+              />
             </div>
           ) : (
-            <button className="btn block" onClick={login}>{t('sign_in_google')}</button>
+            <button type="button" className="btn block google-signin" onClick={login}>
+              <IconGoogle />
+              {t('sign_in_google')}
+            </button>
           )}
         </div>
       </aside>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Chip, Dialog, Empty, ErrorBox, failToast, FeedbackChip, Field, fieldAria, NotFound, Skel, TesterChip, useToast } from '../components/bits'
-import { IconSearch } from '../components/icons'
+import { IconGoogle, IconSearch } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import { usePageMeta } from '../lib/pageMeta'
@@ -50,7 +50,7 @@ export function Admin() {
       <div className="state-page">
         <h1 className="page-title">{t('admin_sign_in_title')}</h1>
         <p>{t('admin_sign_in_body')}</p>
-        <button className="btn primary" onClick={() => signIn().catch((e) => toast(errorText(e, t)))}>{t('sign_in_google')}</button>
+        <button type="button" className="btn primary google-signin" onClick={() => signIn().catch((e) => toast(errorText(e, t)))}><IconGoogle />{t('sign_in_google')}</button>
       </div>
     )
   }

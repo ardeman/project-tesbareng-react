@@ -57,7 +57,13 @@ img, svg { display: block; }
 }
 .sidebar .bottom { margin-top: auto; display: grid; gap: var(--s-2); padding-top: var(--s-3); border-top: var(--bw) solid var(--ink); }
 .bottom-toggles { display: flex; gap: var(--s-2); }
+/* Theme/locale squares already use --target; keep a clear press gap on the sticky bottom. */
+.bottom-toggles .lp-sq { flex: none; }
 .user-row { display: flex; align-items: center; gap: 4px; min-height: var(--target); padding: 4px 0; }
+/* Account menu opens upward so it stays inside the sidebar bottom. */
+.sidebar .bottom .menu { top: auto; bottom: calc(100% + 6px); }
+.btn.google-signin { justify-content: center; gap: 10px; }
+.btn.google-signin svg { flex: none; }
 .user-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .user-row .who { min-width: 0; }
 .user-row .who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
