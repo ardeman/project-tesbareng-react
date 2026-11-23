@@ -20,6 +20,7 @@ import {
   groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, markResumeJoin, openPlayInstall, playInstallUrl,
   readGroupJoinProgress, takeResumeJoin, writeGroupJoinProgress, type GroupJoinProgress,
 } from '../lib/joinProgress'
+import { clearPlayUnreachable, isPlayUnreachable, markPlayUnreachable } from '../lib/playAccess'
 import {
   computeProgress, daysActive, fmtDate, fmtDateTime, fmtDayHeading, inDays, isNewBuild, isoDate, openSeats, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
   type Progress,
@@ -87,6 +88,7 @@ export function AppDetail() {
   const flow = useCheckInFlow(id, user && app.data && !app.data.deleted && app.data.creatorUid !== user.uid ? ownActive : undefined, builds.data.map((b) => b.id).join(','))
   const guideRef = useRef<HTMLElement>(null)
   const [guideTick, setGuideTick] = useState(0)
+  const [playTick, setPlayTick] = useState(0)
   const appId = app.data?.id
   const groupProgress = useMemo(() => (appId ? readGroupJoinProgress(appId) : {}), [appId, guideTick])
 
@@ -244,8 +246,34 @@ export function AppDetail() {
         { label: t('form_title_edit'), to: `/apps/${a.id}/edit` },
       ]
     }
+    // Soft device flag when Play shows "App not available" (no Play Console API).
+    if (!isOwner && mine?.status !== 'active' && mine?.status !== 'removed') {
+      const blocked = playTick >= 0 && isPlayUnreachable(a.id)
+      result.overflow = [
+        ...result.overflow,
+        blocked
+          ? {
+              label: t('appd_act_clear_play'),
+              onSelect: () => {
+                clearPlayUnreachable(a.id)
+                setPlayTick((n) => n + 1)
+                toast(t('appd_toast_play_cleared'))
+              },
+            }
+          : {
+              label: t('appd_act_report_play'),
+              onSelect: () => {
+                markPlayUnreachable(a.id)
+                setPlayTick((n) => n + 1)
+                toast(t('appd_toast_play_reported'))
+              },
+            },
+      ]
+    }
     return result
   })()
+
+  const playBlocked = !isOwner && mine?.status !== 'active' && mine?.status !== 'removed' && playTick >= 0 && isPlayUnreachable(a.id)
 
   return (
     <>
@@ -253,6 +281,14 @@ export function AppDetail() {
       <RecordHead app={a} p={progress} loading={testers.loading} actions={actions} assigned={myAssigned.data.get(a.id)} />
 
       <Finding app={a} p={progress} loading={loading} description={a.description} />
+
+      {playBlocked && (
+        <div className="notice" role="status">
+          <span>{t('appd_play_blocked_notice')}</span>
+          <span className="spacer" />
+          <button type="button" className="link" onClick={() => { clearPlayUnreachable(a.id); setPlayTick((n) => n + 1); toast(t('appd_toast_play_cleared')) }}>{t('appd_act_clear_play')}</button>
+        </div>
+      )}
 
       {isNewBuild(a) && builds.data[0] && !(mine?.status === 'active' && flow.isDone('updated_build', builds.data[0].id)) && (
         <div className="notice info" role="status">
@@ -463,6 +499,7 @@ function InfoPanel({ app, p, mine, isOwner, flow, beginnerGuideOutside }: {
           <dt>{t('appd_panel_unreplied')}</dt><dd className="num">{p.feedbackSent - p.replied}</dd>
         </dl>
         <p className="muted small">{t('appd_panel_play_console_hint')}</p>
+        {!isLiveApp(app) && <p className="muted small">{t('appd_creator_track_hint')}</p>}
         {guide}
       </section>
     )

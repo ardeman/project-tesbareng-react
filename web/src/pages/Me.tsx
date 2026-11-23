@@ -9,6 +9,7 @@ import { errorText, setEmailReminders, usePublicProfile } from '../lib/data'
 import { useMyObligations } from '../lib/cohorts'
 import { useMyTodos } from '../lib/todos'
 import { isLiveApp } from '../lib/joinProgress'
+import { clearPlayUnreachable, isPlayUnreachable } from '../lib/playAccess'
 import { daysActive, relDay, openSeats, TARGET_DAYS } from '../lib/progress'
 import { useT } from '../lib/i18n'
 
@@ -33,6 +34,8 @@ export function Me() {
 function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
   const t = useT()
   const { entries, apps, myApps, requests, testing, todos, total, loading } = useMyTodos(uid, isAdmin)
+  // Soft Play-unreachable flags live in localStorage; bump to re-read after clear.
+  const [playTick, setPlayTick] = useState(0)
   const profile = usePublicProfile(uid)
   const obligations = useMyObligations(uid)
 
@@ -140,15 +143,17 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                     <Link className={`btn sm${i === 0 ? ' primary' : ''}`} to={`/admin?bagian=cohort&cohort=${r.cohortId}`}>{t('me_review_requests')}</Link>
                   </li>
                 ))}
-                {todos.slice(0, 4).map(({ entry, app, kind, count }, i) => (
+                {todos.slice(0, 4).map(({ entry, app, kind, count }, i) => {
+                  const playBlocked = (kind === 'join' || kind === 'listed') && isPlayUnreachable(app.id) && playTick >= 0
+                  return (
                   <li className="row-line" key={`${kind}:${app.id}`}>
                     <span className="grow cell-2">
                       <Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
                       <span>
                         {kind === 'join'
-                          ? (isLiveApp(app) ? t('me_todo_join_live') : t('me_todo_join_group'))
+                          ? (playBlocked ? t('me_todo_join_blocked') : (isLiveApp(app) ? t('me_todo_join_live') : t('me_todo_join_group')))
                           : kind === 'listed'
-                            ? t('me_todo_listed')
+                            ? (playBlocked ? t('me_todo_join_blocked') : t('me_todo_listed'))
                           : kind === 'emails'
                             ? t('me_todo_emails', { n: count ?? 0 })
                           : kind === 'build'
@@ -159,11 +164,19 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                               })}
                       </span>
                     </span>
-                    <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
-                      {kind === 'join' || kind === 'listed' ? t('me_cta_continue') : kind === 'emails' ? t('me_cta_add_email') : kind === 'build' ? t('me_cta_new_build') : (isLiveApp(app) ? t('me_cta_send_review') : t('me_cta_send_feedback'))}
-                    </Link>
+                    {playBlocked ? (
+                      <span style={{ display: 'flex', gap: 'var(--s-2)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <button type="button" className="btn sm" onClick={() => { clearPlayUnreachable(app.id); setPlayTick((n) => n + 1) }}>{t('me_cta_play_clear')}</button>
+                        <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>{t('me_cta_play_retry')}</Link>
+                      </span>
+                    ) : (
+                      <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
+                        {kind === 'join' || kind === 'listed' ? t('me_cta_continue') : kind === 'emails' ? t('me_cta_add_email') : kind === 'build' ? t('me_cta_new_build') : (isLiveApp(app) ? t('me_cta_send_review') : t('me_cta_send_feedback'))}
+                      </Link>
+                    )}
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             )}
             {todos.length > 4 && <p className="muted small num" style={{ marginTop: 'var(--s-2)' }}>{t('me_todo_more', { n: todos.length - 4 })}</p>}

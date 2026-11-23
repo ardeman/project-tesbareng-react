@@ -7,6 +7,7 @@ import {
   clearJoinProgress, emailPlayStepsDone, groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, openPlayInstall,
   playInstallUrl, readEmailJoinProgress, readGroupJoinProgress, writeEmailJoinProgress, writeGroupJoinProgress,
 } from '../lib/joinProgress'
+import { clearPlayUnreachable } from '../lib/playAccess'
 import { fmtDate, isoDate, todayIso } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 import { BUILD_LIMITS, MANUAL_LIMITS, validateBuild, validateManual, type BuildInput, type ManualInput } from '../lib/validate'
@@ -48,6 +49,7 @@ function LiveJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppD
   const [step, setStep] = useState<'play' | 'confirm'>(() => (readGroupJoinProgress(app.id).installed ? 'confirm' : 'play'))
   const { busy, err, run } = useSubmit(() => {
     clearJoinProgress(app.id)
+    clearPlayUnreachable(app.id)
     toast(t('dlg_toast_reviewer', { name: app.name }))
     onClose()
   })
@@ -121,6 +123,7 @@ function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; 
   const [done, setDone] = useState(() => readGroupJoinProgress(app.id))
   const { busy, err, run } = useSubmit(() => {
     clearJoinProgress(app.id)
+    clearPlayUnreachable(app.id)
     toast(t('dlg_toast_tester', { name: app.name }))
     onClose()
   })
@@ -226,6 +229,7 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
   const asked = useSubmit(() => listing.refresh())
   const joined = useSubmit(() => {
     clearJoinProgress(app.id)
+    clearPlayUnreachable(app.id)
     toast(t('dlg_toast_tester', { name: app.name }))
     onClose()
   })
