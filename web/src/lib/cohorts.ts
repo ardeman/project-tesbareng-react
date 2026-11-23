@@ -361,8 +361,10 @@ export interface CohortObligation {
   owesOptIn: boolean
   allFulfilled: boolean
   isBehind: boolean
-  behindCount: number
-  remainingCount: number
+  assignedCount: number
+  optedInCount: number
+  /** Open assignments still missing opt-in (`assigned − opted in`). */
+  optInMissing: number
 }
 
 function toAssignmentStatus(r: Row): AssignmentStatus {
@@ -370,10 +372,13 @@ function toAssignmentStatus(r: Row): AssignmentStatus {
 }
 
 function toObligation(r: Row): CohortObligation {
+  const assignedCount = Number(r.assigned_count ?? 0)
+  const optedInCount = Number(r.opted_in_count ?? 0)
   return {
     cohortId: r.cohort_id, userId: r.user_id,
     owesOptIn: !!r.owes_opt_in, allFulfilled: !!r.all_fulfilled, isBehind: !!r.is_behind,
-    behindCount: r.behind_count ?? 0, remainingCount: r.remaining_count ?? 0,
+    assignedCount, optedInCount,
+    optInMissing: Math.max(0, assignedCount - optedInCount),
   }
 }
 

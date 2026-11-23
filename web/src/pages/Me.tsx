@@ -105,7 +105,7 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
               <li className="row-line" key={`${o.cohortId}:${o.userId}`}>
                 <span className="grow cell-2">
                   <Link to={`/cohorts/${o.cohortId}`}><b>{o.cohortName}</b></Link>
-                  <span className="num">{t('me_oblig_slots', { n: o.behindCount })}</span>
+                  <span className="num">{o.owesOptIn ? t('me_oblig_slots', { n: o.optInMissing }) : t('me_oblig_milestones')}</span>
                 </span>
                 <Chip tone="cabai" glyph="!">{t('me_oblig_behind')}</Chip>
               </li>

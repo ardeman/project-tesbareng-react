@@ -1258,7 +1258,10 @@ function ReminderPanel({ c }: { c: CohortDetail }) {
 
   const lines = behind.map((o) => {
     const m = c.members.find((mm) => mm.userId === o.userId)
-    return t('admin_ch_reminder_line', { name: m?.displayName || t('admin_ch_members'), count: o.behindCount })
+    const name = m?.displayName || t('admin_ch_members')
+    return o.owesOptIn
+      ? t('admin_ch_reminder_line', { name, count: o.optInMissing })
+      : t('admin_ch_reminder_milestones', { name })
   })
 
   return (
@@ -1275,7 +1278,7 @@ function ReminderPanel({ c }: { c: CohortDetail }) {
             <li className="row-line" key={o.userId}>
               <span className="grow cell-2">
                 <b>{m?.displayName || t('admin_ch_members')}</b>
-                <span className="num">{t('admin_ch_slots_behind', { n: o.behindCount })}</span>
+                <span className="num">{o.owesOptIn ? t('admin_ch_slots_behind', { n: o.optInMissing }) : t('admin_ch_milestones_behind')}</span>
               </span>
             </li>
           )

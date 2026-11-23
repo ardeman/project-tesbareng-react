@@ -81,9 +81,10 @@ export function AppDetail() {
   // Called before the early returns (hook order); only loads for the member's own Active entry.
   const ownActive = user ? testers.data.find((t) => t.uid === user.uid && t.status === 'active') : undefined
   // Email-list apps (ADR-011): the header follows the member's own request (ask → wait → opt in).
-  const emailFlow = !!app.data && app.data.testerMethod === 'email_list' && !!user && app.data.creatorUid !== user.uid && !isAdmin
+  // Admins who are not the creator still follow the tester path (same as /me todos).
+  const emailFlow = !!app.data && app.data.testerMethod === 'email_list' && !!user && app.data.creatorUid !== user.uid
   const myListing = useMyEmailListing(emailFlow ? id : undefined, user?.uid)
-  const flow = useCheckInFlow(id, user && app.data && !app.data.deleted && app.data.creatorUid !== user.uid && !isAdmin ? ownActive : undefined, builds.data.map((b) => b.id).join(','))
+  const flow = useCheckInFlow(id, user && app.data && !app.data.deleted && app.data.creatorUid !== user.uid ? ownActive : undefined, builds.data.map((b) => b.id).join(','))
   const guideRef = useRef<HTMLElement>(null)
   const [guideTick, setGuideTick] = useState(0)
   const appId = app.data?.id
@@ -101,12 +102,14 @@ export function AppDetail() {
   if (!app.data || !progress) return <DetailSkeleton />
 
   const a = app.data
-  const isCreator = !!user && (user.uid === a.creatorUid || isAdmin)
+  // Owner = actual creator. Manage = owner or admin (tester-table moderation). Header CTAs follow ownership + tester state, not admin.
+  const isOwner = !!user && user.uid === a.creatorUid
+  const canManage = isOwner || isAdmin
   const mine = user ? testers.data.find((t) => t.uid === user.uid) : undefined
   const loading = testers.loading || builds.loading
   const playUrl = playInstallUrl(a)
   const storeOk = hasStoreUrl(a)
-  const isBeginner = !isCreator && mine?.status !== 'active' && mine?.status !== 'removed'
+  const isBeginner = !isOwner && mine?.status !== 'active' && mine?.status !== 'removed'
 
   const needLogin = async (then: DialogKind) => {
     try {
@@ -126,15 +129,17 @@ export function AppDetail() {
   const openJoinOrLogin = () => { void needLogin('join') }
 
   // ADR-009 §1: one primary per role, up to two secondary, the rest behind "…".
+  // Header follows ownership + tester state; admin-on-others'-app keeps manage tools in overflow.
   const actions: Actions = (() => {
     const live = isLiveApp(a)
     const playLabel = playOpenLabel(t, storeOk, live)
-    if (isCreator) {
+    let result: Actions
+    if (isOwner) {
       const overflow: MenuItem[] = []
       if (storeOk) overflow.push({ label: t('appd_act_open_play_page'), href: a.storeUrl! })
       if (a.optInUrl) overflow.push({ label: t('appd_act_open_optin'), href: a.optInUrl })
       overflow.push({ label: t('appd_act_share_whatsapp'), onSelect: () => shareToWhatsApp(t, a.name, openSeats(a), a.id) })
-      return {
+      result = {
         primary: { label: t('dlg_build_submit'), icon: <IconPlus />, onClick: () => setDialog('build') },
         secondary: [
           { label: t('dlg_manual_label'), onClick: () => setDialog('manual') },
@@ -142,8 +147,7 @@ export function AppDetail() {
         ],
         overflow,
       }
-    }
-    if (mine?.status === 'active') {
+    } else if (mine?.status === 'active') {
       const since = mine.feedbackSentAt ?? mine.optedInAt
       const latest = builds.data[0]
       const buildWaiting = isNewBuild(a) && a.lastBuildAt != null && a.lastBuildAt > since && !(latest && flow.isDone('updated_build', latest.id))
@@ -151,81 +155,96 @@ export function AppDetail() {
       const play: Action = { label: playLabel, icon: <IconExternal />, href: playUrl }
       const editNote: Action = { label: live ? t('appd_act_edit_review_note') : t('appd_act_edit_feedback_note'), onClick: () => setDialog('feedback') }
       if (!mine.feedbackSent) {
-        return {
+        result = {
           primary: { label: live ? t('appd_act_mark_review_sent') : t('dlg_mark_sent'), onClick: () => setDialog('feedback') },
           secondary: [play],
           overflow: [leave],
         }
+      } else if (buildWaiting) {
+        result = { primary: { label: t('appd_act_test_new_build'), icon: <IconExternal />, href: playUrl }, secondary: [editNote], overflow: [leave] }
+      } else {
+        const next = flow.next
+        if (next) {
+          const label = milestoneLabelTr(t, next)
+          const primary: Action = { label: t('appd_act_checkin', { label }), onClick: () => flow.run(next), busy: flow.pending === next.key, blocked: !!flow.pending && flow.pending !== next.key }
+          result = { primary, secondary: [play, editNote], overflow: [leave] }
+        } else {
+          result = { secondary: [play, editNote], overflow: [leave] }
+        }
       }
-      if (buildWaiting) return { primary: { label: t('appd_act_test_new_build'), icon: <IconExternal />, href: playUrl }, secondary: [editNote], overflow: [leave] }
-      const next = flow.next
-      if (next) {
-        const label = milestoneLabelTr(t, next)
-        const primary: Action = { label: t('appd_act_checkin', { label }), onClick: () => flow.run(next), busy: flow.pending === next.key, blocked: !!flow.pending && flow.pending !== next.key }
-        return { primary, secondary: [play, editNote], overflow: [leave] }
-      }
-      return { secondary: [play, editNote], overflow: [leave] }
-    }
-    const playAction: Action = { label: playLabel, icon: <IconExternal />, href: playUrl }
-    const storeOverflow: MenuItem[] = []
-    if (storeOk && a.optInUrl) storeOverflow.push({ label: t('appd_act_optin_backup'), href: a.optInUrl })
-    storeOverflow.push({ label: t('appd_act_share_whatsapp'), onSelect: () => shareToWhatsApp(t, a.name, openSeats(a), a.id) })
-    if (mine?.status === 'removed') return { secondary: [playAction], overflow: storeOverflow }
-    if (live) {
-      if (groupPlayStepsDone(groupProgress)) {
-        return {
-          primary: { label: t('appd_act_record_reviewer'), onClick: openJoinOrLogin },
+    } else {
+      const playAction: Action = { label: playLabel, icon: <IconExternal />, href: playUrl }
+      const storeOverflow: MenuItem[] = []
+      if (storeOk && a.optInUrl) storeOverflow.push({ label: t('appd_act_optin_backup'), href: a.optInUrl })
+      storeOverflow.push({ label: t('appd_act_share_whatsapp'), onSelect: () => shareToWhatsApp(t, a.name, openSeats(a), a.id) })
+      if (mine?.status === 'removed') {
+        result = { secondary: [playAction], overflow: storeOverflow }
+      } else if (live) {
+        if (groupPlayStepsDone(groupProgress)) {
+          result = {
+            primary: { label: t('appd_act_record_reviewer'), onClick: openJoinOrLogin },
+            secondary: [playAction],
+            overflow: storeOverflow,
+            note: user ? t('appd_note_live_installed_logged') : t('appd_note_live_installed_anon'),
+          }
+        } else {
+          result = {
+            primary: { label: t('appd_act_start_review'), onClick: focusGuide },
+            secondary: [playAction],
+            overflow: storeOverflow,
+            note: t('appd_note_live_flow'),
+          }
+        }
+      } else if (a.testerMethod === 'email_list') {
+        const l = myListing.data
+        if (user && myListing.loading) {
+          result = { secondary: [], overflow: storeOverflow }
+        } else if (!l) {
+          result = {
+            primary: { label: t('appd_act_request_add'), onClick: () => needLogin('join') },
+            secondary: [],
+            overflow: storeOverflow,
+            note: user ? t('appd_note_email_request_logged') : t('appd_note_email_request_anon'),
+          }
+        } else if (l.listedAt == null) {
+          result = {
+            secondary: [{ label: t('appd_act_view_request'), onClick: () => setDialog('join') }],
+            overflow: storeOverflow,
+            note: t('appd_note_email_waiting', { date: fmtDate(l.requestedAt) }),
+          }
+        } else {
+          result = {
+            primary: { label: t('appd_act_continue_install'), onClick: () => setDialog('join') },
+            secondary: [playAction],
+            overflow: storeOverflow,
+            note: t('appd_note_email_ready'),
+          }
+        }
+      } else if (groupPlayStepsDone(groupProgress)) {
+        result = {
+          primary: { label: t('appd_act_record_tester'), onClick: openJoinOrLogin },
           secondary: [playAction],
           overflow: storeOverflow,
-          note: user ? t('appd_note_live_installed_logged') : t('appd_note_live_installed_anon'),
+          note: user ? t('appd_note_play_done_logged') : t('appd_note_play_done_anon'),
         }
-      }
-      return {
-        primary: { label: t('appd_act_start_review'), onClick: focusGuide },
-        secondary: [playAction],
-        overflow: storeOverflow,
-        note: t('appd_note_live_flow'),
-      }
-    }
-    if (a.testerMethod === 'email_list') {
-      const l = myListing.data
-      if (user && myListing.loading) return { secondary: [], overflow: storeOverflow }
-      if (!l) {
-        return {
-          primary: { label: t('appd_act_request_add'), onClick: () => needLogin('join') },
-          secondary: [],
+      } else {
+        result = {
+          primary: { label: t('appd_act_start_test'), onClick: focusGuide },
+          secondary: [playAction],
           overflow: storeOverflow,
-          note: user ? t('appd_note_email_request_logged') : t('appd_note_email_request_anon'),
+          note: storeOk ? t('appd_note_beginner_store') : t('appd_note_beginner_optin'),
         }
       }
-      if (l.listedAt == null) {
-        return {
-          secondary: [{ label: t('appd_act_view_request'), onClick: () => setDialog('join') }],
-          overflow: storeOverflow,
-          note: t('appd_note_email_waiting', { date: fmtDate(l.requestedAt) }),
-        }
-      }
-      return {
-        primary: { label: t('appd_act_continue_install'), onClick: () => setDialog('join') },
-        secondary: [playAction],
-        overflow: storeOverflow,
-        note: t('appd_note_email_ready'),
-      }
     }
-    if (groupPlayStepsDone(groupProgress)) {
-      return {
-        primary: { label: t('appd_act_record_tester'), onClick: openJoinOrLogin },
-        secondary: [playAction],
-        overflow: storeOverflow,
-        note: user ? t('appd_note_play_done_logged') : t('appd_note_play_done_anon'),
-      }
+    if (isAdmin && !isOwner) {
+      result.overflow = [
+        ...result.overflow,
+        { label: t('dlg_build_submit'), onSelect: () => setDialog('build') },
+        { label: t('dlg_manual_label'), onSelect: () => setDialog('manual') },
+        { label: t('form_title_edit'), to: `/apps/${a.id}/edit` },
+      ]
     }
-    return {
-      primary: { label: t('appd_act_start_test'), onClick: focusGuide },
-      secondary: [playAction],
-      overflow: storeOverflow,
-      note: storeOk ? t('appd_note_beginner_store') : t('appd_note_beginner_optin'),
-    }
+    return result
   })()
 
   return (
@@ -271,14 +290,14 @@ export function AppDetail() {
         </div>
 
         <aside className="span-4 col-fill" ref={kpiPlace.aside}>
-          <InfoPanel app={a} p={progress} mine={mine} isCreator={isCreator} flow={flow} beginnerGuideOutside={isBeginner} />
+          <InfoPanel app={a} p={progress} mine={mine} isOwner={isOwner} flow={flow} beginnerGuideOutside={isBeginner} />
           <CreatorCard app={a} />
         </aside>
 
         {!kpiPlace.beside && <Kpis p={progress} app={a} loading={loading} wide />}
 
         <TesterTable
-          app={a} testers={testers.data} loading={testers.loading} isCreator={isCreator} myUid={user?.uid}
+          app={a} testers={testers.data} loading={testers.loading} canManage={canManage} myUid={user?.uid}
           appPassed={progress.testDay >= TARGET_DAYS}
           onEdit={(t) => setDialog({ tester: t })}
         />
@@ -287,7 +306,7 @@ export function AppDetail() {
 
         <section className="panel split-host span-12" aria-label={t('appd_build_feedback_aria')}>
           <div className="split">
-            <BuildLog builds={builds.data} loading={builds.loading} error={builds.error} retry={builds.retry} p={progress} app={a} isCreator={isCreator} />
+            <BuildLog builds={builds.data} loading={builds.loading} error={builds.error} retry={builds.retry} p={progress} app={a} isOwner={isOwner} />
             <FeedbackList testers={testers.data} loading={testers.loading} />
           </div>
         </section>
@@ -416,8 +435,8 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
 }
 
 /** Context for the role; the actions themselves live in the header zone. */
-function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
-  app: AppDoc; p: Progress; mine?: TesterDoc; isCreator: boolean; flow: CheckInFlow; beginnerGuideOutside?: boolean
+function InfoPanel({ app, p, mine, isOwner, flow, beginnerGuideOutside }: {
+  app: AppDoc; p: Progress; mine?: TesterDoc; isOwner: boolean; flow: CheckInFlow; beginnerGuideOutside?: boolean
 }) {
   const t = useT()
   const sentBefore = useRef(mine?.feedbackSent)
@@ -435,7 +454,7 @@ function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
     <p className="muted">{t('appd_guide_empty')}</p>
   )
 
-  if (isCreator) {
+  if (isOwner) {
     return (
       <section className="panel stack-16" aria-label={t('appd_panel_your_app_aria')}>
         <h2>{t('appd_panel_your_app')}</h2>
@@ -1066,8 +1085,8 @@ function downloadTestersCsv(tr: Tr, appName: string, testers: TesterDoc[]) {
 type SortKey = 'name' | 'days'
 type Quick = Partial<Pick<TesterDoc, 'feedbackVerified' | 'replied' | 'status'>>
 
-function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdit }: {
-  app: AppDoc; testers: TesterDoc[]; loading: boolean; isCreator: boolean; myUid?: string; appPassed: boolean; onEdit: (t: TesterDoc) => void
+function TesterTable({ app, testers, loading, canManage, myUid, appPassed, onEdit }: {
+  app: AppDoc; testers: TesterDoc[]; loading: boolean; canManage: boolean; myUid?: string; appPassed: boolean; onEdit: (t: TesterDoc) => void
 }) {
   const tr = useT()
   const toast = useToast()
@@ -1171,7 +1190,7 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
           <td>
             <span className="fb-cell">
               <FeedbackChip t={t} />
-              {isCreator && (
+              {canManage && (
                 <label className="tick" title={tr('appd_verify_play_title')}>
                   <input type="checkbox" checked={t.feedbackVerified} onChange={(e) => setVerified(t, e.target.checked)}
                     aria-label={tr('appd_verify_play_aria', { name: t.displayName })} />
@@ -1188,11 +1207,11 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
                   <div><dt>{tr('appd_opted_in')}</dt><dd className="num">{fmtDate(t.optedInAt)}</dd></div>
                   {t.status !== 'active' && t.leftAt && <div><dt>{t.status === 'removed' ? tr('appd_removed_on') : tr('appd_left_on')}</dt><dd className="num">{fmtDate(t.leftAt)}</dd></div>}
                   <div><dt>{tr('appd_csv_email')}</dt><dd>{t.maskedEmail}</dd></div>
-                  {!isCreator && <div><dt>{tr('appd_replied_creator')}</dt><dd>{t.replied ? tr('appd_replied_yes') : tr('appd_replied_no')}</dd></div>}
+                  {!canManage && <div><dt>{tr('appd_replied_creator')}</dt><dd>{t.replied ? tr('appd_replied_yes') : tr('appd_replied_no')}</dd></div>}
                   <div><dt>{tr('appd_note')}</dt><dd>{t.note || (t.addedBy === 'creator' ? tr('appd_note_creator_added') : '—')}</dd></div>
                 </dl>
                 {t.feedbackSummary && t.status !== 'removed' && <p className="guide-quote">{t.feedbackSummary}</p>}
-                {isCreator && (
+                {canManage && (
                   <div className="detail-edit">
                     <label className="check">
                       <input type="checkbox" checked={t.replied} onChange={(e) => setReplied(t, e.target.checked)} />
@@ -1243,7 +1262,7 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
               {th('name', tr('appd_col_name'), false, 'sticky')}
               {th('days', tr('appd_col_days'), true)}
               <th>{tr('appd_col_status')}</th>
-              <th>{isCreator ? tr('appd_col_feedback_creator') : tr('appd_col_feedback_tester')}</th>
+              <th>{canManage ? tr('appd_col_feedback_creator') : tr('appd_col_feedback_tester')}</th>
             </tr>
           </thead>
           <tbody>
@@ -1274,7 +1293,7 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
       {!loading && testers.length === 0 && (
         <div className="empty-pad">
           <Empty title={tr('appd_empty_testers_title')}>
-            <p>{isCreator
+            <p>{canManage
               ? (isLiveApp(app) ? tr('appd_empty_creator_live') : tr('appd_empty_creator_closed'))
               : (isLiveApp(app) ? tr('appd_empty_visitor_live') : tr('appd_empty_visitor_closed'))}</p>
           </Empty>
@@ -1299,8 +1318,8 @@ function groupByDay<T>(items: T[], at: (x: T) => number) {
   return out
 }
 
-function BuildLog({ builds, loading, error, retry, p, app, isCreator }: {
-  builds: BuildDoc[]; loading: boolean; error: string | null; retry: () => void; p: Progress; app: AppDoc; isCreator: boolean
+function BuildLog({ builds, loading, error, retry, p, app, isOwner }: {
+  builds: BuildDoc[]; loading: boolean; error: string | null; retry: () => void; p: Progress; app: AppDoc; isOwner: boolean
 }) {
   const tr = useT()
   const [all, setAll] = useState(false)
@@ -1316,7 +1335,7 @@ function BuildLog({ builds, loading, error, retry, p, app, isCreator }: {
         <div>{[0, 1, 2].map((i) => <div className="row-line" key={i}><span className="grow"><Skel w={120} /></span><Skel w={60} /></div>)}</div>
       ) : sorted.length === 0 ? (
         <Empty title={tr('appd_builds_empty_title')}>
-          <p>{isCreator ? tr('appd_builds_empty_creator') : tr('appd_builds_empty_tester')}</p>
+          <p>{isOwner ? tr('appd_builds_empty_creator') : tr('appd_builds_empty_tester')}</p>
         </Empty>
       ) : (
         <div className="timeline" id="build-list">
