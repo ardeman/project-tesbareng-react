@@ -134,7 +134,7 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
               <button type="button" className="lp-sq theme-btn" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
                 title={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
                 aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
-                <span style={{ fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em' }} aria-hidden="true">{locale === 'id' ? 'EN' : 'ID'}</span>
+                <span style={{ fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em' }} aria-hidden="true">{locale === 'id' ? 'ID' : 'EN'}</span>
               </button>
               {signInBtn}
               <button type="button" className="lp-sq menu-btn" ref={menuBtnRef} aria-expanded={menuOpen} aria-controls="lp-menu" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}><span /><span /><span /></button>
@@ -154,7 +154,7 @@ export function StoryHeader({ page, signIn, active, headerRef, fillRef, brandRef
           </button>}
           <button type="button" className="sheet-theme" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}>
             <span>{locale === 'id' ? 'Switch to English' : 'Ganti ke Indonesia'}</span>
-            <span style={{ fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em' }} aria-hidden="true">{locale === 'id' ? 'EN' : 'ID'}</span>
+            <span style={{ fontWeight: 800, fontSize: '11px', letterSpacing: '0.08em' }} aria-hidden="true">{locale === 'id' ? 'ID' : 'EN'}</span>
           </button>
         </nav>
         {home && <div className="lp-scrollbar" aria-hidden="true"><i ref={fillRef} /></div>}
@@ -181,12 +181,12 @@ export function StoryFooter({ page }: { page: 'home' | 'about' }) {
         <p className="foot-word" aria-hidden="true">TesBareng</p>
         <div className="foot-row">
           <span className="dim">{t('footer_tagline')}</span>
-          <nav aria-label="Kaki halaman">
+          <nav aria-label={t('footer_nav_label')}>
             {FOOT_SECTION_IDS.map((id) => home ? <a key={id} href={`#${id}`}>{sectionLabel(id)}</a> : <Link key={id} to={`/#${id}`}>{sectionLabel(id)}</Link>)}
             <Link to="/about" aria-current={page === 'about' ? 'page' : undefined}>{t('nav_about')}</Link>
             <Link to="/apps">{t('nav_apps')}</Link>
-            <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Google Group<span className="sr-only"> (tab baru)</span></a>
-            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">WhatsApp<span className="sr-only"> (tab baru)</span></a>
+            <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">Google Group<span className="sr-only">{t('coh_new_tab')}</span></a>
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">WhatsApp<span className="sr-only">{t('coh_new_tab')}</span></a>
           </nav>
         </div>
       </footer>

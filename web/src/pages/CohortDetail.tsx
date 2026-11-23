@@ -8,6 +8,8 @@ import { IconBack, IconExternal } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { errorText, useBadgesOf } from '../lib/data'
+import { useT } from '../lib/i18n'
+import { cellLabel } from './cohortDetailI18n'
 import { usePageMeta } from '../lib/pageMeta'
 import { fmtDate, fmtDateTime } from '../lib/progress'
 import {
@@ -31,18 +33,20 @@ const longDay = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeri
 type DialogKind = null | 'join' | 'whatsapp' | 'request'
 
 export function CohortDetail() {
+  const t = useT()
   const { id } = useParams()
   const cohort = useCohort(id)
   const c = cohort.data
-  usePageMeta(c ? c.name : 'Cohort', c ? `${c.name}: ${c.appCount} aplikasi dan ${c.pureTesterCount} tester murni saling menguji selama ${CLOSE_DAY} hari.` : undefined)
+  usePageMeta(c ? c.name : t('coh_crumb'), c ? t('coh_meta_desc', { name: c.name, apps: c.appCount, testers: c.pureTesterCount, days: CLOSE_DAY }) : undefined)
 
-  if (cohort.error && !c) return <ErrorBox text="Cohort gagal dimuat. Periksa koneksi, lalu coba lagi." onRetry={cohort.retry} />
+  if (cohort.error && !c) return <ErrorBox text={t('coh_load_error')} onRetry={cohort.retry} />
   if (c === null) return <CohortNotFound />
   if (!c) return <DetailSkeleton />
   return <Detail c={c} refresh={cohort.refresh} />
 }
 
 function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
+  const t = useT()
   const { user, isAdmin, signIn } = useAuth()
   const toast = useToast()
   const [dialog, setDialog] = useState<DialogKind>(null)
@@ -76,10 +80,10 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
       title.current?.focus()
       refresh(); myReq.refresh()
       toast({
-        text: `Pengajuan ${r.appName} ke ${c.name} dibatalkan.`, duration: 8000,
+        text: t('coh_toast_req_cancel', { app: r.appName, name: c.name }), duration: 8000,
         action: {
-          label: 'Urungkan',
-          onClick: () => { requestCohortSlot(c.id, r.appId).then(() => { toast(`Pengajuan ${r.appName} diajukan kembali.`); refresh(); myReq.refresh() }, (e) => toast(failToast(e))) },
+          label: t('form_undo'),
+          onClick: () => { requestCohortSlot(c.id, r.appId).then(() => { toast(t('coh_toast_req_back', { app: r.appName })); refresh(); myReq.refresh() }, (e) => toast(failToast(e))) },
         },
       })
     } catch (e) {
@@ -100,10 +104,10 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
       title.current?.focus()
       refresh()
       toast({
-        text: `Anda keluar dari ${c.name}.`, duration: 8000,
+        text: t('coh_toast_left', { name: c.name }), duration: 8000,
         action: {
-          label: 'Urungkan',
-          onClick: () => { joinCohortAsTester(c.id).then(() => { toast(`Anda kembali bergabung di ${c.name}.`); refresh() }, (e) => toast(failToast(e))) },
+          label: t('form_undo'),
+          onClick: () => { joinCohortAsTester(c.id).then(() => { toast(t('coh_toast_rejoined', { name: c.name })); refresh() }, (e) => toast(failToast(e))) },
         },
       })
     } catch (e) {
@@ -138,55 +142,55 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
   // ---------- actions (ADR-009 §1: one primary, up to two secondary, the rest behind "…") ----------
   const wa = link.data
   const waButton = wa && (acked
-    ? <a className="btn" href={wa} target="_blank" rel="noreferrer"><IconExternal />Grup WhatsApp<span className="sr-only"> (tab baru)</span></a>
-    : <button type="button" className="btn" onClick={() => setDialog('whatsapp')}>Grup WhatsApp</button>)
+    ? <a className="btn" href={wa} target="_blank" rel="noreferrer"><IconExternal />{t('coh_wa_group')}<span className="sr-only">{t('coh_new_tab')}</span></a>
+    : <button type="button" className="btn" onClick={() => setDialog('whatsapp')}>{t('coh_wa_group')}</button>)
   const overflow: MenuItem[] = []
-  if (me && me.appId == null && c.status === 'forming') overflow.push({ label: 'Keluar dari cohort', danger: true, onSelect: () => { void leave() } })
-  if (isAdmin) overflow.push({ label: 'Kelola di Admin', to: `/admin?bagian=cohort&cohort=${c.id}` })
+  if (me && me.appId == null && c.status === 'forming') overflow.push({ label: t('coh_leave_cohort'), danger: true, onSelect: () => { void leave() } })
+  if (isAdmin) overflow.push({ label: t('coh_manage_admin'), to: `/admin?bagian=cohort&cohort=${c.id}` })
 
   let primary: React.ReactNode = null
   let note: React.ReactNode = null
   if (me) {
-    if (c.status === 'active') primary = <Link className="btn primary" to="/me">Lihat tugas saya</Link>
+    if (c.status === 'active') primary = <Link className="btn primary" to="/me">{t('coh_my_tasks')}</Link>
     note = me.appId
-      ? <>Anda ikut dengan <Link className="link" to={`/apps/${me.appId}`}>{me.appName ?? 'aplikasi Anda'}</Link>.{c.status === 'forming' && ' Untuk keluar, hubungi admin.'}</>
-      : <>Anda ikut sebagai tester murni.{c.status === 'forming' && ' Tugas dibagikan saat cohort dimulai.'}</>
+      ? <>{t('coh_join_with_app')} <Link className="link" to={`/apps/${me.appId}`}>{me.appName ?? t('coh_your_app')}</Link>.{c.status === 'forming' && t('coh_leave_contact_admin')}</>
+      : <>{t('coh_pure_tester_note')}{c.status === 'forming' && t('coh_tasks_on_start')}</>
   } else if (open) {
     if (user && owedIn.length > 0) {
       // aria-disabled, not disabled: the button stays focusable so the reason below is read with it.
-      primary = <button type="button" className="btn primary" aria-disabled="true" aria-describedby="owing-why" onClick={(e) => e.preventDefault()}>Gabung sebagai tester</button>
+      primary = <button type="button" className="btn primary" aria-disabled="true" aria-describedby="owing-why" onClick={(e) => e.preventDefault()}>{t('coh_join_tester')}</button>
       note = (
         <span id="owing-why" className="err-text">
-          <span>Anda masih Berutang di {owedIn.map((o, i) => <span key={o.cohortId}>{i > 0 && ', '}<Link className="link" to={`/cohorts/${o.cohortId}`}>{o.name}</Link></span>)}. Selesaikan kewajiban di sana, lalu minta admin menandai Lunas.</span>
+          <span>{t('coh_owing_block')} {owedIn.map((o, i) => <span key={o.cohortId}>{i > 0 && ', '}<Link className="link" to={`/cohorts/${o.cohortId}`}>{o.name}</Link></span>)}{t('coh_owing_finish')}</span>
         </span>
       )
     } else if (forming && pendingHere) {
       // Joining as a pure tester would close the request (database trigger), so offer the one next step only.
-      note = 'Admin akan menyetujui atau menolak. Mau gabung sebagai tester murni? Batalkan pengajuan dulu.'
+      note = t('coh_pending_admin_note')
     } else {
       // Members with a free app lead with "Ajukan app"; everyone else leads with joining as a tester (ADR-009 §1: one primary).
       const askFirst = forming && hasFreeApp && !pendingElsewhere
-      const joinBtn = <button type="button" className={`btn${askFirst ? '' : ' primary'}`} onClick={join}>Gabung sebagai tester</button>
+      const joinBtn = <button type="button" className={`btn${askFirst ? '' : ' primary'}`} onClick={join}>{t('coh_join_tester')}</button>
       const askBtn = !forming ? null : pendingElsewhere ? (
-        <button type="button" className="btn" aria-disabled="true" aria-describedby="ask-why" onClick={(e) => e.preventDefault()}>Ajukan app</button>
-      ) : <button type="button" className={`btn${askFirst ? ' primary' : ''}`} onClick={ask}>Ajukan app</button>
+        <button type="button" className="btn" aria-disabled="true" aria-describedby="ask-why" onClick={(e) => e.preventDefault()}>{t('coh_request_app')}</button>
+      ) : <button type="button" className={`btn${askFirst ? ' primary' : ''}`} onClick={ask}>{t('coh_request_app')}</button>
       primary = askFirst ? <>{askBtn}{joinBtn}</> : <>{joinBtn}{askBtn}</>
       const creators = forming
-        ? (pendingElsewhere ? null : 'Punya aplikasi? Ajukan untuk ikut sebagai creator, lalu admin menyetujui atau menolak. Tanpa aplikasi, Anda bisa gabung sendiri sebagai tester murni.')
+        ? (pendingElsewhere ? null : t('coh_creators_forming_note'))
         : null
-      const timing = c.status === 'active' && deadline != null ? `Pendaftaran tester murni dibuka sampai akhir Hari ${LAST_JOIN_DAY - 1}: ${fmtWib(deadline)}.` : null
-      const text = [creators, timing, user ? null : 'Anda diminta masuk dengan Google dulu.'].filter(Boolean).join(' ')
+      const timing = c.status === 'active' && deadline != null ? t('coh_join_until', { day: LAST_JOIN_DAY - 1, time: fmtWib(deadline) }) : null
+      const text = [creators, timing, user ? null : t('coh_sign_in_first')].filter(Boolean).join(' ')
       note = !text && !pendingElsewhere ? null : (
         <>
           {text}
           {pendingElsewhere && (
-            <span id="ask-why">{text && <br />}Anda masih punya pengajuan yang menunggu di <Link className="link" to={`/cohorts/${pendingElsewhere.cohortId}`}>{pendingElsewhere.cohortName}</Link>. Satu pengajuan sekali waktu: batalkan di sana dulu untuk mengajukan ke cohort ini.</span>
+            <span id="ask-why">{text && <br />}{t('coh_pending_elsewhere')} <Link className="link" to={`/cohorts/${pendingElsewhere.cohortId}`}>{pendingElsewhere.cohortName}</Link>{t('coh_one_request')}</span>
           )}
         </>
       )
     }
   } else if (c.status === 'active') {
-    note = `Pendaftaran tester murni sudah ditutup${deadline != null ? ` ${fmtWib(deadline)}` : ''} (akhir Hari ${LAST_JOIN_DAY - 1}). Anda tetap bisa menguji aplikasi mana pun dari daftar aplikasi.`
+    note = <>{t('coh_join_closed')}{deadline != null ? ` ${fmtWib(deadline)}` : ''}{t('coh_join_closed_suffix', { day: LAST_JOIN_DAY - 1 })}</>
   }
 
   // Request status: glyph + text, never colour alone. A rejection keeps the admin's reason and the way to ask again.
@@ -194,54 +198,54 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
   if (pendingHere) {
     reqBlock = (
       <div className="rq-status" role="status">
-        <Chip tone="langit" glyph="◷">Menunggu admin</Chip>
-        <p className="rq-line"><b><Link className="link" to={`/apps/${pendingHere.appId}`}>{pendingHere.appName}</Link></b> <span className="num">diajukan {fmtDateTime(pendingHere.createdAt)}</span></p>
-        <button type="button" className="btn" onClick={() => { void withdraw(pendingHere) }}>Batalkan pengajuan<span className="sr-only"> {pendingHere.appName}</span></button>
+        <Chip tone="langit" glyph="◷">{t('coh_pending_admin')}</Chip>
+        <p className="rq-line"><b><Link className="link" to={`/apps/${pendingHere.appId}`}>{pendingHere.appName}</Link></b> <span className="num">{t('coh_submitted')} {fmtDateTime(pendingHere.createdAt)}</span></p>
+        <button type="button" className="btn" onClick={() => { void withdraw(pendingHere) }}>{t('coh_cancel_request')}<span className="sr-only"> {pendingHere.appName}</span></button>
       </div>
     )
   } else if (rejected && !me && forming) {
     reqBlock = (
       <div className="rq-status" role="status">
-        <Chip glyph="×">Ditolak</Chip>
+        <Chip glyph="×">{t('coh_rejected')}</Chip>
         <p className="rq-line"><b><Link className="link" to={`/apps/${rejected.appId}`}>{rejected.appName}</Link></b> <span className="num">{fmtDateTime(rejected.decidedAt ?? rejected.createdAt)}</span></p>
-        <p className="rq-reason">{rejected.reason ? <>Alasan admin: {rejected.reason}</> : 'Admin menolak tanpa alasan.'} Anda bisa mengajukan lagi.</p>
+        <p className="rq-reason">{rejected.reason ? <>{t('coh_reject_reason')} {rejected.reason}</> : t('coh_reject_no_reason')}{t('coh_can_reapply')}</p>
       </div>
     )
   }
 
   return (
     <>
-      <Link to="/cohorts" className="crumb"><IconBack />Cohort</Link>
+      <Link to="/cohorts" className="crumb"><IconBack />{t('coh_crumb')}</Link>
 
       <header className="record-head cohort-head">
         <div className="rh-main">
           <h1 ref={title} tabIndex={-1}>{c.name}</h1>
           <div className="meta-line">
             <CohortChip status={c.status} />
-            <span className="num"><b>{c.appCount}</b> aplikasi · <b>{c.pureTesterCount}</b> tester murni</span>
+            <span className="num">{t('coh_apps_pure_meta', { apps: c.appCount, testers: c.pureTesterCount })}</span>
           </div>
         </div>
 
         <div className="rh-progress">
           {c.status === 'active' && day != null && (
             <>
-              <p className="rh-count num"><b>Hari {day}</b><small> dari {CLOSE_DAY}</small></p>
-              <Bar value={Math.min(day, CLOSE_DAY)} max={CLOSE_DAY} label={`Hari ${day} dari ${CLOSE_DAY}`} />
+              <p className="rh-count num"><b>{t('coh_day_of', { day })}</b><small>{t('coh_day_of_from', { day, max: CLOSE_DAY }).replace(t('coh_day_of', { day }), '')}</small></p>
+              <Bar value={Math.min(day, CLOSE_DAY)} max={CLOSE_DAY} label={t('coh_bar_days', { day, max: CLOSE_DAY })} />
               <p className="rh-sub num">
-                Mulai {fmtDate(c.day0At)} · ditutup paling lambat {fmtDate(c.day0At! + CLOSE_DAY * DAY)}
-                {day > CLOSE_DAY && ' · lewat batas, menunggu admin menutup'}
+                {t('coh_started_close_by', { start: fmtDate(c.day0At), end: fmtDate(c.day0At! + CLOSE_DAY * DAY) })}
+                {day > CLOSE_DAY && t('coh_past_deadline_wait')}
               </p>
               {late && myDay != null && (
-                <p className="own-day num"><b>Hari Anda: {myDay}</b> · dihitung dari saat Anda bergabung, {fmtDate(me!.assignedAt)}</p>
+                <p className="own-day num"><b>{t('coh_your_day', { day: myDay })}</b>{t('coh_your_day_from', { date: fmtDate(me!.assignedAt) })}</p>
               )}
             </>
           )}
           {c.status === 'forming' && (
             <>
-              <p className="rh-count num"><b>{c.appCount}</b><small> / {MIN_APPS}</small><span className="rh-label">aplikasi untuk mulai</span></p>
-              <Bar value={Math.min(c.appCount, MIN_APPS)} max={MIN_APPS} label={`${c.appCount} dari ${MIN_APPS} aplikasi minimum`} />
+              <p className="rh-count num"><b>{c.appCount}</b><small> / {MIN_APPS}</small><span className="rh-label">{t('coh_apps_to_start')}</span></p>
+              <Bar value={Math.min(c.appCount, MIN_APPS)} max={MIN_APPS} label={t('coh_bar_forming', { n: c.appCount, min: MIN_APPS })} />
               <p className="rh-sub num">
-                {c.appCount >= MIN_APPS ? 'Sudah cukup aplikasi. Admin akan memulai cohort.' : `Butuh ${MIN_APPS - c.appCount} aplikasi lagi sebelum admin bisa memulai.`} Dibuat {fmtDate(c.createdAt)}.
+                {c.appCount >= MIN_APPS ? t('coh_enough_apps') : t('coh_need_more_apps', { n: MIN_APPS - c.appCount })} {t('coh_created', { date: fmtDate(c.createdAt) })}
               </p>
             </>
           )}
@@ -255,7 +259,7 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
             {(waButton || overflow.length > 0) && (
               <div className="rh-more">
                 {waButton}
-                <OverflowMenu items={overflow} label="Aksi lain" />
+                <OverflowMenu items={overflow} label={t('coh_more_actions')} />
               </div>
             )}
             {note && <p className="small muted rh-note">{note}</p>}
@@ -283,16 +287,17 @@ function Detail({ c, refresh }: { c: Cohort; refresh: () => void }) {
 }
 
 function ClosedSummary({ c, day }: { c: Cohort; day: number | null }) {
+  const t = useT()
   const n = { good: 0, owing: 0, settled: 0 }
   for (const m of c.members) if (m.standing) n[m.standing]++
   return (
     <>
-      <p className="rh-count num"><b>Selesai</b>{day != null && <small> pada Hari {day}</small>}</p>
+      <p className="rh-count num"><b>{t('coh_finished')}</b>{day != null && <small>{t('coh_on_day', { day })}</small>}</p>
       <p className="rh-sub num">{fmtDate(c.day0At)} – {fmtDate(c.closedAt)}</p>
       <p className="standing-sum num">
-        <span><b>{n.good}</b> baik</span>
-        <span><b>{n.owing}</b> berutang</span>
-        {n.settled > 0 && <span><b>{n.settled}</b> lunas</span>}
+        <span>{t('coh_standing_good', { n: n.good })}</span>
+        <span>{t('coh_standing_owing', { n: n.owing })}</span>
+        {n.settled > 0 && <span>{t('coh_standing_settled', { n: n.settled })}</span>}
       </p>
     </>
   )
@@ -304,6 +309,7 @@ type StepState = 'past' | 'today' | 'next' | 'later'
 interface Row { key: string; day: number; at: number | null; title: string; detail: string; state: StepState }
 
 function Schedule({ c, me, late }: { c: Cohort; me: CohortMember | undefined; late: boolean }) {
+  const t = useT()
   const now = Date.now()
   const base = late ? me!.assignedAt : c.day0At
   const current = c.status === 'active' ? (late ? ownDay(me!.assignedAt, now) : cohortDay(c, now)) : null
@@ -312,12 +318,12 @@ function Schedule({ c, me, late }: { c: Cohort; me: CohortMember | undefined; la
     let steps = schedule(base)
     if (late) {
       // A late pure tester's own milestones; the close stays on the cohort's clock (in the note below).
-      steps = steps.filter((s) => s.day !== CLOSE_DAY).map((s) => s.day === LAST_JOIN_DAY ? { ...s, detail: 'Check-in “Sudah buka app” dan feedback terkirim.' } : s)
+      steps = steps.filter((s) => s.day !== CLOSE_DAY).map((s) => s.day === LAST_JOIN_DAY ? { ...s, detail: t('coh_sched_late_d7_detail') } : s)
     }
     if (c.status === 'closed' && c.closedAt != null) {
       // Show the real close, which may be before Day 21.
       const d = cohortDay(c) ?? CLOSE_DAY
-      steps = steps.filter((s) => s.day !== CLOSE_DAY && s.day <= d).concat({ day: d, at: c.closedAt, title: 'Cohort ditutup', detail: 'Status tiap anggota ditetapkan: Baik atau Berutang.' })
+      steps = steps.filter((s) => s.day !== CLOSE_DAY && s.day <= d).concat({ day: d, at: c.closedAt, title: t('coh_sched_d21_title'), detail: t('coh_sched_closed_detail') })
     }
     let nextSet = false
     return steps.map((s) => {
@@ -330,7 +336,7 @@ function Schedule({ c, me, late }: { c: Cohort; me: CohortMember | undefined; la
       } else if (!nextSet) { state = 'next'; nextSet = true }
       return { key: `${s.day}-${s.title}`, ...s, state }
     })
-  }, [base, late, c, current])
+  }, [base, late, c, current, t])
 
   // "Hari ini" marker between milestones when today has none of its own.
   const markerAt = current != null && !rows.some((r) => r.state === 'today')
@@ -340,13 +346,13 @@ function Schedule({ c, me, late }: { c: Cohort; me: CohortMember | undefined; la
   return (
     <section className="panel span-5 sched-panel" aria-labelledby="sched-h">
       <header>
-        <h2 id="sched-h">{late ? 'Jadwal Anda' : 'Jadwal'}</h2>
-        {current != null && <span className="meta num">Hari ini: Hari {current}</span>}
+        <h2 id="sched-h">{late ? t('coh_schedule_yours') : t('coh_schedule')}</h2>
+        {current != null && <span className="meta num">{t('coh_today_day', { day: current })}</span>}
       </header>
-      {c.status === 'forming' && <p className="small muted sched-note">Tanggal muncul setelah admin memulai cohort (Hari 0).</p>}
+      {c.status === 'forming' && <p className="small muted sched-note">{t('coh_sched_forming_note')}</p>}
       {late && (
         <p className="small muted sched-note num">
-          Tenggat Anda dihitung dari saat Anda bergabung ({fmtDateTime(me!.assignedAt)}). Cohort tetap ditutup paling lambat Hari {CLOSE_DAY} cohort, {fmtDate(c.day0At! + CLOSE_DAY * DAY)}.
+          {t('coh_sched_late_note', { date: fmtDateTime(me!.assignedAt), maxDay: CLOSE_DAY, closeDate: fmtDate(c.day0At! + CLOSE_DAY * DAY) })}
         </p>
       )}
       <ol className="sched">
@@ -360,11 +366,12 @@ function Schedule({ c, me, late }: { c: Cohort; me: CohortMember | undefined; la
 }
 
 function ScheduleItem({ r, marker }: { r: Row; marker: number | null }) {
+  const t = useT()
   return (
     <>
       {marker != null && <TodayMarker day={marker} />}
       <li className={`sched-row ${r.state}`} aria-current={r.state === 'today' ? 'date' : undefined}>
-        <span className="sched-day num">Hari {r.day}</span>
+        <span className="sched-day num">{t('coh_day_label', { day: r.day })}</span>
         <span className="sched-body">
           <span className="sched-head">
             <span className="sched-title">{r.title}</span>
@@ -380,19 +387,21 @@ function ScheduleItem({ r, marker }: { r: Row; marker: number | null }) {
 
 /** Position in the schedule, in glyph + text (never the row colour alone). */
 function StepState({ state }: { state: StepState }) {
-  if (state === 'today') return <Chip glyph="●">Hari ini</Chip>
-  if (state === 'next') return <Chip glyph="→">Berikutnya</Chip>
-  if (state === 'past') return <span className="sched-done"><span aria-hidden="true">· </span>Lewat</span>
+  const t = useT()
+  if (state === 'today') return <Chip glyph="●">{t('coh_sched_today')}</Chip>
+  if (state === 'next') return <Chip glyph="→">{t('coh_sched_next')}</Chip>
+  if (state === 'past') return <span className="sched-done"><span aria-hidden="true">· </span>{t('coh_sched_past')}</span>
   return null
 }
 
 function TodayMarker({ day }: { day: number }) {
+  const t = useT()
   return (
     <li className="sched-row today marker" aria-current="date">
-      <span className="sched-day num">Hari {day}</span>
+      <span className="sched-day num">{t('coh_day_label', { day })}</span>
       <span className="sched-body">
         <span className="sched-head"><span className="sched-title">{longDay.format(Date.now())}</span><StepState state="today" /></span>
-        <span className="sched-detail">Belum ada tenggat hari ini.</span>
+        <span className="sched-detail">{t('coh_no_deadline_today')}</span>
       </span>
     </li>
   )
@@ -403,26 +412,27 @@ function TodayMarker({ day }: { day: number }) {
 function Members({ c, creators, pure, badges, myUid }: {
   c: Cohort; creators: CohortMember[]; pure: CohortMember[]; badges: Map<string, BadgeTier>; myUid?: string
 }) {
+  const t = useT()
   return (
     <section className="panel span-7" aria-labelledby="members-h">
       <header>
-        <h2 id="members-h">Anggota</h2>
-        <span className="meta num">{c.members.length} orang</span>
+        <h2 id="members-h">{t('coh_members')}</h2>
+        <span className="meta num">{t('coh_people', { n: c.members.length })}</span>
       </header>
 
-      <h3 className="member-group num">Creator dan aplikasinya · {creators.length}</h3>
+      <h3 className="member-group num">{t('coh_creators_apps')} · {creators.length}</h3>
       {creators.length === 0 ? (
-        <Empty title="Belum ada creator.">
-          <p>Admin menambahkan creator beserta aplikasinya. Cohort butuh minimal {MIN_APPS} aplikasi untuk mulai.</p>
+        <Empty title={t('coh_no_creators_title')}>
+          <p>{t('coh_no_creators_body', { min: MIN_APPS })}</p>
         </Empty>
       ) : (
         <ul className="member-list">{creators.map((m) => <MemberRow key={m.userId} m={m} c={c} tier={badges.get(m.userId)} mine={m.userId === myUid} />)}</ul>
       )}
 
-      <h3 className="member-group num">Tester murni · {pure.length}</h3>
+      <h3 className="member-group num">{t('coh_pure_testers')} · {pure.length}</h3>
       {pure.length === 0 ? (
         <p className="small muted member-none">
-          {joinOpen(c) ? 'Belum ada. Tester murni tidak membawa aplikasi, hanya menguji, dan mendapat hingga 14 aplikasi.' : 'Tidak ada tester murni di cohort ini.'}
+          {joinOpen(c) ? t('coh_no_pure_open') : t('coh_no_pure')}
         </p>
       ) : (
         <ul className="member-list">{pure.map((m) => <MemberRow key={m.userId} m={m} c={c} tier={badges.get(m.userId)} mine={m.userId === myUid} />)}</ul>
@@ -432,7 +442,8 @@ function Members({ c, creators, pure, badges, myUid }: {
 }
 
 function MemberRow({ m, c, tier, mine }: { m: CohortMember; c: Cohort; tier?: BadgeTier; mine: boolean }) {
-  const name = m.displayName || 'Anggota'
+  const t = useT()
+  const name = m.displayName || t('coh_members')
   const lateDay = isLate(c, m) ? Math.floor((m.assignedAt! - c.day0At!) / DAY) : null
   return (
     <li className={`member-row ${mine ? 'mine' : ''}`}>
@@ -440,15 +451,15 @@ function MemberRow({ m, c, tier, mine }: { m: CohortMember; c: Cohort; tier?: Ba
       <span className="member-main">
         <span className="name-with-badge">
           <Link className="member-name" to={`/u/${m.userId}`}>{name}</Link>
-          {mine && <span className="you">Anda</span>}
+          {mine && <span className="you">{t('coh_you')}</span>}
           <Badge tier={tier} size="sm" />
         </span>
         <span className="member-sub">
           {m.appId
             ? m.appDeleted
-              ? <span>Aplikasi sudah dihapus</span>
+              ? <span>{t('coh_app_deleted')}</span>
               : <Link className="member-app" to={`/apps/${m.appId}`}>{m.appName}</Link>
-            : lateDay != null ? <span className="num">Gabung pada Hari {lateDay}</span> : <span>Tanpa aplikasi</span>}
+            : lateDay != null ? <span className="num">{t('coh_joined_day', { day: lateDay })}</span> : <span>{t('coh_no_app')}</span>}
         </span>
       </span>
       {m.standing && <StandingChip standing={m.standing} />}
@@ -462,12 +473,8 @@ const CELL_GLYPH: Record<CellState, string> = {
   not_joined: '○', left: '×', opted_in: '◑', used: '◕',
   feedback_sent: '✓', feedback_verified: '✓✓', reassigned: '→',
 }
-const CELL_LABEL: Record<CellState, string> = {
-  not_joined: 'Belum opt-in', left: 'Keluar', opted_in: 'Opt-in', used: 'Memakai app',
-  feedback_sent: 'Feedback terkirim', feedback_verified: 'Feedback terverifikasi', reassigned: 'Dipindah',
-}
-
 function ObligationMatrix({ c }: { c: Cohort }) {
+  const t = useT()
   const apps = c.members.filter((m) => m.appId != null)
   const shouldLoad = c.status !== 'forming' && apps.length > 0
   const status = useAssignmentStatus(shouldLoad ? c.id : undefined)
@@ -487,25 +494,25 @@ function ObligationMatrix({ c }: { c: Cohort }) {
   if (!shouldLoad) return null
   if (status.loading && status.data.length === 0) return null
   if (status.error) return (
-    <section className="panel span-12" aria-label="Matriks penugasan">
-      <p className="meta cabai">Matriks penugasan gagal dimuat. <button type="button" className="link" onClick={status.retry}>Coba lagi</button></p>
+    <section className="panel span-12" aria-label={t('coh_matrix_sr')}>
+      <p className="meta cabai">{t('coh_matrix_load_error')} <button type="button" className="link" onClick={status.retry}>{t('retry')}</button></p>
     </section>
   )
 
   return (
     <section className="panel span-12 matrix-panel" aria-labelledby="matrix-h">
       <header>
-        <h2 id="matrix-h">Matriks penugasan</h2>
-        {status.loading && <span className="meta">Memuat…</span>}
+        <h2 id="matrix-h">{t('coh_matrix_sr')}</h2>
+        {status.loading && <span className="meta">{t('loading')}</span>}
       </header>
-      <div className="matrix-wrap" tabIndex={0} role="region" aria-label="Matriks penugasan, scroll horizontal">
+      <div className="matrix-wrap" tabIndex={0} role="region" aria-label={t('coh_matrix_scroll')}>
         <table className="matrix-table num">
           <thead>
             <tr>
-              <th className="matrix-th-name" scope="col">Tester</th>
+              <th className="matrix-th-name" scope="col">{t('coh_col_tester')}</th>
               {apps.map((app) => (
                 <th key={app.appId} scope="col">
-                  <span className="matrix-app-name" title={app.appName ?? ''}>{app.appName ?? 'Aplikasi'}</span>
+                  <span className="matrix-app-name" title={app.appName ?? ''}>{app.appName ?? t('coh_app_fallback')}</span>
                 </th>
               ))}
             </tr>
@@ -514,27 +521,26 @@ function ObligationMatrix({ c }: { c: Cohort }) {
             {c.members.map((m) => (
               <tr key={m.userId} className={behind.has(m.userId) ? 'behind-row' : ''}>
                 <td className="matrix-td-name">
-                  <Link to={`/u/${m.userId}`}>{m.displayName || 'Anggota'}</Link>
-                  {behind.has(m.userId) && <span className="sr-only"> (tertinggal)</span>}
+                  <Link to={`/u/${m.userId}`}>{m.displayName || t('coh_members')}</Link>
+                  {behind.has(m.userId) && <span className="sr-only">{t('coh_behind_sr')}</span>}
                 </td>
                 {apps.map((app) => {
                   if (app.userId === m.userId) {
-                    return <td key={app.appId} className="matrix-cell own"><span aria-label="Aplikasi sendiri">—</span></td>
+                    return <td key={app.appId} className="matrix-cell own"><span aria-label={t('coh_own_app')}>—</span></td>
                   }
                   const cell = cells.get(app.appId!)?.get(m.userId)
                   if (!cell) {
-                    return <td key={app.appId} className="matrix-cell unassigned"><span aria-label="Tidak ditugaskan"></span></td>
+                    return <td key={app.appId} className="matrix-cell unassigned"><span aria-label={t('coh_unassigned')}></span></td>
                   }
-                  return <td key={app.appId} className={`matrix-cell ${cell}`} title={CELL_LABEL[cell]}><span aria-label={CELL_LABEL[cell]}>{CELL_GLYPH[cell]}</span></td>
+                  const lbl = cellLabel(t, cell)
+                  return <td key={app.appId} className={`matrix-cell ${cell}`} title={lbl}><span aria-label={lbl}>{CELL_GLYPH[cell]}</span></td>
                 })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="matrix-legend small muted">
-        ○ Belum · ◑ Opt-in · ◕ Memakai · ✓ Feedback · ✓✓ Terverifikasi · × Keluar · → Dipindah · — Aplikasi sendiri
-      </p>
+      <p className="matrix-legend small muted">{t('coh_matrix_legend')}</p>
     </section>
   )
 }
@@ -542,18 +548,20 @@ function ObligationMatrix({ c }: { c: Cohort }) {
 // ---------- dialogs ----------
 
 function useBusy() {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const run = async (fn: () => Promise<unknown>, done: () => void) => {
     if (busy) return
     setBusy(true); setErr(null)
-    try { await fn(); done() } catch (e) { setErr(errorText(e)) } finally { setBusy(false) }
+    try { await fn(); done() } catch (e) { setErr(errorText(e, t)) } finally { setBusy(false) }
   }
   return { busy, err, run, reset: () => setErr(null) }
 }
 
 /** PRD §5.8 step 2: say what joining commits you to before you confirm. */
 function JoinDialog({ open, onClose, c, onDone }: { open: boolean; onClose: () => void; c: Cohort; onDone: () => void }) {
+  const t = useT()
   const toast = useToast()
   const { busy, err, run, reset } = useBusy()
   const active = c.status === 'active'
@@ -562,37 +570,37 @@ function JoinDialog({ open, onClose, c, onDone }: { open: boolean; onClose: () =
   const title = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
     if (!open) return
-    const t = window.setTimeout(() => title.current?.focus(), 0)
-    return () => window.clearTimeout(t)
+    const timer = window.setTimeout(() => title.current?.focus(), 0)
+    return () => window.clearTimeout(timer)
   }, [open])
   const confirm = () => run(() => joinCohortAsTester(c.id), () => {
-    toast(active ? `Anda bergabung di ${c.name}. Aplikasi yang ditugaskan sudah dibagikan; opt-in dalam 48 jam.` : `Anda bergabung di ${c.name}. Tugas dibagikan saat cohort dimulai.`)
+    toast(active ? t('coh_toast_join_active', { name: c.name }) : t('coh_toast_join_forming', { name: c.name }))
     onClose(); onDone()
   })
   return (
-    <Dialog open={open} onClose={close} label={`Gabung sebagai tester di ${c.name}`}>
+    <Dialog open={open} onClose={close} label={t('coh_join_dialog_label', { name: c.name })}>
       <div className="sheet-body">
-        <h2 ref={title} tabIndex={-1}>Gabung sebagai tester di {c.name}?</h2>
+        <h2 ref={title} tabIndex={-1}>{t('coh_join_confirm', { name: c.name })}</h2>
         <p className="lede">
           {active
-            ? 'Cohort sudah berjalan. Anda langsung mendapat hingga 14 aplikasi, dan semua tenggat Anda dihitung dari saat ini.'
-            : 'Anda mendapat hingga 14 aplikasi saat admin memulai cohort (Hari 0).'}
+            ? t('coh_join_active_lede')
+            : t('coh_join_forming_lede')}
         </p>
         <ol className="duties">
-          <li><b>Opt-in ke semua aplikasi yang ditugaskan dalam 48 jam:</b> uji tertutup — gabung Google Group (pilih akun Play Store), pasang, lalu catat; app sudah rilis — pasang dari Play Store lalu catat (tanpa grup). Lewat dari itu, Anda tercatat tertinggal.</li>
-          <li><b>Check-in di setiap tahap:</b> “Sudah buka app” sampai hari ke-7, “Masih opt-in” di hari ke-13 (utama untuk uji tertutup), dan “Sudah update” dalam 3 hari setiap ada build baru.</li>
-          <li><b>Kirim feedback / ulasan di Google Play</b> sampai hari ke-7, dengan kata-kata Anda sendiri (ulasan publik untuk app rilis).</li>
+          <li><b>{t('coh_join_duty1')}</b>{t('coh_join_duty1_rest')}</li>
+          <li><b>{t('coh_join_duty2')}</b>{t('coh_join_duty2_rest')}</li>
+          <li><b>{t('coh_join_duty3')}</b>{t('coh_join_duty3_rest')}</li>
         </ol>
         <p className="small muted">
-          Untuk app uji tertutup, tanpa gabung <a className="link" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP}<span className="sr-only"> (tab baru)</span></a>, Install di Play biasanya tidak muncul.
-          Jika kewajiban belum selesai saat cohort ditutup, Anda ditandai Berutang dan tidak bisa ikut cohort berikutnya sampai admin menandai Lunas.
-          {!active && ' Selama cohort belum dimulai, Anda masih bisa keluar.'}
+          {t('coh_join_foot1')} <a className="link" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP}<span className="sr-only">{t('coh_new_tab')}</span></a>{t('coh_join_foot2')}
+          {' '}{t('coh_join_foot3')}
+          {!active && t('coh_join_foot4')}
         </p>
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={close}>Batal</button>
-        <button type="button" className="btn primary" onClick={confirm} aria-busy={busy || undefined}>{busy ? 'Menyimpan…' : 'Gabung sebagai tester'}</button>
+        <button type="button" className="btn" onClick={close}>{t('cancel')}</button>
+        <button type="button" className="btn primary" onClick={confirm} aria-busy={busy || undefined}>{busy ? t('saving') : t('coh_join_tester')}</button>
       </div>
     </Dialog>
   )
@@ -602,6 +610,7 @@ function JoinDialog({ open, onClose, c, onDone }: { open: boolean; onClose: () =
 function RequestDialog({ open, onClose, c, apps, loading, onDone }: {
   open: boolean; onClose: () => void; c: Cohort; apps: { id: string; name: string; inCohort: string | null }[]; loading: boolean; onDone: () => void
 }) {
+  const t = useT()
   const toast = useToast()
   const { busy, err, run, reset } = useBusy()
   const free = apps.filter((a) => a.inCohort == null)
@@ -612,11 +621,11 @@ function RequestDialog({ open, onClose, c, apps, loading, onDone }: {
   const first = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (!open) return
-    const t = window.setTimeout(() => title.current?.focus(), 0)
-    return () => window.clearTimeout(t)
+    const timer = window.setTimeout(() => title.current?.focus(), 0)
+    return () => window.clearTimeout(timer)
   }, [open])
   const close = () => { reset(); setShowErr(false); onClose() }
-  const choiceErr = !choice ? 'Pilih satu aplikasi yang Anda bawa.' : undefined
+  const choiceErr = !choice ? t('coh_pick_app') : undefined
   const firstFree = free[0]?.id
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -624,43 +633,43 @@ function RequestDialog({ open, onClose, c, apps, loading, onDone }: {
     if (choiceErr) { setShowErr(true); first.current?.focus(); return }
     const app = apps.find((a) => a.id === choice)
     run(() => requestCohortSlot(c.id, choice), () => {
-      toast(`${app?.name ?? 'Aplikasi'} diajukan ke ${c.name}. Admin akan menyetujui atau menolak.`)
+      toast(t('coh_toast_requested', { app: app?.name ?? t('coh_app_fallback'), name: c.name }))
       setPicked(''); onClose(); onDone()
     })
   }
   return (
-    <Dialog open={open} onClose={close} label={`Ajukan app ke ${c.name}`}>
+    <Dialog open={open} onClose={close} label={t('coh_request_dialog_label', { name: c.name })}>
       <form onSubmit={submit} noValidate>
         <div className="sheet-body">
-          <h2 ref={title} tabIndex={-1}>Ajukan app ke {c.name}</h2>
-          <p className="lede">Pilih satu aplikasi yang ingin Anda bawa. Admin menyetujui atau menolak; Anda melihat hasilnya di halaman ini. Hanya satu pengajuan yang bisa menunggu sekali waktu.</p>
+          <h2 ref={title} tabIndex={-1}>{t('coh_request_title', { name: c.name })}</h2>
+          <p className="lede">{t('coh_request_lede')}</p>
           {loading ? <Skel w={220} h={44} /> : apps.length === 0 ? (
-            <Empty title="Anda belum punya aplikasi.">
-              <p>Tambahkan aplikasi dulu, lalu ajukan. Tanpa aplikasi, Anda tetap bisa gabung sebagai tester murni.</p>
-              <Link className="btn" to="/apps/new">Tambah aplikasi</Link>
+            <Empty title={t('coh_no_apps_title')}>
+              <p>{t('coh_no_apps_body')}</p>
+              <Link className="btn" to="/apps/new">{t('coh_add_app')}</Link>
             </Empty>
           ) : (
             <fieldset className="fieldset rq-opts" aria-describedby={showErr && choiceErr ? 'rq-err' : undefined}>
-              <legend>Aplikasi yang dibawa</legend>
+              <legend>{t('coh_bring_app_legend')}</legend>
               {apps.map((a) => (
                 <label key={a.id} className={`rq-opt${a.inCohort != null ? ' off' : ''}`}>
                   <input ref={a.id === firstFree ? first : undefined} type="radio" name="rq-app" value={a.id} checked={choice === a.id} disabled={a.inCohort != null}
                     onChange={() => { setPicked(a.id); setShowErr(false) }} aria-describedby={a.inCohort != null ? `rq-${a.id}` : undefined} />
                   <span className="cell-2">
                     <b>{a.name}</b>
-                    {a.inCohort != null && <span id={`rq-${a.id}`}>Sudah di {a.inCohort || 'cohort lain yang belum ditutup'}.</span>}
+                    {a.inCohort != null && <span id={`rq-${a.id}`}>{t('coh_already_in', { cohort: a.inCohort || t('in_unnamed_cohort') })}</span>}
                   </span>
                 </label>
               ))}
               <span className={showErr && choiceErr ? 'hint err' : 'sr-only'} id="rq-err" aria-live="polite">{showErr ? choiceErr : ''}</span>
-              {free.length === 0 && <p className="small muted">Semua aplikasi Anda sudah ada di cohort yang belum ditutup. <Link className="link" to="/apps/new">Tambah aplikasi lain</Link>.</p>}
+              {free.length === 0 && <p className="small muted">{t('coh_all_apps_in_cohort')} <Link className="link" to="/apps/new">{t('coh_add_another_app')}</Link>.</p>}
             </fieldset>
           )}
           {err && <ErrorBox text={err} />}
         </div>
         <div className="sheet-foot">
-          <button type="button" className="btn" onClick={close}>Batal</button>
-          {free.length > 0 && <button className="btn primary" aria-busy={busy || undefined}>{busy ? 'Mengajukan…' : 'Ajukan ke admin'}</button>}
+          <button type="button" className="btn" onClick={close}>{t('cancel')}</button>
+          {free.length > 0 && <button className="btn primary" aria-busy={busy || undefined}>{busy ? t('coh_submitting') : t('coh_submit_admin')}</button>}
         </div>
       </form>
     </Dialog>
@@ -669,19 +678,20 @@ function RequestDialog({ open, onClose, c, apps, loading, onDone }: {
 
 /** FR-51: before the link is shown the first time. Acknowledged once per cohort, per browser. */
 function WhatsAppNotice({ open, onClose, url, onAck }: { open: boolean; onClose: () => void; url: string; onAck: () => void }) {
+  const t = useT()
   return (
-    <Dialog open={open} onClose={onClose} label="Sebelum gabung grup WhatsApp">
+    <Dialog open={open} onClose={onClose} label={t('coh_wa_notice_label')}>
       <div className="sheet-body">
-        <h2>Sebelum gabung grup WhatsApp</h2>
+        <h2>{t('coh_wa_notice_label')}</h2>
         <ul className="duties plain">
-          <li><b>Nomor HP Anda terlihat</b> oleh semua anggota grup, dan nomor mereka terlihat oleh Anda.</li>
-          <li><b>Gabung grup ini opsional.</b> Grup untuk koordinasi; status tetap dilaporkan di TesBareng.</li>
-          <li><b>Google Group tetap wajib.</b> Play Console hanya menghitung tester dari {COMMUNITY_GROUP}.</li>
+          <li><b>{t('coh_wa_li1_b')}</b>{t('coh_wa_li1')}</li>
+          <li><b>{t('coh_wa_li2_b')}</b>{t('coh_wa_li2')}</li>
+          <li><b>{t('coh_wa_li3_b')}</b>{t('coh_wa_li3', { group: COMMUNITY_GROUP })}</li>
         </ul>
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Nanti saja</button>
-        <a className="btn primary" href={url} target="_blank" rel="noreferrer" onClick={onAck}><IconExternal />Mengerti, buka grup<span className="sr-only"> (tab baru)</span></a>
+        <button type="button" className="btn" onClick={onClose}>{t('coh_wa_later')}</button>
+        <a className="btn primary" href={url} target="_blank" rel="noreferrer" onClick={onAck}><IconExternal />{t('coh_wa_open')}<span className="sr-only">{t('coh_new_tab')}</span></a>
       </div>
     </Dialog>
   )
@@ -699,18 +709,20 @@ function writeAck(id: string) {
 // ---------- states ----------
 
 function CohortNotFound() {
+  const t = useT()
   return (
     <div className="state-page">
-      <h1 className="page-title">Cohort tidak ditemukan</h1>
-      <p>Tautannya mungkin salah ketik, atau cohort ini sudah dihapus admin.</p>
-      <Link className="btn primary" to="/cohorts">Lihat semua cohort</Link>
+      <h1 className="page-title">{t('coh_not_found_title')}</h1>
+      <p>{t('coh_not_found_body')}</p>
+      <Link className="btn primary" to="/cohorts">{t('coh_see_all')}</Link>
     </div>
   )
 }
 
 function DetailSkeleton() {
+  const t = useT()
   return (
-    <div aria-busy="true" aria-label="Memuat cohort">
+    <div aria-busy="true" aria-label={t('coh_loading_sr')}>
       <Skel w={90} h={20} />
       <div className="record-head skel-head" style={{ marginTop: 'var(--s-2)' }}>
         <div className="rh-main"><Skel w={240} h={32} /><Skel w={200} h={22} /></div>

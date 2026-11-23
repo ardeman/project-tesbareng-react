@@ -13,24 +13,48 @@ import { useMyAssignedApps } from '../lib/cohorts'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
 import { api, errorCode, markEmailListed, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useEmailListings, useMyEmailListing, useTesters } from '../lib/data'
-import { checkIn, milestones, useCheckIns, type CheckIn, type Milestone } from '../lib/checkins'
+import { checkIn, milestones, useCheckIns, type CheckIn, type CheckInKind, type Milestone } from '../lib/checkins'
+import { useT } from '../lib/i18n'
+import type { Keys } from '../locales/id'
 import {
   groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, markResumeJoin, openPlayInstall, playInstallUrl,
   readGroupJoinProgress, takeResumeJoin, writeGroupJoinProgress, type GroupJoinProgress,
 } from '../lib/joinProgress'
 import {
   computeProgress, daysActive, fmtDate, fmtDateTime, fmtDayHeading, inDays, isNewBuild, isoDate, openSeats, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
-  testerStatusLabel, type Progress,
+  type Progress,
 } from '../lib/progress'
 import type { AppDoc, BuildDoc, TesterDoc, TesterStatus } from '../lib/types'
 
 type DialogKind = null | 'join' | 'feedback' | 'build' | 'manual' | 'leave' | { tester: TesterDoc }
+
+type Tr = ReturnType<typeof useT>
+
+function testerStatusTr(t: Tr, s: TesterStatus): string {
+  return t(`tester_status_${s}` as Keys)
+}
+
+function milestoneLabelTr(t: Tr, m: Milestone): string {
+  if (m.kind === 'updated_build') {
+    return t('appd_ci_updated_version', { version: m.label })
+  }
+  const key: Record<Exclude<CheckInKind, 'updated_build'>, Keys> = {
+    used_app: 'appd_ci_used_app',
+    still_opted_in: 'appd_ci_still_opted_in',
+  }
+  return t(key[m.kind as Exclude<CheckInKind, 'updated_build'>])
+}
+
+function playOpenLabel(t: Tr, storeOk: boolean, live: boolean): string {
+  return storeOk || live ? t('appd_act_open_play_store') : t('appd_act_open_optin')
+}
 
 /** One action in the header zone: the primary, a secondary, or an overflow item (ADR-009 §1, §7). */
 interface Action { label: string; icon?: ReactNode; onClick?: () => void; href?: string; to?: string; busy?: boolean; blocked?: boolean }
 interface Actions { primary?: Action; secondary: Action[]; overflow: MenuItem[]; note?: string }
 
 export function AppDetail() {
+  const t = useT()
   const { id } = useParams()
   const app = useApp(id)
   const testers = useTesters(id)
@@ -43,7 +67,7 @@ export function AppDetail() {
   // Placed only once app, testers and builds are in, so the KPI block does not jump after first paint.
   const kpiPlace = useKpiPlacement(!!app.data && !testers.loading && !builds.loading)
   usePageMeta(
-    app.data && !app.data.deleted ? app.data.name : 'Aplikasi',
+    app.data && !app.data.deleted ? app.data.name : t('nav_apps'),
     app.data && !app.data.deleted ? app.data.description : undefined,
     app.data && !app.data.deleted && id
       ? { image: `/api/og/app?id=${encodeURIComponent(id)}`, url: `/apps/${id}` }
@@ -72,8 +96,8 @@ export function AppDetail() {
     if (resume === appId) setDialog('join')
   }, [user, appId])
 
-  if (app.error) return <ErrorBox text="Aplikasi gagal dimuat. Periksa koneksi, lalu coba lagi." onRetry={app.retry} />
-  if (app.data === null || (app.data && app.data.deleted && !isAdmin)) return <NotFound what="Aplikasi" />
+  if (app.error) return <ErrorBox text={t('form_load_error')} onRetry={app.retry} />
+  if (app.data === null || (app.data && app.data.deleted && !isAdmin)) return <NotFound what={t('nav_apps')} />
   if (!app.data || !progress) return <DetailSkeleton />
 
   const a = app.data
@@ -103,126 +127,119 @@ export function AppDetail() {
 
   // ADR-009 §1: one primary per role, up to two secondary, the rest behind "…".
   const actions: Actions = (() => {
+    const live = isLiveApp(a)
+    const playLabel = playOpenLabel(t, storeOk, live)
     if (isCreator) {
       const overflow: MenuItem[] = []
-      if (storeOk) overflow.push({ label: 'Buka halaman Play', href: a.storeUrl! })
-      if (a.optInUrl) overflow.push({ label: 'Buka link opt-in', href: a.optInUrl })
-      overflow.push({ label: 'Bagikan ke WhatsApp', onSelect: () => shareToWhatsApp(a.name, openSeats(a), a.id) })
+      if (storeOk) overflow.push({ label: t('appd_act_open_play_page'), href: a.storeUrl! })
+      if (a.optInUrl) overflow.push({ label: t('appd_act_open_optin'), href: a.optInUrl })
+      overflow.push({ label: t('appd_act_share_whatsapp'), onSelect: () => shareToWhatsApp(t, a.name, openSeats(a), a.id) })
       return {
-        primary: { label: 'Catat build', icon: <IconPlus />, onClick: () => setDialog('build') },
+        primary: { label: t('dlg_build_submit'), icon: <IconPlus />, onClick: () => setDialog('build') },
         secondary: [
-          { label: 'Tambah tester manual', onClick: () => setDialog('manual') },
-          { label: 'Edit aplikasi', to: `/apps/${a.id}/edit` },
+          { label: t('dlg_manual_label'), onClick: () => setDialog('manual') },
+          { label: t('form_title_edit'), to: `/apps/${a.id}/edit` },
         ],
         overflow,
       }
     }
     if (mine?.status === 'active') {
       const since = mine.feedbackSentAt ?? mine.optedInAt
-      // A new build stops being "waiting" once this tester has checked in on it.
       const latest = builds.data[0]
       const buildWaiting = isNewBuild(a) && a.lastBuildAt != null && a.lastBuildAt > since && !(latest && flow.isDone('updated_build', latest.id))
-      const leave: MenuItem = { label: 'Berhenti menguji', danger: true, onSelect: () => setDialog('leave') }
-      const play: Action = { label: storeOk || isLiveApp(a) ? 'Buka di Play Store' : 'Buka link opt-in', icon: <IconExternal />, href: playUrl }
-      const editNote: Action = { label: isLiveApp(a) ? 'Ubah catatan ulasan' : 'Ubah catatan feedback', onClick: () => setDialog('feedback') }
+      const leave: MenuItem = { label: t('appd_act_stop_testing'), danger: true, onSelect: () => setDialog('leave') }
+      const play: Action = { label: playLabel, icon: <IconExternal />, href: playUrl }
+      const editNote: Action = { label: live ? t('appd_act_edit_review_note') : t('appd_act_edit_feedback_note'), onClick: () => setDialog('feedback') }
       if (!mine.feedbackSent) {
         return {
-          primary: { label: isLiveApp(a) ? 'Tandai sudah kirim ulasan' : 'Tandai sudah kirim', onClick: () => setDialog('feedback') },
+          primary: { label: live ? t('appd_act_mark_review_sent') : t('dlg_mark_sent'), onClick: () => setDialog('feedback') },
           secondary: [play],
           overflow: [leave],
         }
       }
-      if (buildWaiting) return { primary: { label: 'Uji build baru di Play', icon: <IconExternal />, href: playUrl }, secondary: [editNote], overflow: [leave] }
+      if (buildWaiting) return { primary: { label: t('appd_act_test_new_build'), icon: <IconExternal />, href: playUrl }, secondary: [editNote], overflow: [leave] }
       const next = flow.next
       if (next) {
-        const primary: Action = { label: `Check-in: ${next.label}`, onClick: () => flow.run(next), busy: flow.pending === next.key, blocked: !!flow.pending && flow.pending !== next.key }
+        const label = milestoneLabelTr(t, next)
+        const primary: Action = { label: t('appd_act_checkin', { label }), onClick: () => flow.run(next), busy: flow.pending === next.key, blocked: !!flow.pending && flow.pending !== next.key }
         return { primary, secondary: [play, editNote], overflow: [leave] }
       }
       return { secondary: [play, editNote], overflow: [leave] }
     }
-    const playAction: Action = { label: storeOk || isLiveApp(a) ? 'Buka di Play Store' : 'Buka link opt-in', icon: <IconExternal />, href: playUrl }
+    const playAction: Action = { label: playLabel, icon: <IconExternal />, href: playUrl }
     const storeOverflow: MenuItem[] = []
-    if (storeOk && a.optInUrl) storeOverflow.push({ label: 'Link opt-in (cadangan)', href: a.optInUrl })
-    storeOverflow.push({ label: 'Bagikan ke WhatsApp', onSelect: () => shareToWhatsApp(a.name, openSeats(a), a.id) })
+    if (storeOk && a.optInUrl) storeOverflow.push({ label: t('appd_act_optin_backup'), href: a.optInUrl })
+    storeOverflow.push({ label: t('appd_act_share_whatsapp'), onSelect: () => shareToWhatsApp(t, a.name, openSeats(a), a.id) })
     if (mine?.status === 'removed') return { secondary: [playAction], overflow: storeOverflow }
-    if (isLiveApp(a)) {
+    if (live) {
       if (groupPlayStepsDone(groupProgress)) {
         return {
-          primary: { label: 'Catat saya sebagai pengulas', onClick: openJoinOrLogin },
+          primary: { label: t('appd_act_record_reviewer'), onClick: openJoinOrLogin },
           secondary: [playAction],
           overflow: storeOverflow,
-          note: user
-            ? 'Sudah pasang? Catat di TesBareng, lalu tulis ulasan publik di Play Store.'
-            : 'Sudah pasang? Masuk dengan Google untuk mencatat, lalu tulis ulasan publik di Play.',
+          note: user ? t('appd_note_live_installed_logged') : t('appd_note_live_installed_anon'),
         }
       }
       return {
-        primary: { label: 'Mulai ulas app ini', onClick: focusGuide },
+        primary: { label: t('appd_act_start_review'), onClick: focusGuide },
         secondary: [playAction],
         overflow: storeOverflow,
-        note: 'App sudah rilis: buka Play Store → pasang → catat di TesBareng → tulis ulasan publik.',
+        note: t('appd_note_live_flow'),
       }
     }
     if (a.testerMethod === 'email_list') {
-      // The opt-in link only works once the creator has added this member's email in Play Console.
       const l = myListing.data
       if (user && myListing.loading) return { secondary: [], overflow: storeOverflow }
       if (!l) {
         return {
-          primary: { label: 'Minta ditambahkan', onClick: () => needLogin('join') },
+          primary: { label: t('appd_act_request_add'), onClick: () => needLogin('join') },
           secondary: [],
           overflow: storeOverflow,
-          note: user
-            ? 'Setelah Anda minta, creator menambahkan email di Play Console. Baru kemudian bisa opt-in dan pasang.'
-            : 'Masuk dengan Google untuk membagikan email ke creator. Opt-in & pasang baru bisa setelah email ditambahkan.',
+          note: user ? t('appd_note_email_request_logged') : t('appd_note_email_request_anon'),
         }
       }
       if (l.listedAt == null) {
         return {
-          secondary: [{ label: 'Lihat permintaan', onClick: () => setDialog('join') }],
+          secondary: [{ label: t('appd_act_view_request'), onClick: () => setDialog('join') }],
           overflow: storeOverflow,
-          note: `Menunggu creator menambahkan email Anda · diminta ${fmtDate(l.requestedAt)}. Anda bisa tutup halaman ini dan kembali nanti.`,
+          note: t('appd_note_email_waiting', { date: fmtDate(l.requestedAt) }),
         }
       }
       return {
-        primary: { label: 'Lanjut: pasang di Play', onClick: () => setDialog('join') },
+        primary: { label: t('appd_act_continue_install'), onClick: () => setDialog('join') },
         secondary: [playAction],
         overflow: storeOverflow,
-        note: 'Email sudah ditambahkan. Buka Play Store / opt-in dengan akun Google yang sama, lalu pasang.',
+        note: t('appd_note_email_ready'),
       }
     }
-    // Google Group: Play-first. Login only when recording on TesBareng.
     if (groupPlayStepsDone(groupProgress)) {
       return {
-        primary: { label: 'Catat saya sebagai tester', onClick: openJoinOrLogin },
+        primary: { label: t('appd_act_record_tester'), onClick: openJoinOrLogin },
         secondary: [playAction],
         overflow: storeOverflow,
-        note: user ? 'Langkah Play selesai. Catat di TesBareng supaya hari aktif terhitung.' : 'Langkah Play selesai. Masuk dengan Google untuk mencatat di TesBareng.',
+        note: user ? t('appd_note_play_done_logged') : t('appd_note_play_done_anon'),
       }
     }
     return {
-      primary: { label: 'Mulai uji app ini', onClick: focusGuide },
+      primary: { label: t('appd_act_start_test'), onClick: focusGuide },
       secondary: [playAction],
       overflow: storeOverflow,
-      note: storeOk
-        ? 'Tanpa login dulu: gabung grup → buka Play Store → pasang. Lalu catat di TesBareng.'
-        : 'Tanpa login dulu: gabung grup → buka link opt-in → pasang. Lalu catat di TesBareng.',
+      note: storeOk ? t('appd_note_beginner_store') : t('appd_note_beginner_optin'),
     }
   })()
 
   return (
     <>
-      <Link to="/apps" className="crumb"><IconBack />Aplikasi</Link>
+      <Link to="/apps" className="crumb"><IconBack />{t('nav_apps')}</Link>
       <RecordHead app={a} p={progress} loading={testers.loading} actions={actions} assigned={myAssigned.data.get(a.id)} />
 
       <Finding app={a} p={progress} loading={loading} description={a.description} />
 
-      {/* Hidden for a tester who already checked in "Sudah update" on this build (same rule as Tugas saya). */}
       {isNewBuild(a) && builds.data[0] && !(mine?.status === 'active' && flow.isDone('updated_build', builds.data[0].id)) && (
         <div className="notice info" role="status">
-          <span><b>Build baru {builds.data[0].versionName}</b> · {relTime(builds.data[0].uploadedAt)}. Perbarui aplikasi dari Play Store, lalu uji lagi.</span>
+          <span>{t('appd_new_build_line', { version: builds.data[0].versionName, time: relTime(builds.data[0].uploadedAt) })}</span>
           <span className="spacer" />
-          <a className="link" href={playUrl} target="_blank" rel="noreferrer">Buka di Play</a>
+          <a className="link" href={playUrl} target="_blank" rel="noreferrer">{t('appd_open_in_play')}</a>
         </div>
       )}
 
@@ -245,10 +262,10 @@ export function AppDetail() {
         <div className="span-8 col-fill">
           <section className="panel" aria-labelledby="board-h" ref={kpiPlace.board}>
             <header>
-              <h2 id="board-h" className="num">Menuju {progress.target} tester × 14 hari</h2>
+              <h2 id="board-h" className="num">{t('appd_board_heading', { target: progress.target })}</h2>
               <BoardLegend />
             </header>
-            {testers.error ? <ErrorBox text="Daftar tester gagal dimuat. Coba lagi sebentar lagi." onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} total={progress.target} counted={progress.testDay} />}
+            {testers.error ? <ErrorBox text={t('appd_testers_load_error')} onRetry={testers.retry} /> : <Board seats={progress.seats} loading={testers.loading} total={progress.target} counted={progress.testDay} />}
           </section>
           {kpiPlace.beside && <Kpis p={progress} app={a} loading={loading} />}
         </div>
@@ -268,7 +285,7 @@ export function AppDetail() {
 
         {a.testerMethod === 'email_list' && user?.uid === a.creatorUid && <EmailListPanel app={a} />}
 
-        <section className="panel split-host span-12" aria-label="Build dan catatan feedback">
+        <section className="panel split-host span-12" aria-label={t('appd_build_feedback_aria')}>
           <div className="split">
             <BuildLog builds={builds.data} loading={builds.loading} error={builds.error} retry={builds.retry} p={progress} app={a} isCreator={isCreator} />
             <FeedbackList testers={testers.data} loading={testers.loading} />
@@ -289,12 +306,13 @@ export function AppDetail() {
 // ---------- header zone: name, status, slot progress (ADR-012), the role's actions (ADR-009 §4) ----------
 
 function ActionButton({ a, primary, small }: { a: Action; primary?: boolean; small?: boolean }) {
+  const t = useT()
   const cls = `btn ${primary ? 'primary' : ''} ${small ? 'sm' : ''}`
   if (a.href) return <a className={cls} href={a.href} target="_blank" rel="noreferrer">{a.icon}{a.label}</a>
   if (a.to) return <Link className={cls} to={a.to}>{a.icon}{a.label}</Link>
   return (
     <button type="button" className={cls} onClick={a.blocked ? undefined : a.onClick} aria-busy={a.busy || undefined} aria-disabled={a.blocked || undefined}>
-      {a.icon}{a.busy ? 'Menyimpan…' : a.label}
+      {a.icon}{a.busy ? t('saving') : a.label}
     </button>
   )
 }
@@ -302,6 +320,7 @@ function ActionButton({ a, primary, small }: { a: Action; primary?: boolean; sma
 function RecordHead({ app, p, loading, actions, assigned }: {
   app: AppDoc; p: Progress; loading: boolean; actions: Actions; assigned?: { cohortId: string; name: string }
 }) {
+  const t = useT()
   const head = useRef<HTMLElement>(null)
   const [stuck, setStuck] = useState(false)
   // Once the header scrolls away, a slim bar keeps name, progress and the primary action in view.
@@ -315,7 +334,7 @@ function RecordHead({ app, p, loading, actions, assigned }: {
   // Google counts a day only while all slots are active together: the same clock as the board's pandan columns.
   const counted = Math.min(p.testDay, TARGET_DAYS)
   const count = loading ? <Skel w={56} h={24} /> : <><b>{counted}</b><small> / {TARGET_DAYS}</small></>
-  const daysLabel = `${counted} dari ${TARGET_DAYS} hari terhitung, ${p.active} tester aktif dari ${p.target} kursi`
+  const daysLabel = t('appd_days_seats_label', { counted, target: TARGET_DAYS, active: p.active, slots: p.target })
   return (
     <>
       <header ref={head} className="record-head">
@@ -327,25 +346,24 @@ function RecordHead({ app, p, loading, actions, assigned }: {
               <Avatar name={app.creatorName} photo={app.creatorPhotoURL} /><span>{app.creatorName}</span>
             </Link>
             {assigned && (
-              // Reuses .creator-link (inline-flex, 44 px target, bold); the cohort name says where the assignment came from.
               <Link to={`/cohorts/${assigned.cohortId}`} className="creator-link">
-                <AssignedChip /><span className="assigned-via">lewat {assigned.name}</span>
+                <AssignedChip /><span className="assigned-via">{t('appd_assigned_via', { name: assigned.name })}</span>
               </Link>
             )}
             {app.packageName && <span className="pkg">{app.packageName}</span>}
           </div>
         </div>
         <div className="rh-progress">
-          <p className="rh-count num">{count}<span className="rh-label">hari terhitung</span></p>
+          <p className="rh-count num">{count}<span className="rh-label">{t('appd_days_counted')}</span></p>
           <Seats active={counted} eligible={counted} total={TARGET_DAYS} className="wide" label={daysLabel} />
-          <p className="rh-sub num">{p.active >= p.target ? `${p.active} aktif · kursi penuh (${p.target})` : `${p.active} aktif dari ${p.target} kursi · hari mulai dihitung saat kursi penuh`}</p>
+          <p className="rh-sub num">{p.active >= p.target ? t('appd_seats_full', { active: p.active, target: p.target }) : t('appd_seats_open', { active: p.active, target: p.target })}</p>
         </div>
         <div className="rh-actions">
           {actions.primary && <ActionButton a={actions.primary} primary />}
           {(actions.secondary.length > 0 || actions.overflow.length > 0) && (
             <div className="rh-more">
               {actions.secondary.slice(0, 2).map((a) => <ActionButton key={a.label} a={a} />)}
-              <OverflowMenu items={actions.overflow} label="Aksi lain" />
+              <OverflowMenu items={actions.overflow} label={t('more_actions')} />
             </div>
           )}
           {actions.note && <p className="muted small">{actions.note}</p>}
@@ -353,7 +371,7 @@ function RecordHead({ app, p, loading, actions, assigned }: {
       </header>
       <div className={`record-bar ${stuck ? 'show' : ''}`} inert={!stuck} aria-hidden={!stuck}>
         <span className="rb-name">{app.name}</span>
-        <span className="rb-count num"><b>{Math.min(p.testDay, TARGET_DAYS)}</b> / {TARGET_DAYS}<span className="sr-only"> hari terhitung</span></span>
+        <span className="rb-count num"><b>{Math.min(p.testDay, TARGET_DAYS)}</b> / {TARGET_DAYS}<span className="sr-only"> {t('appd_days_counted')}</span></span>
         {actions.primary && <ActionButton a={actions.primary} primary small />}
       </div>
     </>
@@ -361,38 +379,36 @@ function RecordHead({ app, p, loading, actions, assigned }: {
 }
 
 function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; loading: boolean; description: string }) {
+  const t = useT()
   if (loading) return <div className="finding"><Skel w={420} h={20} /></div>
-  // ADR-012 §4: what Google's 12 still needs from outside; community testers beyond the slots count too.
   const outside = p.target < TARGET_TESTERS ? TARGET_TESTERS - Math.max(p.active, p.target) : 0
   let text: string
   if (app.status === 'live') {
     text = p.active > 0
-      ? `Sudah rilis production. ${p.active} pengulas tercatat; minta mereka tulis ulasan publik di Play Store.`
-      : 'Sudah rilis production. Bagikan halaman ini atau ajukan ke cohort agar anggota memasang app dan menulis ulasan publik di Play Store.'
+      ? t('appd_find_live_active', { active: p.active })
+      : t('appd_find_live_idle')
   }
-  else if (p.ready) text = `Siap ajukan akses produksi: ${p.eligible} tester sudah 14 hari berturut-turut.`
+  else if (p.ready) text = t('appd_find_ready', { eligible: p.eligible })
   else if (p.active < p.target) {
     const need = p.target - p.active
-    // Not ready until the target-th seat is filled and then runs 14 days; the soonest tester's date unlocks nothing.
-    text = `Butuh ${need} tester aktif lagi.` + (p.active > 0 ? ` Paling cepat siap 14 hari setelah kursi ke-${p.target} terisi.` : ' Belum ada yang mendaftar.')
+    text = t('appd_find_need_more', { need }) + (p.active > 0 ? t('appd_find_need_fast', { target: p.target }) : t('appd_find_need_none'))
   } else {
-    // Ready only when the target-th most senior tester reaches 14 days, not the next one to pass.
-    text = `Kursi sudah terisi; ${p.testDay} dari ${TARGET_DAYS} hari sudah terhitung.` +
-      ` Siap ajukan paling cepat ${inDays(TARGET_DAYS - p.testDay)}, jika ${p.target} tester teratas tetap aktif.`
+    text = t('appd_find_seats_filled', { counted: p.testDay, days: TARGET_DAYS }) +
+      t('appd_find_seats_ready', { when: inDays(TARGET_DAYS - p.testDay), target: p.target })
   }
   return (
     <div className="finding">
       <p className="verdict num">{text}</p>
       {outside > 0 && (
         <p className="muted small num">
-          Target TesBareng: {p.target} tester{p.active > p.target && `, sudah ${p.active} aktif`}. Sisanya ({outside}) dari luar komunitas, dilaporkan sendiri oleh creator.
+          {t('appd_find_target_base', { target: p.target })}{p.active > p.target ? t('appd_find_target_extra', { active: p.active }) : ''}{t('appd_find_target_outside', { outside })}
         </p>
       )}
       <p className="desc">{description}</p>
       {p.lowEngagement && app.status !== 'live' && (
         <p className="flag">
-          <Chip glyph="!">Keterlibatan rendah</Chip>
-          <span>{p.builds === 0 ? 'Belum ada build baru selama uji.' : 'Kurang dari separuh tester yang sudah 14 hari mengirim feedback.'} Google juga menilai feedback dan pembaruan, bukan hanya jumlah tester.</span>
+          <Chip glyph="!">{t('appd_low_engagement')}</Chip>
+          <span>{p.builds === 0 ? t('appd_low_engagement_no_build') : t('appd_low_engagement_low_fb')}{t('appd_low_engagement_google')}</span>
         </p>
       )}
     </div>
@@ -403,7 +419,7 @@ function Finding({ app, p, loading, description }: { app: AppDoc; p: Progress; l
 function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
   app: AppDoc; p: Progress; mine?: TesterDoc; isCreator: boolean; flow: CheckInFlow; beginnerGuideOutside?: boolean
 }) {
-  // Stamp the feedback chip only when "sent" flips on while this panel is open, not on every visit.
+  const t = useT()
   const sentBefore = useRef(mine?.feedbackSent)
   const [stamp, setStamp] = useState(false)
   useEffect(() => {
@@ -412,22 +428,22 @@ function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
   }, [mine?.feedbackSent])
   const guide = app.feedbackGuide ? (
     <div className="stack-8">
-      <h3>Yang ingin diuji kreator</h3>
+      <h3>{t('form_preview_title')}</h3>
       <TestingMissions guide={app.feedbackGuide} appId={app.id} uid={mine?.uid ?? undefined} />
     </div>
   ) : (
-    <p className="muted">Creator belum menulis panduan feedback. Ceritakan apa yang berjalan, apa yang rusak, dan apa yang perlu diperbaiki.</p>
+    <p className="muted">{t('appd_guide_empty')}</p>
   )
 
   if (isCreator) {
     return (
-      <section className="panel stack-16" aria-label="Aplikasi Anda">
-        <h2>Aplikasi Anda</h2>
+      <section className="panel stack-16" aria-label={t('appd_panel_your_app_aria')}>
+        <h2>{t('appd_panel_your_app')}</h2>
         <dl className="kv">
-          <dt>Feedback belum diverifikasi</dt><dd className="num">{p.feedbackSent - p.feedbackVerified}</dd>
-          <dt>Feedback belum dibalas</dt><dd className="num">{p.feedbackSent - p.replied}</dd>
+          <dt>{t('appd_panel_unverified')}</dt><dd className="num">{p.feedbackSent - p.feedbackVerified}</dd>
+          <dt>{t('appd_panel_unreplied')}</dt><dd className="num">{p.feedbackSent - p.replied}</dd>
         </dl>
-        <p className="muted small">Cek di Play Console → Testing feedback, lalu centang kolom Feedback di tabel tester.</p>
+        <p className="muted small">{t('appd_panel_play_console_hint')}</p>
         {guide}
       </section>
     )
@@ -436,28 +452,28 @@ function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
   if (mine?.status === 'active') {
     const d = daysActive(mine)
     return (
-      <section className="panel stack-16" aria-label="Status Anda sebagai tester">
+      <section className="panel stack-16" aria-label={t('appd_panel_tester_aria')}>
         <div>
-          <h2>Anda tester di sini</h2>
-          <p className="lead-num num" style={{ marginTop: 'var(--s-2)' }}>{Math.min(d, 999)}<small> / {TARGET_DAYS} hari</small></p>
-          <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(d, TARGET_DAYS)} max={TARGET_DAYS} label="Hari aktif Anda" /></div>
+          <h2>{t('appd_panel_you_tester')}</h2>
+          <p className="lead-num num" style={{ marginTop: 'var(--s-2)' }}>{Math.min(d, 999)}<small> / {TARGET_DAYS}{t('apps_days_unit')}</small></p>
+          <div style={{ marginTop: 'var(--s-2)' }}><Bar value={Math.min(d, TARGET_DAYS)} max={TARGET_DAYS} label={t('appd_panel_your_days')} /></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--s-2)' }}>
-            <p className="muted small num" style={{ margin: 0 }}>Sejak {fmtDate(mine.optedInAt)}. Jangan uninstall sebelum app ini lulus 14 hari Google.</p>
+            <p className="muted small num" style={{ margin: 0 }}>{t('appd_panel_since', { date: fmtDate(mine.optedInAt) })}</p>
             {mine.optedInAt && (
               <button
                 type="button"
                 className="text-action"
                 style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}
                 onClick={() => {
-                  const targetDay = d < 5 ? 5 : TARGET_DAYS;
-                  const targetTime = new Date(mine.optedInAt + targetDay * 24 * 60 * 60 * 1000);
-                  const title = targetDay === 5 ? 'Kirim feedback Play Store: ' + app.name : 'Selesai 14 hari uji: ' + app.name;
-                  const desc = 'Buka TesBareng untuk check-in pengujian aplikasi ' + app.name + ': ' + window.location.href;
-                  window.open(createCalendarUrl(title, desc, targetTime), '_blank');
+                  const targetDay = d < 5 ? 5 : TARGET_DAYS
+                  const targetTime = new Date(mine.optedInAt + targetDay * 24 * 60 * 60 * 1000)
+                  const title = targetDay === 5 ? t('appd_cal_title_day5', { name: app.name }) : t('appd_cal_title_day14', { name: app.name })
+                  const desc = t('appd_cal_desc', { name: app.name, url: window.location.href })
+                  window.open(createCalendarUrl(title, desc, targetTime), '_blank')
                 }}
-                title="Pasang pengingat jadwal di Google Calendar"
+                title={t('appd_cal_btn_title')}
               >
-                + Pengingat Kalender
+                {t('appd_cal_btn')}
               </button>
             )}
           </div>
@@ -466,10 +482,10 @@ function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
         {mine.feedbackSent ? (
           <div className="stack-8">
             <p className="creator-nums">
-              <span className="strong">Feedback</span>
+              <span className="strong">{t('appd_feedback_word')}</span>
               <FeedbackChip t={mine} className={stamp ? 'stamp' : undefined} />
               {mine.feedbackSentAt && <RelTime t={mine.feedbackSentAt} />}
-              {mine.replied && <span className="muted small">sudah dibalas</span>}
+              {mine.replied && <span className="muted small">{t('appd_replied')}</span>}
             </p>
             {mine.feedbackSummary && <p className="guide-quote">{mine.feedbackSummary}</p>}
           </div>
@@ -480,9 +496,9 @@ function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
 
   if (mine?.status === 'removed') {
     return (
-      <section className="panel stack-8" aria-label="Status Anda">
-        <h2>Anda dikeluarkan</h2>
-        <p className="muted">Creator mengeluarkan Anda dari daftar tester aplikasi ini{mine.note ? `: “${mine.note}”` : '.'} Hubungi creator lewat grup jika ini keliru.</p>
+      <section className="panel stack-8" aria-label={t('appd_panel_removed_aria')}>
+        <h2>{t('appd_panel_removed')}</h2>
+        <p className="muted">{t('appd_panel_removed_body')}{mine.note ? `: “${mine.note}”` : '.'}{t('appd_panel_removed_contact')}</p>
       </section>
     )
   }
@@ -490,19 +506,19 @@ function InfoPanel({ app, p, mine, isCreator, flow, beginnerGuideOutside }: {
   // When BeginnerGuide sits above the board, this panel only keeps the feedback missions.
   if (beginnerGuideOutside) {
     return (
-      <section className="panel stack-16" aria-label="Setelah terpasang">
-        <h2>{mine?.status === 'left' ? 'Uji lagi aplikasi ini' : 'Setelah terpasang'}</h2>
-        {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi menghitung hari aktif Anda dari nol.</p>}
-        <p className="muted small">Ikuti panduan “Cara dapat app ini” di atas. Nanti, saat kirim feedback di Play:</p>
+      <section className="panel stack-16" aria-label={t('appd_panel_after_install')}>
+        <h2>{mine?.status === 'left' ? t('appd_panel_retest') : t('appd_panel_after_install')}</h2>
+        {mine?.status === 'left' && <p className="muted">{t('appd_panel_left_on', { date: fmtDate(mine.leftAt) })}</p>}
+        <p className="muted small">{t('appd_panel_after_hint')}</p>
         {guide}
       </section>
     )
   }
 
   return (
-    <section className="panel stack-16" aria-label="Ikut menguji">
-      <h2>{mine?.status === 'left' ? 'Uji lagi aplikasi ini' : 'Ikut menguji'}</h2>
-      {mine?.status === 'left' && <p className="muted">Anda berhenti pada {fmtDate(mine.leftAt)}. Gabung lagi menghitung hari aktif Anda dari nol.</p>}
+    <section className="panel stack-16" aria-label={t('appd_panel_join_test_aria')}>
+      <h2>{mine?.status === 'left' ? t('appd_panel_retest') : t('appd_panel_join_test')}</h2>
+      {mine?.status === 'left' && <p className="muted">{t('appd_panel_left_on', { date: fmtDate(mine.leftAt) })}</p>}
       {guide}
     </section>
   )
@@ -522,9 +538,11 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
   onAskEmail: () => void
   onOpenJoin: () => void
 }, ref: Ref<HTMLElement>) {
+  const tr = useT()
   const playUrl = playInstallUrl(app)
   const storeOk = hasStoreUrl(app)
   const email = app.testerMethod === 'email_list'
+  const playBtn = playOpenLabel(tr, storeOk, isLiveApp(app))
 
   const mark = (patch: GroupJoinProgress) => {
     writeGroupJoinProgress(app.id, { ...progress, ...patch })
@@ -541,19 +559,19 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
     return (
       <section ref={ref} tabIndex={-1} className="panel stack-16 span-12 beginner-guide" aria-labelledby="beginner-h" id="cara-dapat-app">
         <div>
-          <h2 id="beginner-h">Cara ulas app ini</h2>
-          <p className="muted">App sudah rilis di production. Pasang dari Play Store, catat di TesBareng, lalu tulis ulasan publik (tampil untuk semua orang).</p>
+          <h2 id="beginner-h">{tr('appd_beginner_review_h')}</h2>
+          <p className="muted">{tr('appd_beginner_review_lede')}</p>
         </div>
         <ol className="beginner-steps">
           <li className={progress.installed ? 'done' : step === 1 ? 'current' : undefined}>
             <span className="num" aria-hidden="true">{progress.installed ? '✓' : '1'}</span>
             <div className="beginner-step-body">
-              <p className="t">Buka Play Store dan pasang</p>
-              <p className="d">Ketuk tombol di bawah. Pasang, lalu buka sekali.</p>
+              <p className="t">{tr('appd_beginner_step_play_t')}</p>
+              <p className="d">{tr('appd_beginner_step_play_d')}</p>
               {step === 1 && (
                 <div className="beginner-step-actions">
-                  <a className="btn primary sm" href={playUrl} target="_blank" rel="noreferrer"><IconExternal />Buka di Play Store</a>
-                  <button type="button" className="btn sm" onClick={() => mark({ installed: true, group: true })}>Sudah memasang</button>
+                  <a className="btn primary sm" href={playUrl} target="_blank" rel="noreferrer"><IconExternal />{tr('appd_act_open_play_store')}</a>
+                  <button type="button" className="btn sm" onClick={() => mark({ installed: true, group: true })}>{tr('appd_beginner_already_installed')}</button>
                 </div>
               )}
             </div>
@@ -561,10 +579,10 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
           <li className={step === 2 ? 'current' : undefined}>
             <span className="num" aria-hidden="true">2</span>
             <div className="beginner-step-body">
-              <p className="t">Catat, lalu tulis ulasan publik</p>
-              <p className="d">Catat di TesBareng (login Google). Setelah itu buka lagi Play Store → tulis bintang + komentar dengan kata-kata Anda sendiri → kembali ke sini dan tandai sudah kirim.</p>
+              <p className="t">{tr('appd_beginner_review_step2_t')}</p>
+              <p className="d">{tr('appd_beginner_review_step2_d')}</p>
               {step === 2 && (
-                <button type="button" className="btn primary sm" onClick={onRecord}>Catat saya sebagai pengulas</button>
+                <button type="button" className="btn primary sm" onClick={onRecord}>{tr('appd_act_record_reviewer')}</button>
               )}
             </div>
           </li>
@@ -578,39 +596,39 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
     return (
       <section ref={ref} tabIndex={-1} className="panel stack-16 span-12 beginner-guide" aria-labelledby="beginner-h" id="cara-dapat-app">
         <div>
-          <h2 id="beginner-h">Cara dapat app ini</h2>
-          <p className="muted">App ini memakai daftar email di Play Console. Creator harus menambahkan email Anda dulu — baru bisa opt-in dan pasang.</p>
+          <h2 id="beginner-h">{tr('appd_beginner_get_h')}</h2>
+          <p className="muted">{tr('appd_beginner_email_lede')}</p>
         </div>
         <ol className="beginner-steps">
           <li className={state !== 'signed_out' && state !== 'none' ? 'done' : state === 'signed_out' || state === 'none' ? 'current' : undefined}>
             <span className="num" aria-hidden="true">{state !== 'signed_out' && state !== 'none' ? '✓' : '1'}</span>
             <div className="beginner-step-body">
-              <p className="t">Minta ditambahkan</p>
-              <p className="d">Masuk dengan Google, setujui creator melihat email lengkap Anda (hanya untuk Play Console).</p>
+              <p className="t">{tr('appd_beginner_request_t')}</p>
+              <p className="d">{tr('appd_beginner_request_d')}</p>
               {(state === 'signed_out' || state === 'none') && (
-                <button type="button" className="btn primary sm" onClick={onAskEmail}>Minta ditambahkan</button>
+                <button type="button" className="btn primary sm" onClick={onAskEmail}>{tr('appd_act_request_add')}</button>
               )}
             </div>
           </li>
           <li className={state === 'listed' ? 'done' : state === 'waiting' ? 'current' : undefined}>
             <span className="num" aria-hidden="true">{state === 'listed' ? '✓' : '2'}</span>
             <div className="beginner-step-body">
-              <p className="t">Tunggu creator</p>
-              <p className="d">Creator menempel email di Play Console, lalu menandai “Sudah ditambahkan”. Boleh tutup halaman ini dulu.</p>
-              {state === 'waiting' && <button type="button" className="btn sm" onClick={onOpenJoin}>Lihat status permintaan</button>}
+              <p className="t">{tr('appd_beginner_wait_t')}</p>
+              <p className="d">{tr('appd_beginner_wait_d')}</p>
+              {state === 'waiting' && <button type="button" className="btn sm" onClick={onOpenJoin}>{tr('appd_beginner_view_status')}</button>}
             </div>
           </li>
           <li className={state === 'listed' ? 'current' : undefined}>
             <span className="num" aria-hidden="true">3</span>
             <div className="beginner-step-body">
-              <p className="t">Pasang di Play, lalu catat</p>
-              <p className="d">Setelah email ditambahkan: jadi penguji → Install di Play → catat di TesBareng.</p>
+              <p className="t">{tr('appd_beginner_install_t')}</p>
+              <p className="d">{tr('appd_beginner_install_d')}</p>
               {state === 'listed' && (
                 <div className="beginner-step-actions">
                   <a className="btn primary sm" href={playUrl || app.optInUrl || undefined} target="_blank" rel="noreferrer">
-                    <IconExternal />{storeOk ? 'Buka di Play Store' : 'Buka link opt-in'}
+                    <IconExternal />{playBtn}
                   </a>
-                  <button type="button" className="btn sm" onClick={onOpenJoin}>Lanjut di panduan</button>
+                  <button type="button" className="btn sm" onClick={onOpenJoin}>{tr('appd_beginner_continue_guide')}</button>
                 </div>
               )}
             </div>
@@ -625,19 +643,19 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
   return (
     <section ref={ref} tabIndex={-1} className="panel stack-16 span-12 beginner-guide" aria-labelledby="beginner-h" id="cara-dapat-app">
       <div>
-        <h2 id="beginner-h">Cara dapat app ini</h2>
-        <p className="muted">Tanpa login dulu. Selesaikan di HP: gabung grup, buka Play Store, pasang. Akun Google Group dan Play Store harus sama.</p>
+        <h2 id="beginner-h">{tr('appd_beginner_get_h')}</h2>
+        <p className="muted">{tr('appd_beginner_group_lede')}</p>
       </div>
       <ol className="beginner-steps">
         <li className={progress.group ? 'done' : step === 1 ? 'current' : undefined}>
           <span className="num" aria-hidden="true">{progress.group ? '✓' : '1'}</span>
           <div className="beginner-step-body">
-            <p className="t">Gabung Google Group komunitas</p>
-            <p className="d">Tombol di bawah membuka <b>pilih akun Google</b> dulu. Pilih akun yang sama dengan Play Store, lalu ketuk Bergabung / Join. Jangan ganti akun setelah halaman grup terbuka — tombol Join sering hilang dan Anda mendarat di “Grup saya”.</p>
+            <p className="t">{tr('appd_beginner_group_t')}</p>
+            <p className="d">{tr('appd_beginner_group_d')}</p>
             {step === 1 && (
               <div className="beginner-step-actions">
-                <a className="btn primary sm" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer"><IconExternal />Pilih akun &amp; buka grup</a>
-                <button type="button" className="btn sm" onClick={afterGroup}>Sudah gabung</button>
+                <a className="btn primary sm" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer"><IconExternal />{tr('appd_beginner_open_group')}</a>
+                <button type="button" className="btn sm" onClick={afterGroup}>{tr('appd_beginner_joined')}</button>
               </div>
             )}
             {progress.group && <p className="muted small addr">{COMMUNITY_GROUP}</p>}
@@ -646,18 +664,14 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
         <li className={progress.installed ? 'done' : step === 2 ? 'current' : undefined}>
           <span className="num" aria-hidden="true">{progress.installed ? '✓' : '2'}</span>
           <div className="beginner-step-body">
-            <p className="t">Buka Play Store dan pasang</p>
-            <p className="d">
-              {storeOk
-                ? <>Ketuk tombol di bawah. Di HP, ketuk <b>Install</b> / Pasang, lalu buka app sekali.</>
-                : <>Creator belum mengisi link Play Store. Sementara pakai link opt-in: ketuk <b>Jadi penguji</b>, lalu Install.</>}
-            </p>
+            <p className="t">{tr('appd_beginner_step_play_t')}</p>
+            <p className="d">{storeOk ? tr('appd_beginner_play_store_d') : tr('appd_beginner_no_store_d')}</p>
             {step === 2 && (
               <div className="beginner-step-actions">
                 <a className="btn primary sm" href={playUrl} target="_blank" rel="noreferrer">
-                  <IconExternal />{storeOk ? 'Buka di Play Store' : 'Buka link opt-in'}
+                  <IconExternal />{playBtn}
                 </a>
-                <button type="button" className="btn sm" onClick={() => mark({ installed: true })}>Sudah memasang</button>
+                <button type="button" className="btn sm" onClick={() => mark({ installed: true })}>{tr('appd_beginner_already_installed')}</button>
               </div>
             )}
           </div>
@@ -665,10 +679,10 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
         <li className={step === 3 ? 'current' : undefined}>
           <span className="num" aria-hidden="true">3</span>
           <div className="beginner-step-body">
-            <p className="t">Catat di TesBareng</p>
-            <p className="d">Supaya hari aktif Anda terhitung bersama komunitas. Perlu masuk dengan Google.</p>
+            <p className="t">{tr('appd_beginner_record_t')}</p>
+            <p className="d">{tr('appd_beginner_record_d')}</p>
             {step === 3 && (
-              <button type="button" className="btn primary sm" onClick={onRecord}>Catat saya sebagai tester</button>
+              <button type="button" className="btn primary sm" onClick={onRecord}>{tr('appd_act_record_tester')}</button>
             )}
           </div>
         </li>
@@ -685,6 +699,7 @@ const TICK_MS = 60_000
 
 /** One fetch shared by the header primary and the panel. `entry` is the member's own Active entry, else undefined. */
 function useCheckInFlow(appId: string | undefined, entry: TesterDoc | undefined, buildsKey: string) {
+  const tr = useT()
   const toast = useToast()
   const state = useCheckIns(appId, entry?.id, entry?.uid, buildsKey)
   // A recorded check-in shows as done at once and stays done until the refetch contains it,
@@ -721,7 +736,7 @@ function useCheckInFlow(appId: string | undefined, entry: TesterDoc | undefined,
       setOptimistic((xs) => [...xs, { id, kind: m.kind, buildId: m.buildId ?? null, createdAt: Date.now() }])
       setJustDone(m.key)
       setPending(null)
-      toast(`Check-in “${m.label}” tercatat.`)
+      toast(tr('appd_toast_checkin', { label: milestoneLabelTr(tr, m) }))
       state.retry()
     } catch (e) {
       setPending(null)
@@ -743,6 +758,7 @@ function useCheckInFlow(appId: string | undefined, entry: TesterDoc | undefined,
 type CheckInFlow = ReturnType<typeof useCheckInFlow>
 
 function CheckIns({ flow }: { flow: CheckInFlow }) {
+  const tr = useT()
   const { state, result, pending, justDone } = flow
   const listRef = useRef<HTMLUListElement>(null)
   const [allBuilds, setAllBuilds] = useState(false)
@@ -768,13 +784,13 @@ function CheckIns({ flow }: { flow: CheckInFlow }) {
   return (
     <section className="stack-8 ci" aria-labelledby="ci-h">
       <div className="ci-head">
-        <h3 id="ci-h">Check-in</h3>
-        {!state.loading && !state.error && <span className="meta num">{done} / {items.length} tercatat</span>}
+        <h3 id="ci-h">{tr('appd_ci_h')}</h3>
+        {!state.loading && !state.error && <span className="meta num">{tr('appd_ci_recorded_count', { done, total: items.length })}</span>}
       </div>
-      <p className="muted small">Check-in berdasarkan kejujuran. Bukti terkuat tetap feedback yang diverifikasi creator di Play Console.</p>
-      {state.error ? <ErrorBox text="Check-in gagal dimuat. Coba lagi sebentar lagi." onRetry={state.retry} /> : state.loading || !result ? (
+      <p className="muted small">{tr('appd_ci_honesty')}</p>
+      {state.error ? <ErrorBox text={tr('appd_ci_load_error')} onRetry={state.retry} /> : state.loading || !result ? (
         <div aria-busy="true">
-          <span className="sr-only">Memuat check-in…</span>
+          <span className="sr-only">{tr('appd_ci_loading_sr')}</span>
           {[0, 1, 2].map((i) => <div className="row-line" key={i}><span className="grow"><Skel w={140} /></span><Skel w={80} h={28} /></div>)}
         </div>
       ) : (
@@ -789,10 +805,10 @@ function CheckIns({ flow }: { flow: CheckInFlow }) {
                 <Fragment key="no-build">
                   <li className="row-line top">
                     <span className="grow cell-2">
-                      <b>Sudah update</b>
-                      <span>Terbuka setiap kali creator mencatat build baru.</span>
+                      <b>{tr('appd_ci_updated_h')}</b>
+                      <span>{tr('appd_ci_updated_d')}</span>
                     </span>
-                    <Chip glyph="—">Belum ada build</Chip>
+                    <Chip glyph="—">{tr('appd_ci_no_build')}</Chip>
                   </li>
                   {row}
                 </Fragment>
@@ -806,52 +822,57 @@ function CheckIns({ flow }: { flow: CheckInFlow }) {
         <ShowAll open={allBuilds} total={buildRows.length} onToggle={() => setAllBuilds((x) => !x)} controls="ci-list" />
       )}
       {result?.inCohort && !state.loading && !state.error && (
-        <p className="muted small num">Hari dihitung dari penugasan cohort Anda, <span className="nw">{fmtDate(result.base)}</span>.</p>
+        <p className="muted small num">{tr('appd_ci_cohort_base', { date: fmtDate(result.base) })}</p>
       )}
     </section>
   )
 }
 
 function CheckInRow({ m, busy, blocked, stamp, onCheckIn }: { m: Milestone; busy: boolean; blocked: boolean; stamp: boolean; onCheckIn: () => void }) {
+  const tr = useT()
+  const label = milestoneLabelTr(tr, m)
   // Cohort due line (PRD §6.10 due times). Overdue reads in text and with the cabai "!" chip, never colour alone.
   // Day numbers and dates never break mid-token in the narrow aside ("ke-/5", "6/Nov").
   // Times are plain text with the exact WIB time, so there is nothing small to tap.
   const nw = (x: ReactNode) => <span className="nw">{x}</span>
   // "30 Okt 2026, 13.53 WIB": the date and the time each stay whole, but may sit on two lines in the narrow aside.
   const at = (t: number) => { const [d, ...rest] = fmtDateTime(t).split(', '); return <>{nw(d)}{rest.length > 0 && <>, {nw(rest.join(', '))}</>}</> }
-  const dueText = m.dueAt == null ? null : <>{m.dueDay != null && <>{nw(`hari ke-${m.dueDay}`)}: </>}{at(m.dueAt)}</>
+  const dayOpen = m.opensDay != null ? tr('appd_ci_day_n', { day: m.opensDay }) : null
+  const dayDue = m.dueDay != null ? tr('appd_ci_day_n', { day: m.dueDay }) : null
+  const dueText = m.dueAt == null ? null : <>{dayDue != null && <>{dayDue}: </>}{at(m.dueAt)}</>
   const dueLine = dueText && !m.done && (
-    <span className="num">{m.overdue ? <><Chip tone="cabai" glyph="!">Lewat tenggat</Chip> {dueText}</> : <>Tenggat {dueText}</>}</span>
+    <span className="num">{m.overdue ? <><Chip tone="cabai" glyph="!">{tr('appd_ci_overdue')}</Chip> {dueText}</> : <>{tr('appd_ci_due')} {dueText}</>}</span>
   )
   let when: ReactNode
   let side: ReactNode
   if (m.done) {
-    when = <>Dicatat {at(m.done.createdAt)}</>
+    when = <>{tr('appd_ci_recorded_prefix')}{at(m.done.createdAt)}</>
     side = (
       <span tabIndex={-1} data-ci={m.key} className="ci-status">
-        <span className="sr-only">{m.label}: </span>
-        <Chip tone="pandan" glyph="✓" className={stamp ? 'stamp' : undefined}>Tercatat</Chip>
+        <span className="sr-only">{label}: </span>
+        <Chip tone="pandan" glyph="✓" className={stamp ? 'stamp' : undefined}>{tr('appd_ci_status_recorded')}</Chip>
       </span>
     )
   } else if (!m.open) {
-    // Not open yet: no button and no chip; the sentence says when it opens (the server would refuse earlier).
-    when = <>Dibuka mulai {nw(`hari ke-${m.opensDay}`)}: {at(m.opensAt)}</>
+    when = <>{tr('appd_ci_opens_prefix', { day: dayOpen ?? '' })}{at(m.opensAt)}</>
     side = null
   } else {
-    when = m.kind === 'updated_build' ? <>Build dicatat {at(m.opensAt)}</> : <>Terbuka sejak {nw(`hari ke-${m.opensDay}`)}</>
+    when = m.kind === 'updated_build'
+      ? <>{tr('appd_ci_build_logged_prefix')}{at(m.opensAt)}</>
+      : <>{tr('appd_ci_open_since', { day: dayOpen ?? '' })}</>
     side = (
       <button
         type="button" className="btn sm" onClick={() => { if (!blocked) onCheckIn() }}
-        aria-busy={busy || undefined} aria-disabled={blocked || undefined} aria-label={busy ? undefined : `Check-in: ${m.label}`}
+        aria-busy={busy || undefined} aria-disabled={blocked || undefined} aria-label={busy ? undefined : tr('appd_ci_btn_aria', { label })}
       >
-        {busy ? 'Menyimpan…' : 'Check-in'}
+        {busy ? tr('saving') : tr('appd_ci_btn')}
       </button>
     )
   }
   return (
     <li className="row-line top">
       <span className="grow cell-2">
-        <b>{m.label}</b>
+        <b>{label}</b>
         <span className="num">{when}</span>
         {dueLine}
       </span>
@@ -861,22 +882,23 @@ function CheckInRow({ m, busy, blocked, stamp, onCheckIn }: { m: Milestone; busy
 }
 
 function LeaveDialog({ open, onClose, app, days }: { open: boolean; onClose: () => void; app: AppDoc; days: number }) {
+  const tr = useT()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const leave = async () => {
     if (busy) return
     setBusy(true)
-    try { await api.leaveTesting({ appId: app.id }); toast('Anda berhenti menguji aplikasi ini.'); onClose() } catch (e) { toast(failToast(e)) } finally { setBusy(false) }
+    try { await api.leaveTesting({ appId: app.id }); toast(tr('appd_toast_leave')); onClose() } catch (e) { toast(failToast(e)) } finally { setBusy(false) }
   }
   return (
-    <Dialog open={open} onClose={onClose} label={`Berhenti menguji ${app.name}?`}>
+    <Dialog open={open} onClose={onClose} label={tr('appd_leave_label', { name: app.name })}>
       <div className="sheet-body">
-        <h2>Berhenti menguji {app.name}?</h2>
-        <p className="lede">Hari aktif Anda ({days} hari) berhenti dihitung. Jika gabung lagi, hari aktif Anda mulai dari nol.</p>
+        <h2>{tr('appd_leave_label', { name: app.name })}</h2>
+        <p className="lede">{tr('appd_leave_body', { days })}</p>
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Tetap menguji</button>
-        <button type="button" className="btn danger" onClick={leave} aria-busy={busy || undefined}>{busy ? 'Menyimpan…' : 'Berhenti menguji'}</button>
+        <button type="button" className="btn" onClick={onClose}>{tr('appd_stay_testing')}</button>
+        <button type="button" className="btn danger" onClick={leave} aria-busy={busy || undefined}>{busy ? tr('saving') : tr('appd_act_stop_testing')}</button>
       </div>
     </Dialog>
   )
@@ -906,28 +928,29 @@ function useKpiPlacement(ready: boolean) {
 }
 
 function Kpis({ p, app, loading, wide }: { p: Progress; app: AppDoc; loading: boolean; wide?: boolean }) {
+  const tr = useT()
   const v = (x: ReactNode) => (loading ? <Skel w={64} h={24} /> : x)
   return (
-    <section className={wide ? 'kpis span-12' : 'kpis'} aria-label="Ringkasan keterlibatan">
+    <section className={wide ? 'kpis span-12' : 'kpis'} aria-label={tr('appd_kpi_aria')}>
       <div className="kpi">
-        <div className="kpi-label">Tester aktif</div>
+        <div className="kpi-label">{tr('appd_kpi_active')}</div>
         <div className="kpi-value num">{v(<>{p.active}<small> / {p.target}</small></>)}</div>
-        <div style={{ marginTop: 'var(--s-2)' }}><Bar value={p.active} max={p.target} label="Tester aktif" /></div>
+        <div style={{ marginTop: 'var(--s-2)' }}><Bar value={p.active} max={p.target} label={tr('appd_kpi_active')} /></div>
       </div>
       <div className="kpi">
-        <div className="kpi-label">Feedback di Play</div>
-        <div className="kpi-value num">{v(<>{p.feedbackSent}<small> terkirim</small></>)}</div>
-        <p className="note num">{p.feedbackVerified} terverifikasi creator</p>
+        <div className="kpi-label">{tr('appd_kpi_feedback_play')}</div>
+        <div className="kpi-value num">{v(<>{p.feedbackSent}<small>{tr('appd_kpi_sent_suffix')}</small></>)}</div>
+        <p className="note num">{tr('appd_kpi_verified', { n: p.feedbackVerified })}</p>
       </div>
       <div className="kpi">
-        <div className="kpi-label">Dibalas creator</div>
+        <div className="kpi-label">{tr('appd_kpi_replied_h')}</div>
         <div className="kpi-value num">{v(p.feedbackSent === 0 ? <span className="dash">—</span> : <>{p.replied}<small> / {p.feedbackSent}</small></>)}</div>
-        <p className="note">{p.feedbackSent === 0 ? 'Belum ada feedback untuk dibalas' : 'dari tester yang kirim feedback'}</p>
+        <p className="note">{p.feedbackSent === 0 ? tr('appd_kpi_no_feedback') : tr('appd_kpi_replied_note')}</p>
       </div>
       <div className="kpi">
-        <div className="kpi-label">Build selama uji</div>
+        <div className="kpi-label">{tr('appd_kpi_builds')}</div>
         <div className="kpi-value num">{v(<>{p.builds}<small> / {TARGET_BUILDS}</small></>)}</div>
-        <p className="note">{app.lastBuildAt ? `Terakhir ${relTime(app.lastBuildAt)}` : 'Target komunitas, bukan aturan Google'}</p>
+        <p className="note">{app.lastBuildAt ? tr('appd_kpi_builds_last', { time: relTime(app.lastBuildAt) }) : tr('appd_kpi_builds_target')}</p>
       </div>
     </section>
   )
@@ -935,11 +958,11 @@ function Kpis({ p, app, loading, wide }: { p: Progress; app: AppDoc; loading: bo
 
 // ---------- helper functions: share to WhatsApp, Google Calendar reminder, Testing Missions ----------
 
-function shareToWhatsApp(appName: string, openCount: number, appId: string) {
-  const url = window.location.origin + '/apps/' + appId;
-  const needed = openCount > 0 ? openCount + ' ' : '';
-  const text = 'Halo teman-teman! Saya butuh ' + needed + 'tester untuk aplikasi "' + appName + '" di TesBareng agar lolos 14 hari Google Play.\n\n📲 Bantu uji di sini: ' + url + '\n✨ Ada sistem timbal balik (reciprocity), saya siap tes balik aplikasi kalian! 🙌';
-  window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(text), '_blank');
+function shareToWhatsApp(tr: Tr, appName: string, openCount: number, appId: string) {
+  const url = window.location.origin + '/apps/' + appId
+  const needed = openCount > 0 ? `${openCount} ` : ''
+  const text = tr('appd_wa_share', { needed, name: appName, url })
+  window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(text), '_blank')
 }
 
 function createCalendarUrl(title: string, details: string, targetDate: Date) {
@@ -952,6 +975,7 @@ function createCalendarUrl(title: string, details: string, targetDate: Date) {
 }
 
 function TestingMissions({ guide, appId, uid }: { guide: string; appId: string; uid?: string | null }) {
+  const tr = useT()
   const key = 'tb_missions_' + appId + '_' + (uid ?? 'anon');
   const lines = useMemo(() => {
     return guide
@@ -987,8 +1011,8 @@ function TestingMissions({ guide, appId, uid }: { guide: string; appId: string; 
   return (
     <div className="stack-8" style={{ marginTop: 'var(--s-2)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span className="small muted">Misi pengujian fitur:</span>
-        <span className="small num muted">{completed} / {lines.length} dicoba</span>
+        <span className="small muted">{tr('appd_missions_label')}</span>
+        <span className="small num muted">{tr('appd_missions_count', { done: completed, total: lines.length })}</span>
       </div>
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--s-2)' }}>
         {lines.map((line, i) => (
@@ -1012,17 +1036,17 @@ function TestingMissions({ guide, appId, uid }: { guide: string; appId: string; 
 
 // ---------- tester table: 4 fields per row, details behind a tap, inline edits (ADR-009 §3) ----------
 
-function downloadTestersCsv(appName: string, testers: TesterDoc[]) {
-  const headers = ['Nama', 'Email', 'Hari Aktif', 'Status', 'Feedback Terkirim', 'Feedback Terverifikasi', 'Dibalas Kreator', 'Tanggal Gabung'];
+function downloadTestersCsv(tr: Tr, appName: string, testers: TesterDoc[]) {
+  const headers = [tr('appd_csv_name'), tr('appd_csv_email'), tr('appd_csv_days'), tr('appd_csv_status'), tr('appd_csv_fb_sent'), tr('appd_csv_fb_verified'), tr('appd_csv_replied'), tr('appd_csv_joined')]
   const now = Date.now();
   const rows = testers.map((t) => [
     '"' + t.displayName.replace(/"/g, '""') + '"',
     '"' + (t.maskedEmail ?? '') + '"',
     daysActive(t, now),
-    '"' + testerStatusLabel[t.status] + '"',
-    t.feedbackSent ? 'Ya' : 'Tidak',
-    t.feedbackVerified ? 'Ya' : 'Tidak',
-    t.replied ? 'Ya' : 'Tidak',
+    '"' + testerStatusTr(tr, t.status) + '"',
+    t.feedbackSent ? tr('appd_yes') : tr('appd_no'),
+    t.feedbackVerified ? tr('appd_yes') : tr('appd_no'),
+    t.replied ? tr('appd_yes') : tr('appd_no'),
     t.optedInAt ? new Date(t.optedInAt).toISOString().split('T')[0] : '',
   ]);
 
@@ -1045,6 +1069,7 @@ type Quick = Partial<Pick<TesterDoc, 'feedbackVerified' | 'replied' | 'status'>>
 function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdit }: {
   app: AppDoc; testers: TesterDoc[]; loading: boolean; isCreator: boolean; myUid?: string; appPassed: boolean; onEdit: (t: TesterDoc) => void
 }) {
+  const tr = useT()
   const toast = useToast()
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'days', dir: 'desc' })
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set())
@@ -1082,7 +1107,7 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
       await updateTesterAsCreator(app.id, server, change)
       if (undo) {
         const after = { ...server, ...change }
-        toast({ text: msg, duration: 8000, action: { label: 'Urungkan', onClick: () => { void save(after, undo, `Status ${server.displayName} dikembalikan.`) } } })
+        toast({ text: msg, duration: 8000, action: { label: tr('form_undo'), onClick: () => { void save(after, undo, tr('appd_toast_status_restored', { name: server.displayName })) } } })
       } else toast(msg)
     } catch (e) {
       setOver((o) => {
@@ -1097,13 +1122,13 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
     }
   }
   const serverOf = (id: string) => testers.find((t) => t.id === id)!
-  const setVerified = (t: TesterDoc, v: boolean) =>
-    save(serverOf(t.id), { feedbackVerified: v }, v ? `Feedback ${t.displayName} ditandai terverifikasi.` : `Tanda terverifikasi ${t.displayName} dicabut.`)
-  const setReplied = (t: TesterDoc, v: boolean) =>
-    save(serverOf(t.id), { replied: v }, v ? `${t.displayName} ditandai sudah dibalas.` : `Tanda dibalas ${t.displayName} dicabut.`)
-  const setStatus = (t: TesterDoc, s: TesterStatus) => {
-    const server = serverOf(t.id)
-    return save(server, { status: s }, `${t.displayName} sekarang ${testerStatusLabel[s].toLowerCase()}.`, { status: server.status })
+  const setVerified = (row: TesterDoc, v: boolean) =>
+    save(serverOf(row.id), { feedbackVerified: v }, v ? tr('appd_toast_verified_on', { name: row.displayName }) : tr('appd_toast_verified_off', { name: row.displayName }))
+  const setReplied = (row: TesterDoc, v: boolean) =>
+    save(serverOf(row.id), { replied: v }, v ? tr('appd_toast_replied_on', { name: row.displayName }) : tr('appd_toast_replied_off', { name: row.displayName }))
+  const setStatus = (row: TesterDoc, s: TesterStatus) => {
+    const server = serverOf(row.id)
+    return save(server, { status: s }, tr('appd_toast_status', { name: row.displayName, status: testerStatusTr(tr, s).toLowerCase() }), { status: server.status })
   }
 
   const toggle = (id: string) => setOpenRows((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -1131,13 +1156,13 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
           <td className="sticky">
             <span className="who">
               <button type="button" className="disclose" aria-expanded={isOpen} aria-controls={isOpen ? detailId : undefined} onClick={() => toggle(t.id)}>
-                <IconChevron /><span className="sr-only">Detail {t.displayName}</span>
+                <IconChevron /><span className="sr-only">{tr('appd_detail_sr', { name: t.displayName })}</span>
               </button>
               <Avatar name={t.displayName} photo={t.photoURL} />
               <span className="name-with-badge">
                 {t.uid ? <Link className="name-link" to={`/u/${t.uid}`}><b>{t.displayName}</b></Link> : <b>{t.displayName}</b>}
                 <Badge tier={t.uid ? badges.get(t.uid) : undefined} size="sm" />
-                {me && <span className="you">Anda</span>}
+                {me && <span className="you">{tr('appd_you')}</span>}
               </span>
             </span>
           </td>
@@ -1147,9 +1172,9 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
             <span className="fb-cell">
               <FeedbackChip t={t} />
               {isCreator && (
-                <label className="tick" title="Saya melihat feedback-nya di Play Console">
+                <label className="tick" title={tr('appd_verify_play_title')}>
                   <input type="checkbox" checked={t.feedbackVerified} onChange={(e) => setVerified(t, e.target.checked)}
-                    aria-label={`Feedback ${t.displayName} terverifikasi di Play Console`} />
+                    aria-label={tr('appd_verify_play_aria', { name: t.displayName })} />
                 </label>
               )}
             </span>
@@ -1160,27 +1185,27 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
             <td colSpan={COLS}>
               <div className="detail-body">
                 <dl className="facts">
-                  <div><dt>Opt-in sejak</dt><dd className="num">{fmtDate(t.optedInAt)}</dd></div>
-                  {t.status !== 'active' && t.leftAt && <div><dt>{t.status === 'removed' ? 'Dikeluarkan' : 'Berhenti'}</dt><dd className="num">{fmtDate(t.leftAt)}</dd></div>}
-                  <div><dt>Email</dt><dd>{t.maskedEmail}</dd></div>
-                  {!isCreator && <div><dt>Dibalas creator</dt><dd>{t.replied ? 'Sudah' : 'Belum'}</dd></div>}
-                  <div><dt>Catatan</dt><dd>{t.note || (t.addedBy === 'creator' ? 'Ditambahkan creator' : '—')}</dd></div>
+                  <div><dt>{tr('appd_opted_in')}</dt><dd className="num">{fmtDate(t.optedInAt)}</dd></div>
+                  {t.status !== 'active' && t.leftAt && <div><dt>{t.status === 'removed' ? tr('appd_removed_on') : tr('appd_left_on')}</dt><dd className="num">{fmtDate(t.leftAt)}</dd></div>}
+                  <div><dt>{tr('appd_csv_email')}</dt><dd>{t.maskedEmail}</dd></div>
+                  {!isCreator && <div><dt>{tr('appd_replied_creator')}</dt><dd>{t.replied ? tr('appd_replied_yes') : tr('appd_replied_no')}</dd></div>}
+                  <div><dt>{tr('appd_note')}</dt><dd>{t.note || (t.addedBy === 'creator' ? tr('appd_note_creator_added') : '—')}</dd></div>
                 </dl>
                 {t.feedbackSummary && t.status !== 'removed' && <p className="guide-quote">{t.feedbackSummary}</p>}
                 {isCreator && (
                   <div className="detail-edit">
                     <label className="check">
                       <input type="checkbox" checked={t.replied} onChange={(e) => setReplied(t, e.target.checked)} />
-                      <span><span className="t">Sudah saya balas</span><span className="d">Balasan dikirim dari Play Console.</span></span>
+                      <span><span className="t">{tr('appd_replied_checkbox_t')}</span><span className="d">{tr('appd_replied_checkbox_d')}</span></span>
                     </label>
                     <div className="field">
-                      <label htmlFor={`st-${t.id}`}>Status</label>
+                      <label htmlFor={`st-${t.id}`}>{tr('appd_status_field')}</label>
                       <select id={`st-${t.id}`} className="input" value={t.status} onChange={(e) => setStatus(t, e.target.value as TesterStatus)} aria-describedby={`st-${t.id}-hint`}>
-                        {(['active', 'left', 'removed'] as TesterStatus[]).map((s) => <option key={s} value={s}>{testerStatusLabel[s]}</option>)}
+                        {(['active', 'left', 'removed'] as TesterStatus[]).map((s) => <option key={s} value={s}>{testerStatusTr(tr, s)}</option>)}
                       </select>
-                      <span className="hint" id={`st-${t.id}-hint`}>Tester yang dikeluarkan tidak bisa gabung lagi ke aplikasi ini.</span>
+                      <span className="hint" id={`st-${t.id}-hint`}>{tr('appd_removed_no_rejoin')}</span>
                     </div>
-                    <button type="button" className="btn sm" onClick={() => onEdit(serverOf(t.id))}>Ubah catatan atau tanggal opt-in</button>
+                    <button type="button" className="btn sm" onClick={() => onEdit(serverOf(t.id))}>{tr('appd_edit_tester')}</button>
                   </div>
                 )}
               </div>
@@ -1195,17 +1220,17 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
     <section className="panel flush span-12" aria-labelledby="testers-h">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 id="testers-h">Daftar tester</h2>
-          <span className="meta num">{active.length} aktif{history.length > 0 ? ` · ${history.length} riwayat` : ''}</span>
+          <h2 id="testers-h">{tr('appd_testers_h')}</h2>
+          <span className="meta num">{tr('appd_testers_meta', { active: active.length })}{history.length > 0 ? tr('appd_testers_history', { n: history.length }) : ''}</span>
         </div>
         {testers.length > 0 && (
           <button
             type="button"
             className="btn sm"
-            onClick={() => downloadTestersCsv(app.name, testers)}
-            title="Unduh daftar tester dalam format CSV"
+            onClick={() => downloadTestersCsv(tr, app.name, testers)}
+            title={tr('appd_export_csv_title')}
           >
-            Ekspor CSV
+            {tr('appd_export_csv')}
           </button>
         )}
       </header>
@@ -1215,10 +1240,10 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
         <table className="data sheet-table">
           <thead>
             <tr>
-              {th('name', 'Nama', false, 'sticky')}
-              {th('days', 'Hari aktif', true)}
-              <th>Status</th>
-              <th>{isCreator ? 'Feedback · verifikasi' : 'Feedback di Play'}</th>
+              {th('name', tr('appd_col_name'), false, 'sticky')}
+              {th('days', tr('appd_col_days'), true)}
+              <th>{tr('appd_col_status')}</th>
+              <th>{isCreator ? tr('appd_col_feedback_creator') : tr('appd_col_feedback_tester')}</th>
             </tr>
           </thead>
           <tbody>
@@ -1227,7 +1252,7 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
             ))}
             {!loading && active.map(row)}
             {!loading && active.length === 0 && history.length > 0 && (
-              <tr><td colSpan={COLS} className="muted">Belum ada tester aktif. Bagikan halaman ini di grup WhatsApp cohort.</td></tr>
+              <tr><td colSpan={COLS} className="muted">{tr('appd_no_active_testers')}</td></tr>
             )}
           </tbody>
           {!loading && history.length > 0 && (
@@ -1235,8 +1260,8 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
               <tr className="group-row">
                 <th colSpan={COLS} scope="rowgroup">
                   <button type="button" className="group-toggle" aria-expanded={historyOpen} onClick={() => setHistoryOpen((o) => !o)}>
-                    <IconChevron />Riwayat <span className="num">({history.length})</span>
-                    <span className="muted small">berhenti atau dikeluarkan</span>
+                    <IconChevron />{tr('appd_history')} <span className="num">({history.length})</span>
+                    <span className="muted small">{tr('appd_history_muted')}</span>
                   </button>
                 </th>
               </tr>
@@ -1245,18 +1270,13 @@ function TesterTable({ app, testers, loading, isCreator, myUid, appPassed, onEdi
           )}
         </table>
       </div>
-      {!loading && testers.length > 0 && <p className="meta small scroll-hint" style={{ padding: '0 var(--s-3) var(--s-3)' }}>Geser tabel ke samping untuk melihat status dan feedback.</p>}
+      {!loading && testers.length > 0 && <p className="meta small scroll-hint" style={{ padding: '0 var(--s-3) var(--s-3)' }}>{tr('appd_scroll_hint')}</p>}
       {!loading && testers.length === 0 && (
         <div className="empty-pad">
-          {/* ADR-001 §2.6: spot illustration for the empty tester list goes in Empty's `art` slot. */}
-          <Empty title="Belum ada tester. Kursi pertama masih kosong.">
+          <Empty title={tr('appd_empty_testers_title')}>
             <p>{isCreator
-              ? (isLiveApp(app)
-                ? 'Bagikan halaman ini di grup WhatsApp cohort, atau ajukan ke cohort agar anggota memasang dari Play dan menulis ulasan publik.'
-                : 'Bagikan halaman ini di grup WhatsApp cohort, atau tambahkan tester yang sudah opt-in lewat Tambah tester manual.')
-              : (isLiveApp(app)
-                ? 'Jadilah pengulas pertama: Mulai uji app ini → pasang dari Play → catat di TesBareng → tulis ulasan publik.'
-                : 'Jadilah tester pertama: Mulai uji app ini → gabung grup → pasang dari Play → catat di TesBareng.')}</p>
+              ? (isLiveApp(app) ? tr('appd_empty_creator_live') : tr('appd_empty_creator_closed'))
+              : (isLiveApp(app) ? tr('appd_empty_visitor_live') : tr('appd_empty_visitor_closed'))}</p>
           </Empty>
         </div>
       )}
@@ -1282,20 +1302,21 @@ function groupByDay<T>(items: T[], at: (x: T) => number) {
 function BuildLog({ builds, loading, error, retry, p, app, isCreator }: {
   builds: BuildDoc[]; loading: boolean; error: string | null; retry: () => void; p: Progress; app: AppDoc; isCreator: boolean
 }) {
+  const tr = useT()
   const [all, setAll] = useState(false)
   const sorted = useMemo(() => [...builds].sort((a, b) => b.uploadedAt - a.uploadedAt), [builds])
   const groups = groupByDay(all ? sorted : sorted.slice(0, FEW), (b) => b.uploadedAt)
   return (
     <section aria-labelledby="builds-h">
       <header>
-        <h2 id="builds-h">Log build</h2>
-        <span className="meta num">{p.builds} selama uji{app.testStartDate ? ` sejak ${fmtDate(app.testStartDate)}` : ''}</span>
+        <h2 id="builds-h">{tr('appd_builds_h')}</h2>
+        <span className="meta num">{tr('appd_builds_meta', { n: p.builds })}{app.testStartDate ? tr('appd_builds_since', { date: fmtDate(app.testStartDate) }) : ''}</span>
       </header>
-      {error ? <ErrorBox text="Log build gagal dimuat. Coba lagi sebentar lagi." onRetry={retry} /> : loading ? (
+      {error ? <ErrorBox text={tr('form_builds_error')} onRetry={retry} /> : loading ? (
         <div>{[0, 1, 2].map((i) => <div className="row-line" key={i}><span className="grow"><Skel w={120} /></span><Skel w={60} /></div>)}</div>
       ) : sorted.length === 0 ? (
-        <Empty title="Belum ada build yang dicatat.">
-          <p>{isCreator ? 'Catat setiap unggahan ke jalur uji tertutup lewat tombol Catat build di atas. Target komunitas: 2–3 build selama uji.' : 'Tester menunggu pembaruan untuk diuji ulang. Target komunitas: 2–3 build selama uji.'}</p>
+        <Empty title={tr('appd_builds_empty_title')}>
+          <p>{isCreator ? tr('appd_builds_empty_creator') : tr('appd_builds_empty_tester')}</p>
         </Empty>
       ) : (
         <div className="timeline" id="build-list">
@@ -1320,6 +1341,7 @@ function BuildLog({ builds, loading, error, retry, p, app, isCreator }: {
 }
 
 function FeedbackList({ testers, loading }: { testers: TesterDoc[]; loading: boolean }) {
+  const tr = useT()
   const [all, setAll] = useState(false)
   const withSummary = testers
     .filter((t) => t.feedbackSent && t.feedbackSummary && t.status !== 'removed')
@@ -1328,14 +1350,14 @@ function FeedbackList({ testers, loading }: { testers: TesterDoc[]; loading: boo
   return (
     <section aria-labelledby="fb-h">
       <header>
-        <h2 id="fb-h">Catatan feedback tester</h2>
-        <span className="meta num">{withSummary.length} catatan</span>
+        <h2 id="fb-h">{tr('appd_fb_notes_h')}</h2>
+        <span className="meta num">{tr('appd_fb_notes_meta', { n: withSummary.length })}</span>
       </header>
       {loading ? (
         <div>{[0, 1, 2].map((i) => <div className="row-line" key={i}><span className="grow"><Skel w={200} /></span></div>)}</div>
       ) : shown.length === 0 ? (
-        <Empty title="Belum ada catatan feedback.">
-          <p>Tester bisa menulis ringkasan saat menekan Tandai sudah kirim.</p>
+        <Empty title={tr('appd_fb_notes_empty_title')}>
+          <p>{tr('appd_fb_notes_empty_body')}</p>
         </Empty>
       ) : (
         <ul id="fb-list">
@@ -1372,6 +1394,7 @@ function FeedbackList({ testers, loading }: { testers: TesterDoc[]; loading: boo
 // ---------- email-list testing (ADR-011): the creator's own view only ----------
 
 function EmailListPanel({ app }: { app: AppDoc }) {
+  const tr = useT()
   const toast = useToast()
   const list = useEmailListings(app.id)
   const [busy, setBusy] = useState<string | null>(null)
@@ -1381,8 +1404,8 @@ function EmailListPanel({ app }: { app: AppDoc }) {
   const copy = async (emails: string[]) => {
     try {
       await navigator.clipboard.writeText(emails.join(', '))
-      toast(`${emails.length} email disalin. Tempel di Play Console → Uji tertutup → Penguji → daftar email.`)
-    } catch { toast('Gagal menyalin. Pilih dan salin emailnya manual.') }
+      toast(tr('appd_toast_copied', { n: emails.length }))
+    } catch { toast(tr('appd_toast_copy_fail')) }
   }
   const mark = async (uid: string, listed: boolean) => {
     if (busy) return
@@ -1392,20 +1415,20 @@ function EmailListPanel({ app }: { app: AppDoc }) {
   return (
     <section className="panel stack-12 span-12" aria-labelledby="emails-h">
       <header className="creator-nums">
-        <h2 id="emails-h">Email untuk Play Console</h2>
-        <span className="muted small num">{pending.length} belum ditambahkan · {list.data.length - pending.length} sudah</span>
+        <h2 id="emails-h">{tr('appd_email_h')}</h2>
+        <span className="muted small num">{tr('appd_email_pending', { pending: pending.length, done: list.data.length - pending.length })}</span>
         <span className="spacer" />
-        {pending.length > 0 && <button type="button" className="btn" onClick={() => copy(pending.map((r) => r.email))}>Salin {pending.length} email</button>}
+        {pending.length > 0 && <button type="button" className="btn" onClick={() => copy(pending.map((r) => r.email))}>{tr('appd_copy_emails', { n: pending.length })}</button>}
       </header>
-      <p className="muted small">Hanya Anda yang melihat email ini, karena tester menyetujuinya. Tempel di daftar email jalur uji tertutup, lalu tandai “Sudah ditambahkan” agar tester bisa opt-in.</p>
+      <p className="muted small">{tr('appd_email_hint')}</p>
       <p className="small num">
         {open > 0
-          ? <>Kurang {open} tester aktif dari {app.testerSlots} kursi. Yang baru meminta belum dihitung sampai mereka opt-in.</>
-          : <>Kursi penuh: {app.activeTesterCount} aktif dari {app.testerSlots}. Menambahkan lagi tetap boleh, sebagai cadangan kalau ada yang berhenti.</>}
+          ? tr('appd_email_need', { open, slots: app.testerSlots })
+          : tr('appd_email_full', { active: app.activeTesterCount, slots: app.testerSlots })}
       </p>
-      {list.error ? <ErrorBox text="Daftar email gagal dimuat." onRetry={list.retry} />
+      {list.error ? <ErrorBox text={tr('appd_email_load_error')} onRetry={list.retry} />
         : list.loading ? <Skel w="60%" />
-        : list.data.length === 0 ? <p className="muted">Belum ada yang meminta ditambahkan.</p>
+        : list.data.length === 0 ? <p className="muted">{tr('appd_email_none')}</p>
         : (
           <ul className="email-list">
             {list.data.map((r) => (
@@ -1413,11 +1436,11 @@ function EmailListPanel({ app }: { app: AppDoc }) {
                 <span className="cell-2">
                   <b>{r.displayName}</b>
                   <span className="addr">{r.email}</span>
-                  <span className="muted small num">{r.listedAt ? `✓ Ditambahkan ${fmtDate(r.listedAt)}` : `○ Menunggu · diminta ${fmtDate(r.requestedAt)}`}</span>
+                  <span className="muted small num">{r.listedAt ? tr('appd_email_listed', { date: fmtDate(r.listedAt) }) : tr('appd_email_waiting_row', { date: fmtDate(r.requestedAt) })}</span>
                 </span>
                 {r.listedAt
-                  ? <button type="button" className="text-action quiet" disabled={busy === r.uid} onClick={() => mark(r.uid, false)}>Batalkan tanda</button>
-                  : <button type="button" className="btn primary" disabled={busy === r.uid} onClick={() => mark(r.uid, true)}>{busy === r.uid ? 'Menyimpan…' : 'Sudah ditambahkan'}</button>}
+                  ? <button type="button" className="text-action quiet" disabled={busy === r.uid} onClick={() => mark(r.uid, false)}>{tr('appd_email_unmark')}</button>
+                  : <button type="button" className="btn primary" disabled={busy === r.uid} onClick={() => mark(r.uid, true)}>{busy === r.uid ? tr('saving') : tr('appd_email_marked')}</button>}
               </li>
             ))}
           </ul>
@@ -1427,24 +1450,26 @@ function EmailListPanel({ app }: { app: AppDoc }) {
 }
 
 function CreatorCard({ app }: { app: AppDoc }) {
-  const t = app.creatorTestingCount ?? 0
+  const tr = useT()
+  const testing = app.creatorTestingCount ?? 0
   const f = app.creatorFeedbackSentCount ?? 0
   const v = app.creatorFeedbackVerifiedCount ?? 0
   return (
     <section className="panel stack-12" aria-labelledby="creator-h">
-      <h2 id="creator-h">Creator-nya juga membantu?</h2>
+      <h2 id="creator-h">{tr('appd_creator_h')}</h2>
       <Link to={`/u/${app.creatorUid}`} className="creator-link">
         <Avatar name={app.creatorName} photo={app.creatorPhotoURL} />
         <span>{app.creatorName}</span>
       </Link>
-      <p className="num">{t === 0 ? <span>Belum menguji aplikasi anggota lain.</span> : <>Menguji <b>{t} aplikasi</b> · feedback di {f}{f > 0 ? ` (${v} terverifikasi)` : ''}</>}</p>
+      <p className="num">{testing === 0 ? <span>{tr('appd_creator_none')}</span> : <>{tr('appd_creator_stats', { n: testing })}{tr('appd_creator_fb', { f })}{f > 0 ? tr('appd_creator_verified', { v }) : ''}</>}</p>
     </section>
   )
 }
 
 function DetailSkeleton() {
+  const tr = useT()
   return (
-    <div aria-busy="true" aria-label="Memuat aplikasi">
+    <div aria-busy="true" aria-label={tr('appd_skeleton_aria')}>
       <Skel w={80} />
       <div className="record-head skel-head">
         <div className="rh-main"><Skel w={260} h={32} /><Skel w={180} h={24} /></div>

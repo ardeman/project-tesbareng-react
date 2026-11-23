@@ -6,17 +6,23 @@ import { IconPlus, IconSearch } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, useApps, useEntriesOf } from '../lib/data'
-import { appStatusLabel, daysActive, openSeats, relDay, TARGET_DAYS } from '../lib/progress'
+import { daysActive, openSeats, relDay, TARGET_DAYS } from '../lib/progress'
+import { useT } from '../lib/i18n'
+import type { AppStatus } from '../lib/types'
 import { useAppCohorts, useBelumTesApps, useCohorts, useMyAssignedApps, type AppCohort, type CohortStatus } from '../lib/cohorts'
-import type { AppDoc, AppStatus, TesterDoc } from '../lib/types'
+import type { AppDoc, TesterDoc } from '../lib/types'
 
 type Tab = 'all' | AppStatus
 type Sort = 'need' | 'full' | 'creator' | 'new'
 const TABS: Tab[] = ['all', 'recruiting', 'testing', 'applied', 'live']
 const STILL_TESTING: AppStatus[] = ['recruiting', 'testing']
 
-/** Same words as CohortChip (cohortBits), so the filter and the cohort pages agree. */
-const COHORT_WORD: Record<CohortStatus, string> = { forming: 'dibentuk', active: 'aktif', closed: 'selesai' }
+function appStatusText(t: ReturnType<typeof useT>, status: AppStatus) {
+  return t(`app_status_${status}`)
+}
+function cohortStatusWord(t: ReturnType<typeof useT>, status: CohortStatus) {
+  return t(`cohort_status_${status}`).toLowerCase()
+}
 /** `?cohort=` value for apps not in any forming or active cohort (closed-only history counts as none; owner 2026-11-03). */
 const NO_COHORT = 'tanpa'
 
@@ -24,6 +30,7 @@ interface Assigned { cohortId: string; name: string }
 interface Row { app: AppDoc; eligible: number; cohort?: AppCohort; assigned?: Assigned; belumTes?: boolean; own?: boolean; mine?: TesterDoc }
 
 export function AppList() {
+  const t = useT()
   const apps = useApps()
   const { user, signIn } = useAuth()
   const navigate = useNavigate()
@@ -31,7 +38,7 @@ export function AppList() {
   const [tab, setTab] = useState<Tab>('all')
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<Sort>('need')
-  usePageMeta('Daftar aplikasi', 'Aplikasi Android anggota komunitas yang sedang uji tertutup dan butuh tester.')
+  usePageMeta(t('apps_meta_title'), t('apps_meta_desc'))
 
   // Cohort filter (FR-25) and "Ditugaskan ke saya" live in the URL, so a cohort page can link here (?cohort=<id>).
   const [params, setParams] = useSearchParams()
@@ -118,7 +125,7 @@ export function AppList() {
     try {
       if (!user) await signIn('/apps/new')
       navigate('/apps/new')
-    } catch (e) { toast(errorText(e)) }
+    } catch (e) { toast(errorText(e, t)) }
   }
 
   const resetAll = () => {
@@ -126,70 +133,70 @@ export function AppList() {
     setParams((p) => { const next = new URLSearchParams(p); next.delete('cohort'); next.delete('ditugaskan'); return next }, { replace: true })
   }
   const filterWords: string[] = []
-  if (q.trim()) filterWords.push(`bernama “${q.trim()}”`)
-  if (tab !== 'all') filterWords.push(`berstatus ${appStatusLabel[tab].toLowerCase()}`)
-  if (cohortFilter === NO_COHORT) filterWords.push('tanpa cohort')
-  else if (cohortFilter && pickedCohort) filterWords.push(`di ${pickedCohort.name}`)
+  if (q.trim()) filterWords.push(t('apps_filter_named', { q: q.trim() }))
+  if (tab !== 'all') filterWords.push(t('apps_filter_status', { status: appStatusText(t, tab).toLowerCase() }))
+  if (cohortFilter === NO_COHORT) filterWords.push(t('apps_filter_no_cohort'))
+  else if (cohortFilter && pickedCohort) filterWords.push(t('apps_filter_in_cohort', { name: pickedCohort.name }))
   const unknownCohort = !!cohortFilter && cohortFilter !== NO_COHORT && !pickedCohort
 
   // Screen readers hear the count once the list settles (debounced), not on every search keystroke.
   const [said, setSaid] = useState('')
   useEffect(() => {
     if (loading) return
-    const t = setTimeout(() => setSaid(`${shown.length} aplikasi`), 600)
-    return () => clearTimeout(t)
-  }, [loading, shown.length])
-  if (mineFilter) filterWords.push('yang ditugaskan ke Anda')
+    const timer = setTimeout(() => setSaid(t('apps_count_apps', { n: shown.length })), 600)
+    return () => clearTimeout(timer)
+  }, [loading, shown.length, t])
+  if (mineFilter) filterWords.push(t('apps_filter_assigned_you'))
 
   return (
     <>
       <div className="title-row">
         <div>
-          <h1>Aplikasi</h1>
+          <h1>{t('apps_title')}</h1>
           {(loading || rows.length > 0) && (
             <p className="sub">
               {loading ? <Skel w={360} h={16} /> : (
-                <><b>{short} dari {rows.length} aplikasi</b> masih butuh tester{ready > 0 && <>; {ready} sudah siap ajukan produksi</>}.</>
+                <><b>{t('apps_sub_need_bold', { short, total: rows.length })}</b> {t('apps_sub_still_need')}{ready > 0 && t('apps_sub_ready', { ready })}{t('apps_sub_end')}</>
               )}
             </p>
           )}
         </div>
         <div className="actions">
-          <button className="btn primary" onClick={add}><IconPlus />Tambah aplikasi</button>
+          <button className="btn primary" onClick={add}><IconPlus />{t('apps_add')}</button>
         </div>
       </div>
 
       {/* A filter, not tabs: one list below, narrowed by status. Toggle buttons, one pressed at a time. */}
-      <div className="tabs" role="group" aria-label="Saring menurut status">
-        {TABS.map((t) => (
-          <button key={t} type="button" className="tab" aria-pressed={tab === t} onClick={() => setTab(t)}>
-            {t === 'all' ? 'Semua' : appStatusLabel[t]}<span className="n num">{loading ? '' : counts[t]}</span>
+      <div className="tabs" role="group" aria-label={t('apps_filter_status_label')}>
+        {TABS.map((tabKey) => (
+          <button key={tabKey} type="button" className="tab" aria-pressed={tab === tabKey} onClick={() => setTab(tabKey)}>
+            {tabKey === 'all' ? t('apps_tab_all') : appStatusText(t, tabKey)}<span className="n num">{loading ? '' : counts[tabKey]}</span>
           </button>
         ))}
       </div>
 
       <div className="toolbar app-toolbar">
         <label className="search">
-          <span className="sr-only">Cari nama aplikasi</span>
+          <span className="sr-only">{t('apps_search_label')}</span>
           <IconSearch />
-          <input className="input" type="search" placeholder="Cari nama aplikasi" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input className="input" type="search" placeholder={t('apps_search_placeholder')} value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
         {cohortError ? (
           <span className="cohort-off">
-            <span>Saringan cohort tidak tersedia.</span>
-            <button type="button" className="text-action" onClick={retryCohorts}>Muat ulang</button>
+            <span>{t('apps_cohort_filter_off')}</span>
+            <button type="button" className="text-action" onClick={retryCohorts}>{t('apps_reload')}</button>
           </span>
         ) : (
           <>
-            <label className="sr-only" htmlFor="cohort-filter">Saring menurut cohort</label>
+            <label className="sr-only" htmlFor="cohort-filter">{t('apps_cohort_filter_label')}</label>
             <select
               id="cohort-filter" className="input cohort-select" value={cohortParam} disabled={cohortLoading}
               onChange={(e) => setParam('cohort', e.target.value || null)}
             >
-              <option value="">{cohortLoading ? 'Memuat cohort…' : 'Semua cohort'}</option>
-              {cohortOptions.map((c) => <option key={c.id} value={c.id}>{c.name} · {COHORT_WORD[c.status]}</option>)}
-              {cohortParam && cohortParam !== NO_COHORT && !cohortLoading && !pickedCohort && <option value={cohortParam}>Cohort tidak ditemukan</option>}
-              <option value={NO_COHORT}>Tanpa cohort</option>
+              <option value="">{cohortLoading ? t('apps_cohort_loading') : t('apps_cohort_all')}</option>
+              {cohortOptions.map((c) => <option key={c.id} value={c.id}>{c.name} · {cohortStatusWord(t, c.status)}</option>)}
+              {cohortParam && cohortParam !== NO_COHORT && !cohortLoading && !pickedCohort && <option value={cohortParam}>{t('apps_cohort_not_found')}</option>}
+              <option value={NO_COHORT}>{t('apps_cohort_none')}</option>
             </select>
           </>
         )}
@@ -200,42 +207,42 @@ export function AppList() {
           >
             {/* On/off shown by a check box glyph, not by the lifted shadow alone. */}
             <span className="tg" aria-hidden="true">{mineParam ? '✓' : ''}</span>
-            Ditugaskan ke saya<span className="n num">{assigned.loading ? '' : assigned.data.size}</span>
+            {t('apps_filter_assigned_mine')}<span className="n num">{assigned.loading ? '' : assigned.data.size}</span>
           </button>
         )}
         {mineFailed && (
           <span className="cohort-off">
-            <span>Saringan “Ditugaskan” tidak tersedia.</span>
-            <button type="button" className="text-action" onClick={assigned.retry}>Muat ulang</button>
+            <span>{t('apps_assigned_filter_off')}</span>
+            <button type="button" className="text-action" onClick={assigned.retry}>{t('apps_reload')}</button>
           </span>
         )}
         {/* Count + sort stay together; when the filters fill the row they wrap as one group, right-aligned. */}
         <span className="tb-end">
-          <span className="total num" aria-hidden="true">{loading ? '' : `${shown.length} aplikasi`}</span>
+          <span className="total num" aria-hidden="true">{loading ? '' : t('apps_count_apps', { n: shown.length })}</span>
           <span className="sr-only" role="status">{said}</span>
-          <label className="sr-only" htmlFor="sort">Urutkan</label>
+          <label className="sr-only" htmlFor="sort">{t('apps_sort_label')}</label>
           <select id="sort" className="input" value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-            <option value="need">Paling butuh tester</option>
-            <option value="full">Hampir penuh</option>
-            <option value="creator">Creator paling aktif</option>
-            <option value="new">Terbaru</option>
+            <option value="need">{t('apps_sort_need')}</option>
+            <option value="full">{t('apps_sort_full')}</option>
+            <option value="creator">{t('apps_sort_creator')}</option>
+            <option value="new">{t('apps_sort_new')}</option>
           </select>
         </span>
       </div>
 
-      {apps.error && <ErrorBox text="Daftar aplikasi gagal dimuat." onRetry={apps.retry} />}
+      {apps.error && <ErrorBox text={t('apps_load_error')} onRetry={apps.retry} />}
 
       <div className="panel flush">
         <div className="table-wrap dtable">
           <table className="data app-table">
             <thead>
               <tr>
-                <th className="col-id">Aplikasi</th>
-                <th>Tester aktif</th>
-                <th className="num md-hide">Hari terhitung</th>
-                <th className="num">Feedback di Play</th>
-                <th className="md-hide">Creator-nya menguji</th>
-                <th>Status</th>
+                <th className="col-id">{t('apps_col_app')}</th>
+                <th>{t('apps_col_active_testers')}</th>
+                <th className="num md-hide">{t('apps_col_counted_days')}</th>
+                <th className="num">{t('apps_col_feedback_play')}</th>
+                <th className="md-hide">{t('apps_col_creator_testing')}</th>
+                <th>{t('apps_col_status')}</th>
               </tr>
             </thead>
             <tbody>
@@ -259,20 +266,20 @@ export function AppList() {
         {!loading && shown.length === 0 && (
           <div className="empty-pad">
             {rows.length === 0 ? (
-              <Empty title="Belum ada aplikasi yang sedang uji tertutup.">
-                <p>Daftarkan aplikasi Anda lewat tombol Tambah aplikasi di atas, agar anggota lain bisa ikut menguji.</p>
+              <Empty title={t('apps_empty_none_title')}>
+                <p>{t('apps_empty_none_body')}</p>
               </Empty>
             ) : unknownCohort ? (
-              <Empty title="Cohort ini tidak ditemukan.">
-                <p>Tautannya mungkin sudah lama, atau cohort-nya sudah dihapus.</p>
-                <button className="text-action" onClick={resetAll}>Hapus semua saringan</button>
+              <Empty title={t('apps_empty_cohort_title')}>
+                <p>{t('apps_empty_cohort_body')}</p>
+                <button className="text-action" onClick={resetAll}>{t('apps_reset_filters')}</button>
               </Empty>
             ) : (
-              <Empty title={`Tidak ada aplikasi ${filterWords.join(' ')}.`}>
+              <Empty title={t('apps_empty_filtered_title', { filters: filterWords.join(' ') })}>
                 {pickedCohort && cohortFilter === pickedCohort.id && filterWords.length === 1 && (
-                  <p>Aplikasi muncul di sini setelah creator-nya bergabung ke {pickedCohort.name} dengan aplikasinya.</p>
+                  <p>{t('apps_empty_cohort_join_hint', { cohort: pickedCohort.name })}</p>
                 )}
-                <button className="text-action" onClick={resetAll}>Hapus semua saringan</button>
+                <button className="text-action" onClick={resetAll}>{t('apps_reset_filters')}</button>
               </Empty>
             )}
           </div>
@@ -285,10 +292,11 @@ export function AppList() {
 /** Who the signed-in member is to this app: its creator, or one of its testers (active or left).
  *  Neutral fills: colour already means status/progress here (PRD DR-3), so glyph + text carry it. */
 function MineChips({ own, mine }: Pick<Row, 'own' | 'mine'>) {
-  if (own) return <Chip glyph="★" className="mine">Aplikasi Anda</Chip>
+  const t = useT()
+  if (own) return <Chip glyph="★" className="mine">{t('apps_chip_your_app')}</Chip>
   if (!mine) return null
-  if (mine.status === 'left') return <Chip tone="soft" glyph="←" className="mine">Anda keluar</Chip>
-  return <Chip glyph="●" className="mine">Anda menguji<span className="num"> · {daysActive(mine)} hari</span></Chip>
+  if (mine.status === 'left') return <Chip tone="soft" glyph="←" className="mine">{t('apps_chip_you_left')}</Chip>
+  return <Chip glyph="●" className="mine">{t('apps_chip_you_testing')}<span className="num"> · {daysActive(mine)}{t('apps_days_unit')}</span></Chip>
 }
 
 /** ADR-012 §6: open seats against the app's slots. Chip removed — the X/slots count already conveys this. */
@@ -317,6 +325,7 @@ function creatorLine(app: AppDoc) {
 }
 
 function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
+  const t = useT()
   const { app, cohort, assigned, belumTes, own, mine } = row
   const c = creatorLine(app)
   return (
@@ -326,19 +335,19 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
           <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
           <MineChips own={own} mine={mine} />
           {assigned && <AssignedChip cohort={assigned.name} />}
-          {belumTes && <Chip tone="cabai" glyph="!">Belum tes</Chip>}
+          {belumTes && <Chip tone="cabai" glyph="!">{t('landing_cell_late_short')}</Chip>}
         </div>
-        <span>{app.creatorName} · didaftarkan {relDay(app.createdAt)}{cohort && <> · {cohort.name}</>}</span>
-        <span className="md-show">Creator-nya menguji {c.t} aplikasi <Badge tier={app.creatorBadgeTier} size="sm" /></span>
+        <span>{app.creatorName}{t('apps_registered_on', { when: relDay(app.createdAt) })}{cohort && <> · {cohort.name}</>}</span>
+        <span className="md-show">{t('apps_creator_testing_n', { n: c.t })} <Badge tier={app.creatorBadgeTier} size="sm" /></span>
       </td>
-      <td className="cell-2"><SeatCell app={app} /><span className="md-show num">{counted(app)} / {TARGET_DAYS} hari terhitung</span></td>
+      <td className="cell-2"><SeatCell app={app} /><span className="md-show num">{t('apps_counted_days_line', { counted: counted(app), target: TARGET_DAYS })}</span></td>
       <td className="num md-hide"><b>{counted(app)}</b><span className="of"> / {TARGET_DAYS}</span></td>
       <td className="num">
-        {app.feedbackSentCount === 0 ? <span className="dash">0</span> : <><b>{app.feedbackSentCount}</b><span className="muted fb-ver"> · {app.feedbackVerifiedCount} terverifikasi</span></>}
+        {app.feedbackSentCount === 0 ? <span className="dash">0</span> : <><b>{app.feedbackSentCount}</b><span className="muted fb-ver">{t('apps_feedback_verified_n', { n: app.feedbackVerifiedCount })}</span></>}
       </td>
       <td className="muted md-hide">
         <span className="creator-nums">
-          {c.t === 0 ? <span>Belum menguji aplikasi lain</span> : <span><b style={{ color: 'var(--ink)' }}>{c.t} aplikasi</b> · feedback {c.f}</span>}
+          {c.t === 0 ? <span>{t('apps_creator_none')}</span> : <span><b style={{ color: 'var(--ink)' }}>{t('apps_creator_apps_feedback', { n: c.t })}</b>{t('apps_creator_feedback_n', { n: c.f })}</span>}
           <Badge tier={app.creatorBadgeTier} size="sm" />
         </span>
       </td>
@@ -348,6 +357,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
 }
 
 function PhoneRow({ row }: { row: Row }) {
+  const t = useT()
   const { app, cohort, assigned, belumTes, own, mine } = row
   const c = creatorLine(app)
   return (
@@ -357,15 +367,15 @@ function PhoneRow({ row }: { row: Row }) {
       <span className="l2">
         <Seats active={app.activeTesterCount} total={app.testerSlots} />
         <SlotChip app={app} />
-        <span className="num">{counted(app)} / {TARGET_DAYS} hari terhitung</span>
+        <span className="num">{t('apps_counted_days_line', { counted: counted(app), target: TARGET_DAYS })}</span>
         <span>feedback {app.feedbackSentCount}</span>
       </span>
       <span className="l2">
         <StatusPill status={app.status} />
         <MineChips own={own} mine={mine} />
         {assigned && <AssignedChip cohort={assigned.name} />}
-        {belumTes && <Chip tone="cabai" glyph="!">Belum tes</Chip>}
-        <span>{app.creatorName} · menguji {c.t} aplikasi</span>
+        {belumTes && <Chip tone="cabai" glyph="!">{t('landing_cell_late_short')}</Chip>}
+        <span>{app.creatorName}{t('apps_testing_other_n', { n: c.t })}</span>
         <Badge tier={app.creatorBadgeTier} size="sm" />
         {cohort && <span className="mrow-cohort">{cohort.name}</span>}
       </span>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePageMeta } from '../lib/pageMeta'
 import { Link } from 'react-router-dom'
 import { StoryHeader, StoryFooter, useSignIn } from '../components/StoryChrome'
@@ -9,22 +9,13 @@ import './about.css'
 /* /about: the full rules and how it works, PRD v2.2 (§1, §5–§6, §8). Story surface, same system as the landing.
    No photos: the page uses the product's own visual language (ruled sheets, chips, 12/14 counters, the ring). */
 
-const TITLE = 'Cara kerja · TesBareng'
-const DESCRIPTION =
-  'Cara kerja TesBareng: syarat closed test Google Play, cara ngetes, cohort dan pembagian tugas, tester murni, titik cek, badge, pengingat dan privasi.'
-
-const TOC = [
-  { id: 'syarat', label: 'Syarat Google Play' },
-  { id: 'ngetes', label: 'Cara ngetes satu app' },
-  { id: 'cohort', label: 'Cohort' },
-  { id: 'tester-murni', label: 'Tester murni' },
-  { id: 'titik-cek', label: 'Titik cek' },
-  { id: 'badge', label: 'Badge' },
-  { id: 'pengingat', label: 'Pengingat' },
-  { id: 'whatsapp', label: 'Grup WhatsApp' },
-  { id: 'privasi', label: 'Privasi' },
-  { id: 'aturan', label: 'Aturan main' },
-]
+const TOC_IDS = [
+  'syarat', 'ngetes', 'cohort', 'tester-murni', 'titik-cek', 'badge', 'pengingat', 'whatsapp', 'privasi', 'aturan',
+] as const
+const TOC_KEYS = [
+  'about_toc_syarat', 'about_toc_ngetes', 'about_toc_cohort', 'about_toc_tester_murni', 'about_toc_titik_cek',
+  'about_toc_badge', 'about_toc_pengingat', 'about_toc_whatsapp', 'about_toc_privasi', 'about_toc_aturan',
+] as const
 
 function Section({ id, n, title, lede, children }: { id: string; n: number; title: string; lede?: ReactNode; children: ReactNode }) {
   return (
@@ -74,6 +65,7 @@ function CopyEmail() {
 
 /** Ring rule for cohorts above 16 apps: the member at position i tests i+1 … i+14 (PRD FR-32). Static. */
 function RingRule() {
+  const t = useT()
   const n = 20, k = 14, c = 160, r = 132
   const pt = (i: number) => {
     const a = -Math.PI / 2 + (i * 2 * Math.PI) / n
@@ -83,7 +75,7 @@ function RingRule() {
   return (
     <figure className="ab-ring">
       <svg viewBox="0 0 320 320" width="320" height="320" role="img" aria-labelledby="ab-ring-t">
-        <title id="ab-ring-t">Contoh cohort 20 app yang semuanya butuh 12 tester: anggota di posisi pertama ngetes 14 app berikutnya searah jarum jam. 5 app sisanya dites anggota lain.</title>
+        <title id="ab-ring-t">{t('about_ring_title')}</title>
         {Array.from({ length: k }, (_, j) => {
           const p = pt(j + 1)
           return <line key={j} x1={me.x} y1={me.y} x2={p.x} y2={p.y} className="ab-ring-tie" />
@@ -99,74 +91,13 @@ function RingRule() {
         })}
       </svg>
       <figcaption>
-        <span><i className="k me" aria-hidden="true" />Kamu</span>
-        <span><i className="k on" aria-hidden="true" />14 app yang kamu tes</span>
-        <span><i className="k off" aria-hidden="true" />Dites anggota lain</span>
+        <span><i className="k me" aria-hidden="true" />{t('about_ring_legend_you')}</span>
+        <span><i className="k on" aria-hidden="true" />{t('about_ring_legend_yours')}</span>
+        <span><i className="k off" aria-hidden="true" />{t('about_ring_legend_others')}</span>
       </figcaption>
     </figure>
   )
 }
-
-const STEPS: { t: string; d: ReactNode }[] = [
-  { t: 'Gabung Google Group (uji tertutup saja)', d: <>Untuk app closed test: di halaman app ketuk <b>Pilih akun &amp; buka grup</b> (atau buka <code className="ab-email">{COMMUNITY_GROUP}</code>). Google meminta pilih akun dulu — pakai akun yang sama dengan Play Store, lalu ketuk Bergabung / Join. Jangan ganti akun setelah halaman grup terbuka. App daftar email: tekan Minta ditambahkan, setujui email terlihat oleh creator, tunggu Sudah ditambahkan. App sudah rilis production: lewati langkah ini — langsung Play Store.</> },
-  { t: 'Buka Play Store dan pasang', d: 'Buka halaman Play Store app itu (tombol di TesBareng). Di HP ketuk Install / Pasang, lalu buka sekali. Untuk uji tertutup, kalau creator belum mengisi link Play Store, TesBareng memakai link opt-in sebagai cadangan.' },
-  { t: 'Catat di TesBareng', d: 'Tekan Catat saya sebagai tester / pengulas (atau Mulai uji app ini → ikuti panduan). Login Google hanya di langkah ini, supaya keikutsertaanmu terhitung.' },
-  { t: 'Pakai', d: 'Baca panduan feedback dari creator, lalu benar-benar pakai app-nya. Untuk uji tertutup, biarkan terpasang sampai app lulus 14 hari Google.' },
-  { t: 'Kirim feedback / ulasan di Google Play', d: 'Rating plus komentar yang spesifik, dengan kata-katamu sendiri. App rilis: tulis ulasan publik di halaman Play Store (tampil untuk semua orang). App uji tertutup: feedback di jalur tester.' },
-  { t: 'Centang di TesBareng', d: 'Tekan Tandai sudah kirim di halaman app. Ringkasan singkat boleh ditambahkan, maksimal 500 karakter.' },
-]
-
-const COHORT_FACTS: { t: string; d: ReactNode }[] = [
-  { t: 'Minimal 13 app', d: 'Setiap creator membawa satu app. Selama cohort masih Forming, creator mengajukan app-nya, lalu admin menyetujui atau menolak, boleh dengan alasan. Satu permintaan dalam satu waktu; tarik dulu kalau mau mengajukan yang lain. Admin juga bisa langsung menambahkan app. Dengan 13 app, setiap app sudah bisa dapat 12 tester dari sesama creator saja.' },
-  { t: 'Opt-in dalam 48 jam', d: <>Hitungan mulai Hari 0. Lewat 48 jam, yang belum opt-in tercatat Behind, dan app miliknya mendapat label <span className="ab-chip c-cabai">! Belum tes</span> sampai tugasnya terpenuhi. Admin bisa memindahkan slot yang kosong ke anggota lain.</> },
-  { t: 'Tutup di hari 21', d: 'Cohort ditutup saat semua app siap ajukan production, atau paling lambat hari ke-21.' },
-  { t: 'Good, Owing, Settled', d: 'Saat cohort tutup, anggota yang semua tugasnya selesai berstatus Good. Yang belum berstatus Owing dan tidak bisa ikut cohort berikutnya sampai admin menandainya Settled.' },
-]
-
-const SCHEDULE = [
-  { d: 0, t: 'Mulai', x: 'Tugas dibagi, jendela opt-in 48 jam dibuka' },
-  { d: 2, t: 'Batas opt-in', x: 'Label Belum tes mulai tampil' },
-  { d: 7, t: 'Sudah buka app', x: 'Feedback di Play. Hari terakhir tester murni bisa gabung' },
-  { d: 13, t: 'Masih opt-in', x: 'Centang terakhir sebelum 14 hari' },
-  { d: 21, t: 'Tutup', x: 'Paling lambat. Status Good atau Owing' },
-]
-
-const CHECKS = [
-  { m: 'Opt-in', when: 'Hari 0–2', what: 'Per app tugasmu: uji tertutup = gabung grup → pasang → catat; app rilis = pasang dari Play → catat' },
-  { m: 'Sudah buka app', when: 'Mulai hari 5, paling lambat hari 7', what: 'Centang, lalu kirim feedback / ulasan di Google Play' },
-  { m: 'Sudah update', when: 'Dalam 3 hari setelah build baru', what: 'Update app-nya, coba lagi, lalu centang' },
-  { m: 'Masih opt-in', when: 'Mulai hari 12, paling lambat hari 13', what: 'Centang sekali lagi (utama untuk uji tertutup)' },
-]
-
-const TIERS = [
-  { name: 'Bronze', n: 3, cls: 't-bronze' },
-  { name: 'Silver', n: 7, cls: 't-silver' },
-  { name: 'Gold', n: 14, cls: 't-gold' },
-  { name: 'Platinum', n: 25, cls: 't-platinum' },
-]
-
-const RULES: { group: string; items: { t: string; d: string }[] }[] = [
-  {
-    group: 'Sebagai tester',
-    items: [
-      { t: 'Biarkan terpasang sampai app lulus', d: 'Google menghitung 14 hari berturut-turut selama minimal 12 tester tetap opt-in. Kalau ada yang keluar dan jumlahnya turun di bawah 12, hitungan app itu mulai lagi dari nol.' },
-      { t: 'Tulis feedback dengan kata sendiri', d: 'Ulasan yang disalin dari banyak akun terlihat tidak asli bagi Google.' },
-      { t: 'Coba lagi setiap build baru', d: 'Saat creator mencatat build, update dari Play Store, coba lagi, lalu centang Sudah update.' },
-      { t: 'Berhenti dengan terus terang', d: 'Kalau harus berhenti, tekan Berhenti menguji. Lembarnya tetap jujur dan creator tahu slot mana yang perlu diisi.' },
-    ],
-  },
-  {
-    group: 'Sebagai creator',
-    items: [
-      { t: 'Pasang grup komunitas', d: `Untuk uji tertutup: masukkan ${COMMUNITY_GROUP} sebagai daftar tester di closed track, dan isi link Play Store (wajib). Untuk app yang sudah rilis production: centang “App sudah rilis” di form — tidak perlu opt-in; anggota memasang dari Play dan menulis ulasan publik, dan app bisa diajukan ke cohort. Kalau track-mu memakai daftar email (bukan grup), pilih Daftar email di form (terbuka setelah ngetes 3 app).` },
-      { t: 'Minta tester sesuai kebutuhan', d: 'Di form app, isi berapa tester yang kamu butuhkan dari TesBareng (1–12). Google tetap butuh 12; sisanya dari grup atau daftarmu sendiri, dilaporkan sendiri. Kursi penuh tidak menolak tester baru, mereka jadi cadangan.' },
-      { t: 'Tulis panduan feedback sebagai pertanyaan', d: '“Coba level 3 di layar kecil: tombol lompat mudah ditekan?” Bukan teks ulasan siap salin. Maksimal 500 karakter.' },
-      { t: 'Balas setiap feedback', d: 'Baca feedback di Play Console, tandai Terverifikasi, balas di sana, lalu tandai Sudah saya balas di TesBareng.' },
-      { t: 'Catat setiap build', d: 'Catat setiap upload ke closed track di log build. Dua sampai tiga build selama tes adalah target komunitas, bukan aturan resmi Google.' },
-      { t: 'Ikut ngetes app anggota lain', d: 'Angka ngetes dan feedback-mu tampil di setiap app-mu. Yang membantu, lebih mudah dibantu.' },
-    ],
-  },
-]
 
 const readHh = () => {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hh'))
@@ -188,12 +119,14 @@ function useShellHh(on: boolean) {
   }, [on])
 }
 
+type TocItem = { id: string; label: string }
+
 /** Floating section strip: one scrollable row, shown once the 5x2 grid has scrolled away. Scroll-spy sets the current item. */
-function TocStrip({ gridRef }: { gridRef: React.RefObject<HTMLElement | null> }) {
+function TocStrip({ gridRef, toc }: { gridRef: React.RefObject<HTMLElement | null>; toc: TocItem[] }) {
+  const t = useT()
   const [shown, setShown] = useState(false)
   const [active, setActive] = useState<string | null>(null)
   const listRef = useRef<HTMLOListElement>(null)
-  // Header height (--hh) changes when the header wraps or the viewport rotates; re-create the observers when it does.
   const [hh, setHh] = useState(readHh)
   useEffect(() => {
     let frame = 0
@@ -219,17 +152,15 @@ function TocStrip({ gridRef }: { gridRef: React.RefObject<HTMLElement | null> })
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) e.isIntersecting ? seen.add(e.target.id) : seen.delete(e.target.id)
-        const cur = TOC.find((x) => seen.has(x.id))
+        const cur = toc.find((x) => seen.has(x.id))
         if (cur) setActive(cur.id)
       },
       { rootMargin: `-${hh + 48 + 8}px 0px -60% 0px` },
     )
-    TOC.forEach((x) => { const el = document.getElementById(x.id); if (el) io.observe(el) })
+    toc.forEach((x) => { const el = document.getElementById(x.id); if (el) io.observe(el) })
     return () => io.disconnect()
-  }, [hh])
+  }, [hh, toc])
 
-  // Keep the current item visible inside the strip by moving the strip only, never the page.
-  // Setting scrollLeft is instant, so it needs no reduced-motion branch.
   useEffect(() => {
     const list = listRef.current
     const el = active ? list?.querySelector<HTMLElement>(`[aria-current]`) : null
@@ -240,9 +171,9 @@ function TocStrip({ gridRef }: { gridRef: React.RefObject<HTMLElement | null> })
   }, [active, shown])
 
   return (
-    <nav className="ab-strip" aria-label="Bagian halaman" hidden={!shown ? true : undefined}>
+    <nav className="ab-strip" aria-label={t('about_strip_aria')} hidden={!shown ? true : undefined}>
       <ol ref={listRef}>
-        {TOC.map((x, i) => (
+        {toc.map((x, i) => (
           <li key={x.id}>
             <a href={`#${x.id}`} aria-current={active === x.id ? 'location' : undefined}>
               <span className="ab-toc-n num">{String(i + 1).padStart(2, '0')}</span>{x.label}
@@ -254,14 +185,94 @@ function TocStrip({ gridRef }: { gridRef: React.RefObject<HTMLElement | null> })
   )
 }
 
+const TIERS = [
+  { name: 'Bronze', n: 3, cls: 't-bronze' },
+  { name: 'Silver', n: 7, cls: 't-silver' },
+  { name: 'Gold', n: 14, cls: 't-gold' },
+  { name: 'Platinum', n: 25, cls: 't-platinum' },
+]
+
 /** `embedded`: rendered inside the app shell for signed-in members, so the shell supplies the nav, skip link and <main>. */
 export function About({ embedded = false }: { embedded?: boolean }) {
   const t = useT()
-  usePageMeta(TITLE, DESCRIPTION)
+  usePageMeta(t('about_meta_title'), t('about_meta_desc'))
   const signIn = useSignIn()
   const gridRef = useRef<HTMLElement>(null)
   useShellHh(embedded)
   const Main = embedded ? 'div' : 'main'
+
+  const toc = useMemo(
+    () => TOC_IDS.map((id, i) => ({ id, label: t(TOC_KEYS[i]) })),
+    [t],
+  )
+
+  const schedule = useMemo(
+    () => [
+      { d: 0, t: t('about_sched0_t'), x: t('about_sched0_x') },
+      { d: 2, t: t('about_sched2_t'), x: t('about_sched2_x') },
+      { d: 7, t: t('about_sched7_t'), x: t('about_sched7_x') },
+      { d: 13, t: t('about_sched13_t'), x: t('about_sched13_x') },
+      { d: 21, t: t('about_sched21_t'), x: t('about_sched21_x') },
+    ],
+    [t],
+  )
+
+  const checks = useMemo(
+    () => [
+      { m: t('about_check1_m'), when: t('about_check1_when'), what: t('about_check1_what') },
+      { m: t('about_check2_m'), when: t('about_check2_when'), what: t('about_check2_what') },
+      { m: t('about_check3_m'), when: t('about_check3_when'), what: t('about_check3_what') },
+      { m: t('about_check4_m'), when: t('about_check4_when'), what: t('about_check4_what') },
+    ],
+    [t],
+  )
+
+  const cohortFacts = useMemo(
+    () => [
+      { t: t('about_fact1_t'), d: t('about_fact1_d') },
+      {
+        t: t('about_fact2_t'),
+        d: (
+          <>
+            {t('about_fact2_d1')}
+            <span className="ab-chip c-cabai">{t('about_fact2_chip')}</span>
+            {t('about_fact2_d2')}
+          </>
+        ),
+      },
+      { t: t('about_fact3_t'), d: t('about_fact3_d') },
+      { t: t('about_fact4_t'), d: t('about_fact4_d') },
+    ],
+    [t],
+  )
+
+  const rules = useMemo(
+    () => [
+      {
+        group: t('about_rules_tester_h'),
+        items: [
+          { t: t('about_rt1_t'), d: t('about_rt1_d') },
+          { t: t('about_rt2_t'), d: t('about_rt2_d') },
+          { t: t('about_rt3_t'), d: t('about_rt3_d') },
+          { t: t('about_rt4_t'), d: t('about_rt4_d') },
+        ],
+      },
+      {
+        group: t('about_rules_creator_h'),
+        items: [
+          { t: t('about_rc1_t'), d: t('about_rc1_d', { community_group: COMMUNITY_GROUP }) },
+          { t: t('about_rc2_t'), d: t('about_rc2_d') },
+          { t: t('about_rc3_t'), d: t('about_rc3_d') },
+          { t: t('about_rc4_t'), d: t('about_rc4_d') },
+          { t: t('about_rc5_t'), d: t('about_rc5_d') },
+          { t: t('about_rc6_t'), d: t('about_rc6_d') },
+        ],
+      },
+    ],
+    [t],
+  )
+
+  const tierNote = t('landing_tier_note_apps')
 
   return (
     <div className={`ab surface-story dark-ready${embedded ? ' ab--embedded' : ''}`}>
@@ -270,81 +281,89 @@ export function About({ embedded = false }: { embedded?: boolean }) {
       {!embedded && <StoryHeader page="about" signIn={signIn} />}
 
       <Main id="isi">
-        <TocStrip gridRef={gridRef} />
+        <TocStrip gridRef={gridRef} toc={toc} />
         <div className="ab-wrap ab-hero">
-          <p className="ab-label"><b>Aturan main</b>TesBareng</p>
-          <h1>Cara kerja, tanpa basa‑basi.</h1>
-          <p className="ab-lede">
-            Semua aturan komunitas di satu halaman: syarat dari Google, cara ngetes, cohort, titik cek, badge dan privasi.
-            Melihat-lihat tidak perlu masuk; ikut ngetes perlu akun Google.
-          </p>
-          <nav className="ab-toc" aria-label="Di halaman ini" ref={gridRef}>
+          <p className="ab-label"><b>{t('about_hero_kicker')}</b>TesBareng</p>
+          <h1>{t('about_hero_h1')}</h1>
+          <p className="ab-lede">{t('about_hero_lede')}</p>
+          <nav className="ab-toc" aria-label={t('about_toc_aria')} ref={gridRef}>
             <ol>
-              {TOC.map((x, i) => (
+              {toc.map((x, i) => (
                 <li key={x.id}><a href={`#${x.id}`}><span className="ab-toc-n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>{x.label}</a></li>
               ))}
             </ol>
           </nav>
         </div>
 
-        <Section id="syarat" n={1} title="Syarat dari Google Play"
-          lede="Akun developer pribadi baru wajib menjalankan closed test sebelum boleh mengajukan akses production. Kalau app‑mu sudah rilis ke production, syarat ini sudah lewat; kamu tetap bisa ikut sebagai tester.">
+        <Section id="syarat" n={1} title={t('about_s1_title')} lede={t('about_s1_lede')}>
           <div className="ab-sheet">
             <div className="ab-meter">
-              <div className="ab-meter-top"><span>Tester tetap opt-in</span><span className="num">minimal 12</span></div>
-              <Segments n={12} label="12 tester" />
+              <div className="ab-meter-top"><span>{t('about_s1_meter_testers')}</span><span className="num">{t('about_s1_meter_testers_val')}</span></div>
+              <Segments n={12} label={t('about_s1_seg_testers')} />
             </div>
             <div className="ab-meter">
-              <div className="ab-meter-top"><span>Hari berturut-turut</span><span className="num">14 hari</span></div>
-              <Segments n={14} label="14 hari" />
+              <div className="ab-meter-top"><span>{t('about_s1_meter_days')}</span><span className="num">{t('about_s1_meter_days_val')}</span></div>
+              <Segments n={14} label={t('about_s1_seg_days')} />
             </div>
-            <p className="ab-sheet-sub">Google juga melihat keterlibatan, bukan hanya jumlah tester:</p>
+            <p className="ab-sheet-sub">{t('about_s1_engagement_sub')}</p>
             <ul className="ab-checks">
-              <li><span className="ab-tick" aria-hidden="true">✓</span>Tester mengirim feedback lewat Google Play</li>
-              <li><span className="ab-tick" aria-hidden="true">✓</span>Creator membalas feedback itu di Play Console</li>
-              <li><span className="ab-tick" aria-hidden="true">✓</span><span>Creator merilis build baru selama tes <small>biasanya 2–3 kali; target komunitas, bukan angka resmi Google</small></span></li>
+              <li><span className="ab-tick" aria-hidden="true">✓</span>{t('about_s1_check1')}</li>
+              <li><span className="ab-tick" aria-hidden="true">✓</span>{t('about_s1_check2')}</li>
+              <li><span className="ab-tick" aria-hidden="true">✓</span><span>{t('about_s1_check3')} <small>{t('about_s1_check3_note')}</small></span></li>
             </ul>
-            <p className="ab-sheet-foot">Tester yang keluar lalu masuk lagi mulai menghitung 14 hari dari awal.</p>
+            <p className="ab-sheet-foot">{t('about_s1_foot')}</p>
           </div>
         </Section>
 
-        <Section id="ngetes" n={2} title="Cara ngetes satu app" lede="Enam langkah. Uji tertutup: gabung grup → pasang dari Play Store → catat. App sudah rilis: lewati grup, pasang dari Play → catat → tulis ulasan publik. Langkah grup cukup sekali untuk semua app Google Group; app daftar email memintanya per app. Yang masih harus kamu kerjakan selalu ada di Tugas saya.">
+        <Section id="ngetes" n={2} title={t('about_s2_title')} lede={t('about_s2_lede')}>
           <ol className="ab-steps">
-            {STEPS.map((s, i) => (
-              <li key={s.t}>
-                <span className="ab-step-n num" aria-hidden="true">{i + 1}</span>
+            <li>
+              <span className="ab-step-n num" aria-hidden="true">1</span>
+              <div>
+                <h3>{t('about_step1_t')}</h3>
+                <p>
+                  {t('about_step1_d1')}
+                  <b>{t('about_step1_d_bold')}</b>
+                  {t('about_step1_d2')}
+                  <code className="ab-email">{COMMUNITY_GROUP}</code>
+                  {t('about_step1_d3')}
+                </p>
+                <CopyEmail />
+              </div>
+            </li>
+            {([2, 3, 4, 5, 6] as const).map((i) => (
+              <li key={i}>
+                <span className="ab-step-n num" aria-hidden="true">{i}</span>
                 <div>
-                  <h3>{s.t}</h3>
-                  <p>{s.d}</p>
-                  {i === 0 && <CopyEmail />}
+                  <h3>{t(`about_step${i}_t` as const)}</h3>
+                  <p>{t(`about_step${i}_d` as const)}</p>
                 </div>
               </li>
             ))}
           </ol>
         </Section>
 
-        <Section id="cohort" n={3} title="Cohort: tugas dibagi rata"
-          lede="Cohort mengelompokkan creator supaya tidak ada yang cuma minta dites. Siapa ngetes app siapa ditentukan sistem, bukan dipilih sendiri. Cohort tidak wajib: tanpa cohort kamu tetap bisa mendaftarkan app dan ngetes app mana saja, hanya tanpa jaminan dites balik.">
+        <Section id="cohort" n={3} title={t('about_s3_title')} lede={t('about_s3_lede')}>
           <div className="ab-split">
             <div className="ab-card-flat">
-              <h3>Pembagian tugas</h3>
+              <h3>{t('about_s3_split_h')}</h3>
               <ul className="ab-rule-list">
-                <li><b>Butuh + 2</b><span>Setiap app dapat tester sebanyak yang creator butuhkan dari TesBareng, ditambah 2 cadangan (paling banyak semua app lain di cohort).</span></li>
-                <li><b>Memberi = menerima</b><span>Kamu ngetes sebanyak tester yang diterima app‑mu. Butuh 12, kamu ngetes 14 app; butuh 3, biasanya 5.</span></li>
-                <li><b>Diacak</b><span>Urutan anggota diacak, lalu tugas dibagi sistem. Kalau semua app butuh 12, hasilnya lingkaran seperti pada gambar.</span></li>
+                <li><b>{t('about_s3_rule1_t')}</b><span>{t('about_s3_rule1_d')}</span></li>
+                <li><b>{t('about_s3_rule2_t')}</b><span>{t('about_s3_rule2_d')}</span></li>
+                <li><b>{t('about_s3_rule3_t')}</b><span>{t('about_s3_rule3_d')}</span></li>
               </ul>
             </div>
             <RingRule />
           </div>
           <dl className="ab-facts">
-            {COHORT_FACTS.map((x) => (
+            {cohortFacts.map((x) => (
               <div key={x.t}><dt>{x.t}</dt><dd>{x.d}</dd></div>
             ))}
           </dl>
-          <ol className="ab-schedule" aria-label="Jadwal cohort">
-            {SCHEDULE.map((x) => (
+          <ol className="ab-schedule" aria-label={t('about_schedule_aria')}>
+            {schedule.map((x) => (
               <li key={x.d} className={x.d === 21 ? 'end' : undefined}>
-                <p className="ab-day num"><small>Hari</small>{x.d}</p>
+                <p className="ab-day num"><small>{t('about_schedule_day')}</small>{x.d}</p>
                 <p className="ab-day-t">{x.t}</p>
                 <p className="ab-day-x">{x.x}</p>
               </li>
@@ -352,76 +371,82 @@ export function About({ embedded = false }: { embedded?: boolean }) {
           </ol>
         </Section>
 
-        <Section id="tester-murni" n={4} title="Tester murni" lede="Belum punya app, atau sedang di antara dua app? Ikut cohort tanpa membawa app. Tanpa cohort pun bisa: pilih app di daftar, ikuti panduan di halaman app (grup hanya untuk uji tertutup), pasang dari Play Store, lalu catat di TesBareng.">
+        <Section id="tester-murni" n={4} title={t('about_s4_title')} lede={t('about_s4_lede')}>
           <ul className="ab-rule-list ab-rule-list--boxed">
-            <li><b>Gabung sampai akhir hari 6</b><span>Selama cohort masih Forming, atau sudah berjalan sampai akhir hari ke-6 (tepat 7 × 24 jam setelah Hari 0). Batas ini menyisakan 14 hari sebelum cohort tutup di hari 21.</span></li>
-            <li><b>14 app untukmu</b><span>Kamu ditugaskan 14 app (atau semua app kalau kurang dari itu), dimulai dari app yang paling kurang tester dibanding kebutuhannya.</span></li>
-            <li><b>48 jam milikmu sendiri</b><span>Batas opt-in dihitung dari saat kamu ditugaskan, bukan dari Hari 0. Titik cek berikutnya ikut bergeser.</span></li>
+            <li><b>{t('about_s4_rule1_t')}</b><span>{t('about_s4_rule1_d')}</span></li>
+            <li><b>{t('about_s4_rule2_t')}</b><span>{t('about_s4_rule2_d')}</span></li>
+            <li><b>{t('about_s4_rule3_t')}</b><span>{t('about_s4_rule3_d')}</span></li>
           </ul>
         </Section>
 
-        <Section id="titik-cek" n={5} title="Titik cek, bukan absen harian"
-          lede="Absen harian di 14 app berarti 14 ketukan sehari. Cukup centang di titik-titik ini.">
-          <div className="ab-table" role="region" aria-label="Tabel titik cek" tabIndex={0}>
+        <Section id="titik-cek" n={5} title={t('about_s5_title')} lede={t('about_s5_lede')}>
+          <div className="ab-table" role="region" aria-label={t('about_s5_table_aria')} tabIndex={0}>
             <table>
-              <thead><tr><th scope="col">Titik cek</th><th scope="col">Kapan</th><th scope="col">Yang kamu lakukan</th></tr></thead>
+              <thead><tr><th scope="col">{t('about_s5_col_milestone')}</th><th scope="col">{t('about_s5_col_when')}</th><th scope="col">{t('about_s5_col_what')}</th></tr></thead>
               <tbody>
-                {CHECKS.map((x) => (
+                {checks.map((x) => (
                   <tr key={x.m}><th scope="row">{x.m}</th><td>{x.when}</td><td>{x.what}</td></tr>
                 ))}
               </tbody>
             </table>
           </div>
           <div className="ab-note">
-            <span className="ab-chip c-pandan">✓✓ Terverifikasi</span>
-            <p>Centang opt-in, buka app, update dan masih opt-in berdasarkan kejujuran. Bukti terkuat adalah feedback yang ditandai Terverifikasi, karena creator mengeceknya sendiri di Play Console.</p>
+            <span className="ab-chip c-pandan">{t('about_s5_chip')}</span>
+            <p>{t('about_s5_verify_note')}</p>
           </div>
         </Section>
 
-        <Section id="badge" n={6} title="Badge" lede="Dihitung dari app yang kamu tes sampai 14 hari atau lebih. Untuk creator dan tester murni sama.">
+        <Section id="badge" n={6} title={t('about_s6_title')} lede={t('about_s6_lede')}>
           <ul className="ab-tiers">
-            {TIERS.map((t) => (
-              <li key={t.name}><span className={`ab-pill ${t.cls}`}>{t.name}</span><b className="num">{t.n}</b><small>app dites 14 hari</small></li>
+            {TIERS.map((tier) => (
+              <li key={tier.name}><span className={`ab-pill ${tier.cls}`}>{tier.name}</span><b className="num">{tier.n}</b><small>{tierNote}</small></li>
             ))}
           </ul>
           <ul className="ab-bullets">
-            <li>Yang dihitung: masih aktif dengan 14 hari atau lebih, atau keluar setelah 14 hari.</li>
-            <li>Tidak dihitung: dikeluarkan creator, keluar sebelum 14 hari, atau app yang sudah dihapus.</li>
-            <li>Satu cohort penuh sebagai tester murni berarti 14 app, langsung Gold.</li>
-            <li>Badge dihitung sistem dari data, tidak bisa diubah siapa pun.</li>
+            <li>{t('about_s6_bullet1')}</li>
+            <li>{t('about_s6_bullet2')}</li>
+            <li>{t('about_s6_bullet3')}</li>
+            <li>{t('about_s6_bullet4')}</li>
           </ul>
         </Section>
 
-        <Section id="pengingat" n={7} title="Pengingat" lede="Tidak ada yang perlu menagih di grup.">
+        <Section id="pengingat" n={7} title={t('about_s7_title')} lede={t('about_s7_lede')}>
           <ul className="ab-rule-list ab-rule-list--boxed">
-            <li><b className="num">19.00 WIB</b><span>Satu email ringkasan sehari, hanya kalau ada tugas tertunda: app yang belum kamu ikuti, titik cek yang jatuh tempo, feedback yang belum dikirim, build baru.</span></li>
-            <li><b>Bisa dimatikan</b><span>Atur di <Link to="/me">Tugas saya</Link>. Setiap email juga punya tautan ke pengaturan itu.</span></li>
-            <li><b>Simpan pengirimnya</b><span>Tambahkan alamat pengirim email pengingat ke kontakmu supaya tidak masuk folder spam.</span></li>
+            <li><b className="num">{t('about_s7_rule1_t')}</b><span>{t('about_s7_rule1_d')}</span></li>
+            <li>
+              <b>{t('about_s7_rule2_t')}</b>
+              <span>
+                {t('about_s7_rule2_d1')}
+                <Link to="/me">{t('nav_tasks')}</Link>
+                {t('about_s7_rule2_d2')}
+              </span>
+            </li>
+            <li><b>{t('about_s7_rule3_t')}</b><span>{t('about_s7_rule3_d')}</span></li>
           </ul>
         </Section>
 
-        <Section id="whatsapp" n={8} title="Grup WhatsApp cohort" lede="Opsional. Untuk uji tertutup yang dibutuhkan adalah Google Group (atau persetujuan berbagi email). App sudah rilis cukup Play Store.">
+        <Section id="whatsapp" n={8} title={t('about_s8_title')} lede={t('about_s8_lede')}>
           <ul className="ab-bullets">
-            <li>Link grup hanya tampil untuk anggota cohort itu, setelah masuk.</li>
-            <li>Anggota grup bisa melihat nomor HP satu sama lain. Gabung hanya kalau kamu nyaman.</li>
-            <li>Chat untuk koordinasi. Status tetap dilaporkan di TesBareng, bukan di chat.</li>
+            <li>{t('about_s8_b1')}</li>
+            <li>{t('about_s8_b2')}</li>
+            <li>{t('about_s8_b3')}</li>
           </ul>
         </Section>
 
-        <Section id="privasi" n={9} title="Privasi">
+        <Section id="privasi" n={9} title={t('about_s9_title')}>
           <div className="ab-privacy">
             <span className="ab-masked">bu*****@gmail.com</span>
             <ul className="ab-bullets">
-              <li>Email tampil disamarkan seperti ini di semua halaman, termasuk tabel tester.</li>
-              <li>Profil publik tidak menampilkan email sama sekali.</li>
-              <li>Alamat lengkap dipakai untuk mengirim pengingat. Creator hanya melihatnya kalau app-nya pakai daftar email dan kamu setuju dibagikan. Persetujuan ini berlaku untuk app itu saja dan bisa kamu tarik kapan saja (alamat yang sudah dimasukkan ke Play Console tidak ikut terhapus).</li>
+              <li>{t('about_s9_b1')}</li>
+              <li>{t('about_s9_b2')}</li>
+              <li>{t('about_s9_b3')}</li>
             </ul>
           </div>
         </Section>
 
-        <Section id="aturan" n={10} title="Aturan main">
+        <Section id="aturan" n={10} title={t('about_s10_title')}>
           <div className="ab-rules">
-            {RULES.map((g) => (
+            {rules.map((g) => (
               <div key={g.group} className="ab-rule-group">
                 <h3>{g.group}</h3>
                 <ul>
@@ -436,11 +461,11 @@ export function About({ embedded = false }: { embedded?: boolean }) {
 
         <section className="ab-cta" aria-labelledby="ab-cta-h">
           <div className="ab-wrap">
-            <h2 id="ab-cta-h">Siap ikut ngetes?</h2>
-            <p className="ab-lede">Untuk uji tertutup: mulai dari Google Group (akun yang sama dengan Play Store), lalu buka app → pasang → catat. Untuk app rilis: langsung Play Store → pasang → catat → ulasan publik. Atau tunggu cohort berikutnya.</p>
+            <h2 id="ab-cta-h">{t('about_cta_h')}</h2>
+            <p className="ab-lede">{t('about_cta_lede')}</p>
             <div className="ab-cta-row">
               <a className="ab-btn ab-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">
-                {t('cta_join_community')}<span className="sr-only"> (Google Group, tab baru)</span><span aria-hidden="true"> ↗</span>
+                {t('cta_join_community')}<span className="sr-only">{t('about_cta_group_sr')}</span><span aria-hidden="true"> ↗</span>
               </a>
               <Link className="ab-btn" to="/apps">{t('cta_see_apps')}</Link>
             </div>

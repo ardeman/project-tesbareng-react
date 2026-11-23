@@ -36,7 +36,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [open])
 
   const login = async () => {
-    try { await signIn() } catch (e) { toast(errorText(e)) }
+    try { await signIn() } catch (e) { toast(errorText(e, t)) }
   }
 
   return (
@@ -86,12 +86,12 @@ export function Shell({ children }: { children: ReactNode }) {
               title={dark ? t('dark_mode_on') : t('dark_mode_off')} aria-label={dark ? t('dark_mode_on') : t('dark_mode_off')}>
               {dark ? <IconMoon /> : <IconSun />}
             </button>
-            {/* Language toggle: aria-label is always in the target language so it's readable regardless of current locale */}
+            {/* Face = current locale; title/aria = switch-to target (readable in that language). */}
             <button type="button" className="lp-sq" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
               title={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
               aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
               <span style={{ fontWeight: 800, fontSize: 'var(--fs-caption)', letterSpacing: '0.08em' }} aria-hidden="true">
-                {locale === 'id' ? 'EN' : 'ID'}
+                {locale === 'id' ? 'ID' : 'EN'}
               </span>
             </button>
           </div>

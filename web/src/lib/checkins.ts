@@ -121,7 +121,8 @@ export function milestones(s: CheckInState, optedInAt: number, now = Date.now())
       const dueAt = inCohort ? b.createdAt + BUILD_DUE_MS : null
       const done = doneOf('updated_build', b.id)
       return {
-        key: `build:${b.id}`, kind: 'updated_build', buildId: b.id, label: `${CHECKIN_LABEL.updated_build} ke ${b.versionName}`,
+        // label is version only; UI translates via appd_ci_updated_version
+        key: `build:${b.id}`, kind: 'updated_build', buildId: b.id, label: b.versionName,
         opensDay: null, opensAt: b.createdAt, dueAt, dueDay: null, done, open: true, overdue: !done && dueAt != null && now > dueAt,
       }
     })

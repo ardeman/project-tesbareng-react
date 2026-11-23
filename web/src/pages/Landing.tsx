@@ -570,9 +570,9 @@ function Proof() {
    and its column matches the hero sheet (Budi and Sari verified, Dimas active, Rizky late). "Aktif" uses → everywhere, as on the work surface; ✓✓ is verified. */
 type CellKind = 'ok2' | 'ok' | 'wait' | 'late' | 'own'
 const MATRIX_APPS = ['Kopi Catat', 'Resep Ibu', 'Angkot Kita', 'Hafalan', 'Jajan']
-const MATRIX_ROWS: { who: string; me?: boolean; cells: CellKind[] }[] = [
+const MATRIX_ROW_CELLS: { who?: string; you?: boolean; cells: CellKind[] }[] = [
   { who: 'Budi S.', cells: ['ok2', 'own', 'ok2', 'ok', 'ok'] },
-  { who: 'Kamu', me: true, cells: ['own', 'ok', 'ok', 'ok2', 'wait'] },
+  { you: true, cells: ['own', 'ok', 'ok', 'ok2', 'wait'] },
   { who: 'Sari A.', cells: ['ok2', 'ok2', 'own', 'ok2', 'ok'] },
   { who: 'Rizky H.', cells: ['late', 'late', 'ok', 'own', 'late'] },
   { who: 'Dimas P.', cells: ['ok', 'ok', 'ok2', 'ok', 'own'] },
@@ -581,6 +581,9 @@ const FILTERS: CellKind[] = ['ok2', 'ok', 'wait', 'late']
 
 function MatrixDemo() {
   const t = useT()
+  const matrixRows: { who: string; me?: boolean; cells: CellKind[] }[] = MATRIX_ROW_CELLS.map((r) =>
+    r.you ? { who: t('landing_matrix_you'), me: true, cells: r.cells }
+      : { who: r.who!, cells: r.cells })
   const [filter, setFilter] = useState<CellKind | null>(null)
   const tblRef = useRef<HTMLTableElement>(null)
   const [scRef, scTab] = useOverflowTab<HTMLDivElement>()
@@ -611,10 +614,10 @@ function MatrixDemo() {
           <table ref={tblRef} onPointerOver={onOver} onPointerLeave={clearX}>
             <caption className="sr-only">{t('landing_matrix_caption')}</caption>
             <thead>
-              <tr><th scope="col">Anggota</th>{MATRIX_APPS.map((a) => <th key={a} scope="col">{a}</th>)}</tr>
+              <tr><th scope="col">{t('landing_matrix_col_member')}</th>{MATRIX_APPS.map((a) => <th key={a} scope="col">{a}</th>)}</tr>
             </thead>
             <tbody>
-              {MATRIX_ROWS.map((r) => (
+              {matrixRows.map((r) => (
                 <tr key={r.who} className={r.me ? 'me' : undefined}>
                   <th scope="row">{r.who}</th>
                   {r.cells.map((c, i) => (
@@ -634,7 +637,7 @@ function MatrixDemo() {
         <p className="matrix-note"><b>{t('landing_matrix_note')}</b><span className="matrix-hint" aria-hidden="true"> {t('landing_matrix_hint')}</span> {t('landing_matrix_real')}</p>
       </div>
       <div className="lp-legend">
-        <p className="lp-hud"><b>Filter</b>{t('landing_matrix_hud')}</p>
+        <p className="lp-hud"><b>{t('landing_matrix_filter')}</b>{t('landing_matrix_hud')}</p>
         {FILTERS.map((k) => (
           <button key={k} type="button" className="lg-btn" aria-pressed={filter === k} onClick={() => setFilter(filter === k ? null : k)}>
             <span className={`cell ${CELL[k].cls}`} aria-hidden="true">{CELL[k].glyph}</span>
@@ -682,7 +685,7 @@ function Schedule() {
       <ol className="days rv">
         {days.map((x) => (
           <li className={`day${x.d === 0 ? ' now theme-light' : ''}`} key={x.d} onPointerEnter={() => setHot(x.d)} onPointerLeave={() => setHot(null)}>
-            <p className="day-n"><small>Hari ke</small>{x.d}</p>
+            <p className="day-n"><small>{t('landing_day_prefix')}</small>{x.d}</p>
             <h3>{x.title}</h3>
             <p className="day-t">{x.text}</p>
             <span className={`lp-chip ${x.chip}`}>{x.chipText}</span>
@@ -849,7 +852,7 @@ export function Landing() {
             <p className="lp-lede">{t('landing_lede_hero')}</p>
             <div className="cta-row">
               <a className="lp-btn lp-btn--primary" href="#gabung">{t('cta_join_community')}</a>
-              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />{t('cta_wa_group')}<span className="sr-only"> (tab baru)</span></a>
+              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />{t('cta_wa_group')}<span className="sr-only">{t('coh_new_tab')}</span></a>
               <a className="lp-btn" href="#cara-kerja">{t('landing_cta_how')}</a>
             </div>
           </div>
@@ -943,9 +946,9 @@ export function Landing() {
               </li>
             </ol>
             <div className="cta-row join-cta">
-              <a className="lp-btn lp-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">{t('cta_open_group')}<span className="sr-only"> (Google Group, tab baru)</span></a>
+              <a className="lp-btn lp-btn--ink" href={COMMUNITY_GROUP_URL} target="_blank" rel="noopener noreferrer">{t('cta_open_group')}<span className="sr-only">{t('about_cta_group_sr')}</span></a>
               {signInBtn('lp-btn', true)}
-              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />{t('cta_wa_community')}<span className="sr-only"> (tab baru)</span></a>
+              <a className="lp-btn lp-btn--wa" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer"><WaIcon />{t('cta_wa_community')}<span className="sr-only">{t('coh_new_tab')}</span></a>
             </div>
             <p className="wa-note">{t('landing_wa_note')}</p>
             <div className="duty rv">
