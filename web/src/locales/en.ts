@@ -1259,7 +1259,7 @@ export const en: Record<Keys, string> = {
   coh_behind_sr: " (behind)",
   coh_own_app: "Own app",
   coh_unassigned: "Not assigned",
-  coh_matrix_legend: "○ Not yet · ◑ Opted in · ◕ Using · ✓ Feedback · ✓✓ Verified · × Left · → Reassigned · — Own app",
+  coh_matrix_legend: "○ Not yet · ◑ Opted in · ● Using · ✓ Feedback · ✓✓ Verified · ✕ Left · → Reassigned · — Own app",
   coh_cell_not_joined: "Not opted in",
   coh_cell_left: "Left",
   coh_cell_opted_in: "Opted in",

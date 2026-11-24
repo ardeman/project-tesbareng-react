@@ -46,7 +46,8 @@
 .matrix-cell.unassigned { background: var(--putih); }
 /* behind: cabai left edge on the name cell (ADR-001 §2.2; edge = inset shadow, not border, to preserve layout) */
 .behind-row .matrix-td-name { box-shadow: inset 4px 0 0 var(--cabai); }
-.matrix-legend { margin-top: var(--s-2); }
+.matrix-legend { margin-top: var(--s-2); padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); }
+.matrix-legend li { white-space: nowrap; }
 
 /* ---------- ADR-013: my request to bring an app ---------- */
 .rq-status { display: grid; gap: var(--s-2); justify-items: start; padding: var(--s-3); border: var(--bw) solid var(--ink); background: var(--putih); }

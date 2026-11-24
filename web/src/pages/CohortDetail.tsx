@@ -470,7 +470,7 @@ function MemberRow({ m, c, tier, mine }: { m: CohortMember; c: Cohort; tier?: Ba
 // ---------- B5: obligation matrix (FR-38, cohort_assignment_status view) ----------
 
 const CELL_GLYPH: Record<CellState, string> = {
-  not_joined: '○', left: '×', opted_in: '◑', used: '◕',
+  not_joined: '○', left: '✕', opted_in: '◑', used: '●',
   feedback_sent: '✓', feedback_verified: '✓✓', reassigned: '→',
 }
 function ObligationMatrix({ c }: { c: Cohort }) {
@@ -530,7 +530,7 @@ function ObligationMatrix({ c }: { c: Cohort }) {
                   }
                   const cell = cells.get(app.appId!)?.get(m.userId)
                   if (!cell) {
-                    return <td key={app.appId} className="matrix-cell unassigned"><span aria-label={t('coh_unassigned')}></span></td>
+                    return <td key={app.appId} className="matrix-cell unassigned" title={t('coh_unassigned')}><span aria-hidden="true">·</span><span className="sr-only">{t('coh_unassigned')}</span></td>
                   }
                   const lbl = cellLabel(t, cell)
                   return <td key={app.appId} className={`matrix-cell ${cell}`} title={lbl}><span aria-label={lbl}>{CELL_GLYPH[cell]}</span></td>
@@ -540,7 +540,9 @@ function ObligationMatrix({ c }: { c: Cohort }) {
           </tbody>
         </table>
       </div>
-      <p className="matrix-legend small muted">{t('coh_matrix_legend')}</p>
+      <ul className="matrix-legend small muted">
+        {[...t('coh_matrix_legend').split(' · '), `· ${t('coh_unassigned')}`].map((item) => <li key={item}>{item}</li>)}
+      </ul>
     </section>
   )
 }

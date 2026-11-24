@@ -1258,7 +1258,7 @@ export const id = {
   coh_behind_sr: " (tertinggal)",
   coh_own_app: "Aplikasi sendiri",
   coh_unassigned: "Tidak ditugaskan",
-  coh_matrix_legend: "○ Belum · ◑ Opt-in · ◕ Memakai · ✓ Feedback · ✓✓ Terverifikasi · × Keluar · → Dipindah · — Aplikasi sendiri",
+  coh_matrix_legend: "○ Belum · ◑ Opt-in · ● Memakai · ✓ Feedback · ✓✓ Terverifikasi · ✕ Keluar · → Dipindah · — Aplikasi sendiri",
   coh_cell_not_joined: "Belum opt-in",
   coh_cell_left: "Keluar",
   coh_cell_opted_in: "Opt-in",
