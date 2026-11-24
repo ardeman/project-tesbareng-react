@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Badge, Chip, Empty, ErrorBox, Seats, Skel, StatusPill, useToast } from '../components/bits'
+import { Badge, Chip, Empty, ErrorBox, Skel, StatusPill, useToast } from '../components/bits'
 import { AssignedChip } from '../components/cohortBits'
 import { IconPlus, IconSearch } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { usePageMeta } from '../lib/pageMeta'
 import { errorText, useApps, useEntriesOf } from '../lib/data'
-import { daysActive, openSeats, relDay, TARGET_DAYS } from '../lib/progress'
+import { daysActive, daysAgo, openSeats, relDay, TARGET_DAYS } from '../lib/progress'
 import { useT } from '../lib/i18n'
 import type { AppStatus } from '../lib/types'
 import { useAppCohorts, useBelumTesApps, useCohorts, useMyAssignedApps, type AppCohort, type CohortStatus } from '../lib/cohorts'
@@ -80,7 +80,7 @@ export function AppList() {
     eligible: app.eligibleCount,
     cohort: appCohorts.data.get(app.id)?.find((c) => c.status !== 'closed'),
     assigned: assigned.data.get(app.id),
-    belumTes: belumTes.data.has(app.id),
+    belumTes: !!user && belumTes.data.has(app.id),
     own: !!user && app.creatorUid === user.uid,
     mine: myEntry.get(app.id),
   })), [apps.data, appCohorts.data, assigned.data, belumTes.data, user, myEntry])
@@ -237,19 +237,24 @@ export function AppList() {
           <table className="data app-table">
             <thead>
               <tr>
-                <th className="col-id">{t('apps_col_app')}</th>
-                <th>{t('apps_col_progress')}</th>
-                <th className="md-hide">{t('apps_col_creator_testing')}</th>
-                <th>{t('apps_col_status')}</th>
+                <th className="col-app">{t('apps_col_app')}</th>
+                <th className="num col-metric">{t('apps_prog_testers')}</th>
+                <th className="num col-metric">{t('apps_prog_feedback')}</th>
+                <th className="num col-metric">{t('apps_prog_days')}</th>
+                <th className="num col-creator">{t('apps_col_creator_testing')}</th>
+                <th className="num col-status">{t('apps_col_status')}</th>
               </tr>
             </thead>
             <tbody>
               {loading
-                ? Array.from({ length: 6 }, (_, i) => (
+                ? Array.from({ length: 8 }, (_, i) => (
                     <tr key={i}>
-                      <td className="cell-2"><Skel w={160} /><br /><Skel w={110} h={12} /></td>
-                      <td><Skel w={210} /></td>
-                      <td className="md-hide"><Skel w={140} /></td><td><Skel w={120} h={24} /></td>
+                      <td className="app-main"><Skel w={160} /><br /><Skel w={220} h={12} /></td>
+                      <td className="num"><Skel w={48} /></td>
+                      <td className="num"><Skel w={48} /></td>
+                      <td className="num"><Skel w={48} /></td>
+                      <td><Skel w={120} /></td>
+                      <td><Skel w={96} h={20} /></td>
                     </tr>
                   ))
                 : shown.map((r) => <DesktopRow key={r.app.id} row={r} onOpen={() => navigate(`/apps/${r.app.id}`)} />)}
@@ -258,7 +263,13 @@ export function AppList() {
         </div>
         <div className="mlist">
           {loading
-            ? Array.from({ length: 5 }, (_, i) => <div className="mrow" key={i}><Skel w={150} /><Skel w={40} /><span className="l2"><Skel w={220} h={12} /></span></div>)
+            ? Array.from({ length: 5 }, (_, i) => (
+                <div className="mrow" key={i}>
+                  <Skel w={150} /><Skel w={80} h={20} />
+                  <span className="l2"><Skel w={220} h={12} /></span>
+                  <span className="l2"><Skel w={260} h={28} /></span>
+                </div>
+              ))
             : shown.map((r) => <PhoneRow key={r.app.id} row={r} />)}
         </div>
         {!loading && shown.length === 0 && (
@@ -297,56 +308,64 @@ function MineChips({ own, mine }: Pick<Row, 'own' | 'mine'>) {
   return <Chip glyph="●" className="mine">{t('apps_chip_you_testing')}<span className="num"> · {daysActive(mine)}{t('apps_days_unit')}</span></Chip>
 }
 
-/** "12 / 12" capped at the slots; anyone beyond them is "+3" (more than needed is a good thing, not an error). */
-function SeatCount({ app }: { app: AppDoc }) {
+/** One count for the list: "6/12" leads, a thin plain bar sits under it. 0 is muted; pandan only when `done`
+ *  (default: target reached; feedback passes "all verified", since pandan means verified there, PRD DR-3).
+ *  The number is for the eye; the progressbar's label carries the full sentence for screen readers. */
+function Metric({ value, max, label, note, done }: { value: number; max: number; label: string; note?: ReactNode; done?: boolean }) {
   const t = useT()
-  const extra = Math.max(0, app.activeTesterCount - app.testerSlots)
+  const v = Math.max(0, Math.min(value, max))
+  const extra = Math.max(0, value - max)
+  const state = value <= 0 ? 'zero' : (done ?? value >= max) ? 'done' : ''
   return (
-    <span className="seat-count num">
-      {Math.min(app.activeTesterCount, app.testerSlots)}<small> / {app.testerSlots}</small>
-      {extra > 0 && <span className="seat-extra">+{extra}<span className="sr-only">{t('apps_seat_over_sr')}</span></span>}
+    <span className={`metric ${state}`}>
+      <span className="metric-n num" aria-hidden="true">
+        {v}<small>/{max}</small>
+        {extra > 0 && <span className="metric-x">+{extra}</span>}
+        {note}
+      </span>
+      <span
+        className="pbar" role="progressbar" aria-label={extra > 0 ? t('apps_bar_over', { label, extra }) : label}
+        aria-valuemin={0} aria-valuemax={max} aria-valuenow={v}
+        style={{ '--bar-max': max } as React.CSSProperties}
+      >
+        <i style={{ width: `${max > 0 ? (v / max) * 100 : 0}%` }} />
+      </span>
     </span>
   )
 }
 
-/** Two labelled rows on one grid (label, bar, count) so bars and numbers line up: testers x/slots, counted days x/14. */
-function Progress({ app }: { app: AppDoc }) {
+function TesterMetric({ app }: { app: AppDoc }) {
   const t = useT()
-  const days = counted(app)
+  const active = Math.min(app.activeTesterCount, app.testerSlots)
+  return <Metric value={app.activeTesterCount} max={app.testerSlots} label={t('seats_label', { active, total: app.testerSlots })} />
+}
+
+function FeedbackMetric({ app }: { app: AppDoc }) {
+  const t = useT()
   const sent = app.feedbackSentCount
   const ver = Math.min(app.feedbackVerifiedCount, sent)
   return (
-    <span className="prog">
-      <span className="prog-l">{t('apps_prog_testers')}</span>
-      <Seats active={app.activeTesterCount} total={app.testerSlots} />
-      <SeatCount app={app} />
-      <span className="prog-l">{t('apps_prog_feedback')}</span>
-      <Seats
-        active={sent} eligible={ver} total={app.testerSlots}
-        label={t('apps_fb_bar_label', { sent, slots: app.testerSlots, ver })}
-      />
-      <span className="seat-count num">
-        {Math.min(sent, app.testerSlots)}<small> / {app.testerSlots}</small>
-        {sent > app.testerSlots && <span className="seat-extra">+{sent - app.testerSlots}<span className="sr-only">{t('apps_seat_over_sr')}</span></span>}
-        {ver > 0 && <span className="seat-extra">✓ {ver}<span className="sr-only"> {t('apps_fb_verified', { n: ver })}</span></span>}
-      </span>
-      <span className="prog-l">{t('apps_prog_days')}</span>
-      <Seats
-        active={days} eligible={days >= TARGET_DAYS ? TARGET_DAYS : 0} total={TARGET_DAYS}
-        label={t('apps_days_bar_label', { v: days, max: TARGET_DAYS })}
-      />
-      <span className="seat-count num">{days}<small> / {TARGET_DAYS}</small></span>
-    </span>
+    <Metric
+      value={sent} max={app.testerSlots} done={ver >= app.testerSlots}
+      label={t('apps_fb_bar_label', { sent: Math.min(sent, app.testerSlots), slots: app.testerSlots, ver })}
+      note={ver > 0 ? <span className="metric-note">✓{ver}</span> : undefined}
+    />
   )
 }
 
+function DaysMetric({ app }: { app: AppDoc }) {
+  const t = useT()
+  const days = counted(app)
+  return <Metric value={days} max={TARGET_DAYS} label={t('apps_days_bar_label', { v: days, max: TARGET_DAYS })} />
+}
+
 /** Readiness comes from the numbers (eligible >= slots, CLAUDE.md), so it leads; the creator-set status
- *  is demoted to a quiet line when it is behind. Glyph + text, pandan = eligible. */
+ *  is demoted to a quiet line when it is behind. Glyph + text, pandan = eligible. Chips stay small: the name leads the row. */
 function StatusCell({ row }: { row: Row }) {
   const t = useT()
   const { app, eligible } = row
   const ready = eligible >= app.testerSlots && (app.status === 'recruiting' || app.status === 'testing')
-  if (!ready) return <StatusPill status={app.status} />
+  if (!ready) return <span className="status-cell"><StatusPill status={app.status} /></span>
   return (
     <span className="status-cell">
       <Chip tone="pandan" glyph="✓">{t('apps_chip_ready')}</Chip>
@@ -366,31 +385,29 @@ function AppChips({ row }: { row: Row }) {
   )
 }
 
-/** Line 1 is the person: creator, badge, and "Belum tes" (it is about the creator's own testing, not the app). */
-function CreatorLine({ row }: { row: Row }) {
+/** The quiet second line: creator (badge and "Belum tes" inline) · didaftarkan … · Kohort #1.
+ *  Each dot belongs to the piece after it, which never breaks, so no line starts with a dot. */
+function MetaLine({ row, link = false }: { row: Row; link?: boolean }) {
   const t = useT()
-  const { app, belumTes } = row
+  const { app, cohort, belumTes } = row
+  const listed = t('apps_registered_on', { when: relDay(app.createdAt) })
+  const age = shortAge(t, app.createdAt)
   return (
-    <span className="app-meta-who">
-      {app.creatorName}<Badge tier={app.creatorBadgeTier} size="sm" />
-      {belumTes && (
-        <Chip tone="cabai" glyph="!" className="sm">
-          {t('landing_cell_late_short')}<span className="sr-only"> {t('apps_late_creator_sr')}</span>
-        </Chip>
-      )}
-    </span>
-  )
-}
-
-/** Line 2: "didaftarkan … · Kohort #1". The dot belongs to the second piece, which never breaks, so no line starts with it. */
-function ListedLine({ row, link = false }: { row: Row; link?: boolean }) {
-  const t = useT()
-  const { app, cohort } = row
-  return (
-    <span className="app-meta-sub">
-      <span>{t('apps_registered_on', { when: relDay(app.createdAt) })}</span>
+    <span className="app-meta-line">
+      <span className="app-meta-who">
+        <span title={app.creatorName}>{app.creatorName}</span>
+        <Badge tier={app.creatorBadgeTier} size="sm" />
+        {belumTes && (
+          <Chip tone="cabai" glyph="!" className="sm">
+            {t('landing_cell_late_short')}<span className="sr-only"> {t('apps_late_creator_sr')}</span>
+          </Chip>
+        )}
+      </span>
+      <span className="app-meta-piece listed" title={listed}>
+        <span aria-hidden="true">· {age}</span><span className="sr-only">{listed}</span>
+      </span>
       {cohort && (
-        <span className="app-meta-cohort">
+        <span className="app-meta-piece">
           <span aria-hidden="true">· </span>
           {link
             ? <Link to={`/cohorts/${cohort.cohortId}`} className="cohort-link" onClick={(e) => e.stopPropagation()}>{cohort.name}</Link>
@@ -401,53 +418,69 @@ function ListedLine({ row, link = false }: { row: Row; link?: boolean }) {
   )
 }
 
+/** Short listing age for the meta line: "hari ini", "3 hr lalu", "2 mgg lalu", "4 bln lalu", "1 thn lalu".
+ *  The full "didaftarkan 2 minggu lalu" stays in the title and for screen readers. */
+function shortAge(t: ReturnType<typeof useT>, createdAt?: number | null) {
+  if (createdAt == null) return '—'
+  const d = daysAgo(createdAt)
+  if (d === 0) return t('apps_age_today')
+  if (d < 7) return t('apps_age_days', { n: d })
+  if (d < 30) return t('apps_age_weeks', { n: Math.floor(d / 7) })
+  if (d < 365) return t('apps_age_months', { n: Math.floor(d / 30) })
+  return t('apps_age_years', { n: Math.floor(d / 365) })
+}
+
 /** Days Google counts: all slots active together (app_stats.counted_days), capped at the 14 it needs. */
 const counted = (app: AppDoc) => Math.min(app.countedDays, TARGET_DAYS)
 
-function creatorLine(app: AppDoc) {
-  const t = app.creatorTestingCount ?? 0
+/** "11 aplikasi · 11 feedback"; a creator who tests nothing yet gets a quiet dash (the words stay for screen readers). */
+function CreatorTesting({ app }: { app: AppDoc }) {
+  const t = useT()
+  const n = app.creatorTestingCount ?? 0
   const f = app.creatorFeedbackSentCount ?? 0
-  const v = app.creatorFeedbackVerifiedCount ?? 0
-  return { t, f, v }
+  if (n === 0) {
+    return <><span className="dash" aria-hidden="true" title={t('apps_creator_none')}>—</span><span className="sr-only">{t('apps_creator_none')}</span></>
+  }
+  return <span className="num">{t(n === 1 ? 'apps_creator_summary_one' : 'apps_creator_summary', { n, f })}</span>
 }
 
 function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
-  const t = useT()
   const { app } = row
-  const c = creatorLine(app)
   return (
     <tr className="clickable" onClick={onOpen}>
-      <td className="cell-2">
-        <div className="name-line">
-          <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
-        </div>
-        <span className="app-meta"><CreatorLine row={row} /><ListedLine row={row} link /></span>
-        <AppChips row={row} />
-      </td>
-      <td><Progress app={app} /></td>
-      <td className="muted md-hide">
-        <span className="creator-nums">
-          {c.t === 0
-            ? <span>{t('apps_creator_none')}</span>
-            : <span><b style={{ color: 'var(--ink)' }}>{t('apps_creator_apps_feedback', { n: c.t })}</b>{t('apps_creator_feedback_n', { n: c.f })}</span>}
+      <td className="app-main">
+        <span className="name-line">
+          <Link to={`/apps/${app.id}`} className="app-name" onClick={(e) => e.stopPropagation()}>{app.name}</Link>
+          <AppChips row={row} />
         </span>
+        <MetaLine row={row} link />
       </td>
-      <td><StatusCell row={row} /></td>
+      <td className="num"><TesterMetric app={app} /></td>
+      <td className="num"><FeedbackMetric app={app} /></td>
+      <td className="num"><DaysMetric app={app} /></td>
+      <td className="num creator-cell"><CreatorTesting app={app} /></td>
+      <td className="num"><StatusCell row={row} /></td>
     </tr>
   )
 }
 
+/** Below 900 px: a card. Name and status on top, the quiet meta line, then the three counts in one row. */
 function PhoneRow({ row }: { row: Row }) {
+  const t = useT()
+  const nameId = useId()
   const { app } = row
+  // The link is named by the app name only; the rest of the card stays readable as its content.
   return (
-    <Link to={`/apps/${app.id}`} className="mrow">
-      <span className="l1">{app.name}</span>
-      <span className="l2"><Progress app={app} /></span>
-      <span className="l2">
-        <StatusCell row={row} />
-        <AppChips row={row} />
+    <Link to={`/apps/${app.id}`} className="mrow app-card" aria-labelledby={nameId}>
+      <span className="l1" id={nameId}>{app.name}</span>
+      <span className="r1"><StatusCell row={row} /></span>
+      <span className="l2"><MetaLine row={row} /></span>
+      {(row.own || row.mine || row.assigned) && <span className="l2"><AppChips row={row} /></span>}
+      <span className="card-metrics">
+        <span><span className="card-metric-l" aria-hidden="true">{t('apps_prog_testers')}</span><TesterMetric app={app} /></span>
+        <span><span className="card-metric-l" aria-hidden="true">{t('apps_prog_feedback')}</span><FeedbackMetric app={app} /></span>
+        <span><span className="card-metric-l" aria-hidden="true">{t('apps_prog_days')}</span><DaysMetric app={app} /></span>
       </span>
-      <span className="l2 app-meta"><CreatorLine row={row} /><ListedLine row={row} /></span>
     </Link>
   )
 }

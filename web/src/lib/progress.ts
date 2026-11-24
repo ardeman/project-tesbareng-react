@@ -120,6 +120,11 @@ function calendarDays(t: number, now: number) {
   return Math.round((wibDayStart(isoDate(now)) - wibDayStart(isoDate(t))) / DAY_MS)
 }
 
+/** Whole WIB calendar days from `t` to now (0 = today). Lets lists print their own short age ("2 mgg lalu"). */
+export function daysAgo(t: number, now = Date.now()) {
+  return Math.max(0, calendarDays(t, now))
+}
+
 /** Relative time in Bahasa Indonesia via Intl: "2 jam lalu", "kemarin", "3 hari lalu", "bulan lalu". */
 export function relTime(t?: number | null, now = Date.now()) {
   if (t == null) return '—'

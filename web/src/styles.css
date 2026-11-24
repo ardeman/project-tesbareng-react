@@ -265,14 +265,6 @@ table.data tr.mine td:first-child { box-shadow: inset 6px 0 0 var(--kunyit); }
 .dash { color: var(--muted); }
 .you { font-size: var(--fs-caption); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 
-th.col-id { width: 30%; min-width: 220px; }
-.md-show { display: none !important; }
-/* App list: below 1440 px (sidebar + six columns) the detail columns fold into the first two cells. */
-@media (max-width: 1439px) {
-  .md-hide { display: none; }
-  .md-show { display: block !important; }
-  th.col-id { width: 40%; min-width: 200px; }
-}
 
 /* Tester table: always a table. On narrow screens it scrolls sideways and the name column stays put. */
 .sheet-table th.sticky, .sheet-table td.sticky { position: sticky; left: 0; z-index: 1; border-right: var(--bw) solid var(--ink); }
@@ -613,8 +605,6 @@ dialog.sheet[open] { animation: rise var(--t-enter) var(--ease); }
   .board-days i { height: 16px; }
   .search, .search .input { width: 100%; }
   .toolbar .search { flex: 1 1 100%; }
-  .dtable { display: none; }
-  .mlist { display: block; }
   .lead-num { font-size: var(--fs-h1); }
   .hide-sm { display: none; }
   .recip-grid { grid-template-columns: minmax(0, 1fr); }
@@ -825,44 +815,100 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
   display: inline-flex; align-items: center; justify-content: center; width: var(--s-3); height: var(--s-3);
   border: var(--bw) solid var(--ink); background: var(--putih); font-size: var(--fs-caption); font-weight: 800; line-height: 1;
 }
-.cell-2 .name-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); min-width: 0; }
-.cell-2 .name-line b { display: inline; overflow-wrap: anywhere; }
-/* Creator · listed · cohort on one quiet line; badge inline with the name. */
-.cell-2 > span.app-meta,
-.app-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; }
-.app-meta { column-gap: var(--s-3); color: var(--muted); font-size: var(--fs-small); }
-.cell-2 > span.app-meta, .app-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
-.app-meta-who { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
-.app-meta-sub { display: inline-flex; flex-wrap: wrap; column-gap: 0.4em; }
-.app-meta-sub > span { display: inline-block; }
-.cohort-link { text-decoration: underline; text-underline-offset: 2px; color: inherit; }
-.mrow .l2.app-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
-.app-meta-cohort { white-space: nowrap; }
 .chip.sm { font-size: var(--fs-caption); padding-top: 0; padding-bottom: 0; min-height: 0; }
-.app-chips { display: flex; flex-wrap: wrap; gap: var(--s-1); margin-top: 4px; }
-.mrow .app-chips { margin-top: 0; }
-.seat-extra { margin-left: var(--s-1); font-size: var(--fs-small); font-weight: 700; }
-.prog { display: inline-grid; grid-template-columns: auto 112px auto; gap: 6px var(--s-2); align-items: center; }
-.prog .seats { grid-template-columns: repeat(var(--n, 12), 1fr); width: 112px; }
-.prog-l { color: var(--muted); font-size: var(--fs-small); font-weight: 600; }
-.prog .seat-count { font-size: var(--fs-small); }
 .fb-cell { display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }
 .fb-cell .fb-ver { color: var(--muted); font-size: var(--fs-small); }
-.status-cell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.cohort-link { text-decoration: underline; text-underline-offset: 2px; color: inherit; }
+
+/* ---------- app list (Aplikasi): one line per app; counts read "6/12" over a thin plain bar ---------- */
+/* Two text lines per row (name, quiet meta) keep rows at ~56–60 px. */
+table.data.app-table td { padding-top: 6px; padding-bottom: 6px; }
+.app-table th.col-metric { width: 96px; }
+.app-table th.col-creator { width: 1%; }
+.app-table .creator-cell { white-space: nowrap; }
+/* App column: 40%, so the counts sit near the name and Status (left-aligned) takes the spare width at the end.
+   max-width: 0 lets its nowrap meta line truncate instead of widening the table. */
+.app-table td.app-main { width: 40%; max-width: 0; min-width: 240px; }
+.app-main .name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--s-2); min-width: 0; }
+.app-name { font-size: var(--fs-body); font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.app-chips { display: inline-flex; flex-wrap: wrap; gap: var(--s-1); }
+/* Creator (badge, "Belum tes") · didaftarkan … · Kohort: one muted line; each "· piece" stays whole. */
+/* One line, always: the creator part and "didaftarkan …" give way (ellipsis, full text in the title); the cohort never does. */
+.app-meta-line { display: flex; align-items: center; gap: 0.4em; min-width: 0; margin-top: 2px; color: var(--muted); font-size: var(--fs-small); line-height: 1.4; white-space: nowrap; }
+/* "didaftarkan …" gives way first, then the creator name; chips and the cohort never shrink. */
+.app-meta-who { display: contents; }
+.app-meta-who > *, .app-meta-piece { flex: none; }
+.app-meta-who > span:first-child, .app-meta-piece.listed { overflow: hidden; text-overflow: ellipsis; }
+.app-meta-who > span:first-child { flex: 0 1 auto; min-width: 0; }
+.app-meta-piece.listed { flex: 0 20 auto; min-width: 0; }
+/* Badge and "Belum tes" whisper here: outline only, 1 px rule; the tier mark and the "!" keep their fill, so colour
+   still marks them, and the words say it (never colour alone). */
+.app-meta-line .chip.sm, .app-meta-line .badge.sm { border-width: var(--bw-row); background: transparent; color: var(--ink); line-height: 1.25; }
+.app-meta-line .chip.sm { gap: 4px; padding: 0 6px 0 0; border-color: var(--cabai); font-weight: 600; letter-spacing: 0.02em; }
+.app-meta-line .chip.sm .g { align-self: stretch; display: inline-grid; place-items: center; min-width: 14px; background: var(--cabai); color: var(--on-fill); }
+.app-meta-line .badge.sm { padding: 0 6px 0 1px; font-weight: 600; }
+.app-meta-line .badge.sm .badge-mark { min-width: 16px; height: 14px; color: var(--on-fill); border-color: var(--on-fill); }
+.app-meta-line .badge.bronze .badge-mark { background: var(--tier-bronze); }
+.app-meta-line .badge.silver .badge-mark { background: var(--tier-silver); }
+.app-meta-line .badge.gold .badge-mark { background: var(--tier-gold); }
+.app-meta-line .badge.platinum .badge-mark { background: var(--tier-platinum); }
+.status-cell { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .status-set { color: var(--muted); font-size: var(--fs-caption); }
-.mrow-cohort { overflow-wrap: anywhere; }
-.app-table .seat-cell { display: flex; flex-wrap: wrap; gap: 0 var(--s-2); }
-/* Keep app-list rows closer to the 48 px sheet rhythm when content is short. */
-table.data.app-table td.cell-2 { padding-top: 10px; padding-bottom: 10px; }
-/* Tablet and small laptop (sidebar + four columns): the feedback column stacks so Status is not clipped. */
+
+.metric { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; vertical-align: middle; --bar-w: 72px; }
+.metric-n { font-size: var(--fs-body); font-weight: 700; line-height: 1.2; white-space: nowrap; color: var(--ink); }
+.metric-n small { font-size: var(--fs-small); font-weight: 500; color: var(--muted); }
+.metric-x, .metric-note { margin-left: var(--s-1); font-size: var(--fs-caption); font-weight: 600; color: var(--muted); }
+.metric.zero .metric-n { color: var(--muted); font-weight: 500; }
+/* Segmented track: ink dividers at every slot boundary via ::after overlay. Fill is langit → pandan at target; 0 mutes the rule. */
+.pbar { display: block; position: relative; width: var(--bar-w); height: 6px; border: var(--bw-row) solid var(--ink); background: var(--putih); overflow: hidden; }
+.pbar > i { display: block; height: 100%; background: var(--langit); }
+.pbar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(100% / var(--bar-max, 12) - 1px),
+    var(--ink) calc(100% / var(--bar-max, 12) - 1px),
+    var(--ink) calc(100% / var(--bar-max, 12))
+  );
+  pointer-events: none;
+}
+.metric.done .pbar > i { background: var(--pandan); }
+.metric.zero .pbar { border-color: var(--muted); }
+
+/* Cards (below 900 px): name + status, meta, then the three counts side by side. */
+.app-card { align-items: start; }
+.app-card .l1 { white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.app-card .r1 { font-weight: inherit; white-space: normal; }
+.app-card .status-cell { align-items: flex-end; text-align: right; }
+.app-card .l2 { display: block; }
+.app-card .app-meta-line { flex-wrap: wrap; white-space: normal; row-gap: 2px; }
+.app-card .app-meta-piece.listed { white-space: nowrap; }
+.card-metrics { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); }
+.card-metrics > span { display: grid; gap: 2px; min-width: 0; }
+.card-metric-l { color: var(--muted); font-size: var(--fs-caption); font-weight: 600; }
+.card-metrics .metric { align-items: stretch; --bar-w: 100%; }
+.card-metrics .metric-n { white-space: normal; }
+@media (max-width: 899px) {
+  .dtable { display: none; }
+  .mlist { display: block; }
+}
+/* Small laptop and tablet (900–1279 px): tighter gutters, five columns. */
 @media (max-width: 1279px) {
   table.data.app-table th { white-space: normal; }
   table.data.app-table th, table.data.app-table td { padding-left: var(--s-2); padding-right: var(--s-2); }
-  .app-table .fb-cell { white-space: normal; }
-  .app-table .prog { grid-template-columns: auto 96px auto; }
-  .app-table .prog .seats { width: 96px; }
+  .app-table th.col-metric { width: 72px; }
+  .app-table .metric { --bar-w: 56px; }
+  .app-table td.app-main { width: 100%; min-width: 200px; }
+  /* Too narrow for six columns: "Creator tested" folds away (as it did below 1440 px before); 1280 px and up show it. */
+  .app-table .col-creator, .app-table .creator-cell { display: none; }
   .app-table .status-set { max-width: 14ch; }
-  .app-table td:last-child .chip { white-space: normal; max-width: 15ch; }
+}
+@media (hover: hover) and (pointer: fine) {
+  .app-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 }
 /* "Ditugaskan" chip: the kunyit edge is a fill (like .own-day), not a shadow; the chip stays flat. */
 .chip.assigned { box-shadow: inset var(--s-1) 0 0 var(--kunyit); padding-left: calc(var(--s-2) + var(--s-1)); }
