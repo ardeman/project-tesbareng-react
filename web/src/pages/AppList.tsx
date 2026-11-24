@@ -238,9 +238,7 @@ export function AppList() {
             <thead>
               <tr>
                 <th className="col-id">{t('apps_col_app')}</th>
-                <th>{t('apps_col_active_testers')}</th>
-                <th className="num md-hide">{t('apps_col_counted_days')}</th>
-                <th className="num">{t('apps_col_feedback_play')}</th>
+                <th>{t('apps_col_progress')}</th>
                 <th className="md-hide">{t('apps_col_creator_testing')}</th>
                 <th>{t('apps_col_status')}</th>
               </tr>
@@ -250,7 +248,7 @@ export function AppList() {
                 ? Array.from({ length: 6 }, (_, i) => (
                     <tr key={i}>
                       <td className="cell-2"><Skel w={160} /><br /><Skel w={110} h={12} /></td>
-                      <td><Skel w={150} /></td><td className="num md-hide"><Skel w={40} /></td><td className="num"><Skel w={90} /></td>
+                      <td><Skel w={210} /></td>
                       <td className="md-hide"><Skel w={140} /></td><td><Skel w={120} h={24} /></td>
                     </tr>
                   ))
@@ -299,17 +297,73 @@ function MineChips({ own, mine }: Pick<Row, 'own' | 'mine'>) {
   return <Chip glyph="●" className="mine">{t('apps_chip_you_testing')}<span className="num"> · {daysActive(mine)}{t('apps_days_unit')}</span></Chip>
 }
 
-/** ADR-012 §6: open seats against the app's slots. Chip removed — the X/slots count already conveys this. */
-function SlotChip(_: { app: AppDoc }) {
-  return null
+/** "12 / 12" capped at the slots; anyone beyond them is "+3" (more than needed is a good thing, not an error). */
+function SeatCount({ app }: { app: AppDoc }) {
+  const t = useT()
+  const extra = Math.max(0, app.activeTesterCount - app.testerSlots)
+  return (
+    <span className="seat-count num">
+      {Math.min(app.activeTesterCount, app.testerSlots)}<small> / {app.testerSlots}</small>
+      {extra > 0 && <span className="seat-extra">+{extra}<span className="sr-only">{t('apps_seat_over_sr')}</span></span>}
+    </span>
+  )
 }
 
-function SeatCell({ app }: { app: AppDoc }) {
+/** Two labelled rows on one grid (label, bar, count) so bars and numbers line up: testers x/slots, counted days x/14. */
+function Progress({ app }: { app: AppDoc }) {
+  const t = useT()
+  const days = counted(app)
+  const sent = app.feedbackSentCount
+  const ver = Math.min(app.feedbackVerifiedCount, sent)
   return (
-    <span className="seat-cell">
+    <span className="prog">
+      <span className="prog-l">{t('apps_prog_testers')}</span>
       <Seats active={app.activeTesterCount} total={app.testerSlots} />
-      <span className="seat-count num">{app.activeTesterCount}<small> / {app.testerSlots}</small></span>
-      <SlotChip app={app} />
+      <SeatCount app={app} />
+      <span className="prog-l">{t('apps_prog_feedback')}</span>
+      <Seats
+        active={sent} eligible={ver} total={app.testerSlots}
+        label={t('apps_fb_bar_label', { sent, slots: app.testerSlots, ver })}
+      />
+      <span className="seat-count num">
+        {Math.min(sent, app.testerSlots)}<small> / {app.testerSlots}</small>
+        {sent > app.testerSlots && <span className="seat-extra">+{sent - app.testerSlots}<span className="sr-only">{t('apps_seat_over_sr')}</span></span>}
+        {ver > 0 && <span className="seat-extra">✓ {ver}<span className="sr-only"> {t('apps_fb_verified', { n: ver })}</span></span>}
+      </span>
+      <span className="prog-l">{t('apps_prog_days')}</span>
+      <Seats
+        active={days} eligible={days >= TARGET_DAYS ? TARGET_DAYS : 0} total={TARGET_DAYS}
+        label={t('apps_days_bar_label', { v: days, max: TARGET_DAYS })}
+      />
+      <span className="seat-count num">{days}<small> / {TARGET_DAYS}</small></span>
+    </span>
+  )
+}
+
+/** Readiness comes from the numbers (eligible >= slots, CLAUDE.md), so it leads; the creator-set status
+ *  is demoted to a quiet line when it is behind. Glyph + text, pandan = eligible. */
+function StatusCell({ row }: { row: Row }) {
+  const t = useT()
+  const { app, eligible } = row
+  const ready = eligible >= app.testerSlots && (app.status === 'recruiting' || app.status === 'testing')
+  if (!ready) return <StatusPill status={app.status} />
+  return (
+    <span className="status-cell">
+      <Chip tone="pandan" glyph="✓">{t('apps_chip_ready')}</Chip>
+      <span className="status-set">{t('apps_status_set', { status: appStatusText(t, app.status) })}</span>
+    </span>
+  )
+}
+
+function AppChips({ row }: { row: Row }) {
+  const t = useT()
+  const { assigned, belumTes, own, mine } = row
+  if (!own && !mine && !assigned && !belumTes) return null
+  return (
+    <span className="app-chips">
+      <MineChips own={own} mine={mine} />
+      {assigned && <AssignedChip cohort={assigned.name} />}
+      {belumTes && <Chip tone="cabai" glyph="!">{t('landing_cell_late_short')}</Chip>}
     </span>
   )
 }
@@ -326,43 +380,22 @@ function creatorLine(app: AppDoc) {
 
 function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
   const t = useT()
-  const { app, cohort, assigned, belumTes, own, mine } = row
+  const { app, cohort } = row
   const c = creatorLine(app)
   return (
     <tr className="clickable" onClick={onOpen}>
       <td className="cell-2">
         <div className="name-line">
           <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
-          <MineChips own={own} mine={mine} />
-          {assigned && <AssignedChip cohort={assigned.name} />}
-          {belumTes && <Chip tone="cabai" glyph="!">{t('landing_cell_late_short')}</Chip>}
         </div>
-        {/* One meta line only — creator testing stays in its own column when there is room (not folded in). */}
         <span className="app-meta">
-          {app.creatorName}
-          <Badge tier={app.creatorBadgeTier} size="sm" />
-          {t('apps_registered_on', { when: relDay(app.createdAt) })}
-          {cohort && <> · {cohort.name}</>}
+          <span className="app-meta-who">{app.creatorName}<Badge tier={app.creatorBadgeTier} size="sm" /></span>
+          <span>{t('apps_registered_on', { when: relDay(app.createdAt) })}</span>
+          {cohort && <span>{cohort.name}</span>}
         </span>
+        <AppChips row={row} />
       </td>
-      <td className="cell-2">
-        <SeatCell app={app} />
-        {/* Folded days: compact X/14, not a full sentence under the seats. */}
-        <span className="md-show num app-days-fold">{counted(app)} / {TARGET_DAYS}</span>
-      </td>
-      <td className="num md-hide"><b>{counted(app)}</b><span className="of"> / {TARGET_DAYS}</span></td>
-      <td className="num">
-        {app.feedbackSentCount === 0
-          ? <span className="dash">0</span>
-          : (
-            <>
-              <b>{app.feedbackSentCount}</b>
-              {app.feedbackVerifiedCount > 0 && (
-                <span className="muted fb-ver">{t('apps_feedback_verified_n', { n: app.feedbackVerifiedCount })}</span>
-              )}
-            </>
-          )}
-      </td>
+      <td><Progress app={app} /></td>
       <td className="muted md-hide">
         <span className="creator-nums">
           {c.t === 0
@@ -370,34 +403,24 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
             : <span><b style={{ color: 'var(--ink)' }}>{t('apps_creator_apps_feedback', { n: c.t })}</b>{t('apps_creator_feedback_n', { n: c.f })}</span>}
         </span>
       </td>
-      <td><StatusPill status={app.status} /></td>
+      <td><StatusCell row={row} /></td>
     </tr>
   )
 }
 
 function PhoneRow({ row }: { row: Row }) {
-  const t = useT()
-  const { app, cohort, assigned, belumTes, own, mine } = row
+  const { app, cohort } = row
   return (
     <Link to={`/apps/${app.id}`} className="mrow">
       <span className="l1">{app.name}</span>
-      <span className="r1 num">{app.activeTesterCount}<span className="of"> / {app.testerSlots}</span></span>
+      <span className="l2"><Progress app={app} /></span>
       <span className="l2">
-        <Seats active={app.activeTesterCount} total={app.testerSlots} />
-        <SlotChip app={app} />
-        <span className="num">{counted(app)} / {TARGET_DAYS}</span>
-        {app.feedbackSentCount > 0 && <span className="num">feedback {app.feedbackSentCount}</span>}
+        <StatusCell row={row} />
+        <AppChips row={row} />
       </span>
-      <span className="l2">
-        <StatusPill status={app.status} />
-        <MineChips own={own} mine={mine} />
-        {assigned && <AssignedChip cohort={assigned.name} />}
-        {belumTes && <Chip tone="cabai" glyph="!">{t('landing_cell_late_short')}</Chip>}
-        <span className="app-meta">
-          {app.creatorName}
-          <Badge tier={app.creatorBadgeTier} size="sm" />
-          {cohort && <span className="mrow-cohort"> · {cohort.name}</span>}
-        </span>
+      <span className="l2 app-meta">
+        <span className="app-meta-who">{app.creatorName}<Badge tier={app.creatorBadgeTier} size="sm" /></span>
+        {cohort && <span className="mrow-cohort">{cohort.name}</span>}
       </span>
     </Link>
   )
