@@ -43,7 +43,9 @@
 .matrix-cell.feedback_sent     { background: var(--pandan); color: var(--on-fill); }
 .matrix-cell.feedback_verified { background: var(--pandan); color: var(--on-fill); font-weight: 800; }
 .matrix-cell.own      { background: var(--surface-soft); color: var(--muted); }
-.matrix-cell.unassigned { background: var(--putih); }
+.matrix-cell.unassigned { background: var(--putih); color: var(--muted); }
+/* ∅ draws about 3/4 the height of ○ in the text font; scale it to match the other glyphs. */
+.matrix-cell.unassigned > [aria-hidden] { font-size: 1.33em; line-height: 1; }
 /* behind: cabai left edge on the name cell (ADR-001 §2.2; edge = inset shadow, not border, to preserve layout) */
 .behind-row .matrix-td-name { box-shadow: inset 4px 0 0 var(--cabai); }
 .matrix-legend { margin-top: var(--s-2); padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); }

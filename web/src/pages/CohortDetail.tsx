@@ -530,7 +530,7 @@ function ObligationMatrix({ c }: { c: Cohort }) {
                   }
                   const cell = cells.get(app.appId!)?.get(m.userId)
                   if (!cell) {
-                    return <td key={app.appId} className="matrix-cell unassigned" title={t('coh_unassigned')}><span aria-hidden="true">·</span><span className="sr-only">{t('coh_unassigned')}</span></td>
+                    return <td key={app.appId} className="matrix-cell unassigned" title={t('coh_unassigned')}><span aria-hidden="true">∅</span><span className="sr-only">{t('coh_unassigned')}</span></td>
                   }
                   const lbl = cellLabel(t, cell)
                   return <td key={app.appId} className={`matrix-cell ${cell}`} title={lbl}><span aria-label={lbl}>{CELL_GLYPH[cell]}</span></td>
@@ -541,7 +541,7 @@ function ObligationMatrix({ c }: { c: Cohort }) {
         </table>
       </div>
       <ul className="matrix-legend small muted">
-        {[...t('coh_matrix_legend').split(' · '), `· ${t('coh_unassigned')}`].map((item) => <li key={item}>{item}</li>)}
+        {[...t('coh_matrix_legend').split(' · '), `∅ ${t('coh_unassigned')}`].map((item) => <li key={item}>{item}</li>)}
       </ul>
     </section>
   )
