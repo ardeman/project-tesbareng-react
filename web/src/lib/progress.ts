@@ -94,7 +94,13 @@ const dayHeadFmt = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'num
 const dateTimeFmt = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: TZ })
 /** YYYY-MM-DD in WIB (en-CA formats as ISO order). */
 const isoFmt = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: TZ })
-const rtf = new Intl.RelativeTimeFormat('id-ID', { numeric: 'auto' })
+const rtfs = {
+  id: new Intl.RelativeTimeFormat('id-ID', { numeric: 'auto' }),
+  en: new Intl.RelativeTimeFormat('en', { numeric: 'auto' }),
+}
+let rtf = rtfs.id
+/** Relative dates follow the UI language ("bulan lalu" / "last month"); set by I18nProvider. */
+export function setRelLocale(l: 'id' | 'en') { rtf = rtfs[l] }
 
 export const fmtDate = (t?: number | null) => (t != null ? dateFmt.format(t) : '—')
 export const fmtShort = (t?: number | null) => (t != null ? shortFmt.format(t) : '—')

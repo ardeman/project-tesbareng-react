@@ -628,6 +628,7 @@ export const en: Record<Keys, string> = {
   apps_days_bar_label: '{v} of {max} counted days',
   apps_prog_feedback: 'Feedback',
   apps_fb_bar_label: '{sent} of {slots} feedback sent, {ver} verified',
+  apps_late_creator_sr: 'the creator has not yet tested their assigned apps',
   apps_chip_you_left: 'You left',
   apps_chip_you_testing: 'You are testing',
   apps_days_unit: ' days',

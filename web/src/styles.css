@@ -831,7 +831,14 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
 .cell-2 > span.app-meta,
 .app-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; }
 .app-meta { column-gap: var(--s-3); color: var(--muted); font-size: var(--fs-small); }
-.app-meta-who { display: inline-flex; align-items: center; gap: 6px; }
+.cell-2 > span.app-meta, .app-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
+.app-meta-who { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.app-meta-sub { display: inline-flex; flex-wrap: wrap; column-gap: 0.4em; }
+.app-meta-sub > span { display: inline-block; }
+.cohort-link { text-decoration: underline; text-underline-offset: 2px; color: inherit; }
+.mrow .l2.app-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
+.app-meta-cohort { white-space: nowrap; }
+.chip.sm { font-size: var(--fs-caption); padding-top: 0; padding-bottom: 0; min-height: 0; }
 .app-chips { display: flex; flex-wrap: wrap; gap: var(--s-1); margin-top: 4px; }
 .mrow .app-chips { margin-top: 0; }
 .seat-extra { margin-left: var(--s-1); font-size: var(--fs-small); font-weight: 700; }

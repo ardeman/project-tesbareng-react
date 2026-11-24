@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { id as idDict } from '../locales/id'
 import { en as enDict } from '../locales/en'
 import type { Keys } from '../locales/id'
+import { setRelLocale } from './progress'
 
 export type Locale = 'id' | 'en'
 
@@ -44,6 +45,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     return str
   }, [locale])
 
+  setRelLocale(locale)
   return <Ctx.Provider value={{ locale, setLocale, t }}>{children}</Ctx.Provider>
 }
 

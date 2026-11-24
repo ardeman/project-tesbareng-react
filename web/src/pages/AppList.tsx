@@ -356,14 +356,47 @@ function StatusCell({ row }: { row: Row }) {
 }
 
 function AppChips({ row }: { row: Row }) {
-  const t = useT()
-  const { assigned, belumTes, own, mine } = row
-  if (!own && !mine && !assigned && !belumTes) return null
+  const { assigned, own, mine } = row
+  if (!own && !mine && !assigned) return null
   return (
     <span className="app-chips">
       <MineChips own={own} mine={mine} />
       {assigned && <AssignedChip cohort={assigned.name} />}
-      {belumTes && <Chip tone="cabai" glyph="!">{t('landing_cell_late_short')}</Chip>}
+    </span>
+  )
+}
+
+/** Line 1 is the person: creator, badge, and "Belum tes" (it is about the creator's own testing, not the app). */
+function CreatorLine({ row }: { row: Row }) {
+  const t = useT()
+  const { app, belumTes } = row
+  return (
+    <span className="app-meta-who">
+      {app.creatorName}<Badge tier={app.creatorBadgeTier} size="sm" />
+      {belumTes && (
+        <Chip tone="cabai" glyph="!" className="sm">
+          {t('landing_cell_late_short')}<span className="sr-only"> {t('apps_late_creator_sr')}</span>
+        </Chip>
+      )}
+    </span>
+  )
+}
+
+/** Line 2: "didaftarkan … · Kohort #1". The dot belongs to the second piece, which never breaks, so no line starts with it. */
+function ListedLine({ row, link = false }: { row: Row; link?: boolean }) {
+  const t = useT()
+  const { app, cohort } = row
+  return (
+    <span className="app-meta-sub">
+      <span>{t('apps_registered_on', { when: relDay(app.createdAt) })}</span>
+      {cohort && (
+        <span className="app-meta-cohort">
+          <span aria-hidden="true">· </span>
+          {link
+            ? <Link to={`/cohorts/${cohort.cohortId}`} className="cohort-link" onClick={(e) => e.stopPropagation()}>{cohort.name}</Link>
+            : cohort.name}
+        </span>
+      )}
     </span>
   )
 }
@@ -380,7 +413,7 @@ function creatorLine(app: AppDoc) {
 
 function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
   const t = useT()
-  const { app, cohort } = row
+  const { app } = row
   const c = creatorLine(app)
   return (
     <tr className="clickable" onClick={onOpen}>
@@ -388,11 +421,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
         <div className="name-line">
           <Link to={`/apps/${app.id}`} onClick={(e) => e.stopPropagation()}><b>{app.name}</b></Link>
         </div>
-        <span className="app-meta">
-          <span className="app-meta-who">{app.creatorName}<Badge tier={app.creatorBadgeTier} size="sm" /></span>
-          <span>{t('apps_registered_on', { when: relDay(app.createdAt) })}</span>
-          {cohort && <span>{cohort.name}</span>}
-        </span>
+        <span className="app-meta"><CreatorLine row={row} /><ListedLine row={row} link /></span>
         <AppChips row={row} />
       </td>
       <td><Progress app={app} /></td>
@@ -409,7 +438,7 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
 }
 
 function PhoneRow({ row }: { row: Row }) {
-  const { app, cohort } = row
+  const { app } = row
   return (
     <Link to={`/apps/${app.id}`} className="mrow">
       <span className="l1">{app.name}</span>
@@ -418,10 +447,7 @@ function PhoneRow({ row }: { row: Row }) {
         <StatusCell row={row} />
         <AppChips row={row} />
       </span>
-      <span className="l2 app-meta">
-        <span className="app-meta-who">{app.creatorName}<Badge tier={app.creatorBadgeTier} size="sm" /></span>
-        {cohort && <span className="mrow-cohort">{cohort.name}</span>}
-      </span>
+      <span className="l2 app-meta"><CreatorLine row={row} /><ListedLine row={row} /></span>
     </Link>
   )
 }

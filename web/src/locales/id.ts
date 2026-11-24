@@ -626,6 +626,7 @@ export const id = {
   apps_days_bar_label: '{v} dari {max} hari terhitung',
   apps_prog_feedback: 'Feedback',
   apps_fb_bar_label: '{sent} dari {slots} feedback dikirim, {ver} terverifikasi',
+  apps_late_creator_sr: 'pembuat belum mengetes aplikasi yang ditugaskan',
   apps_chip_you_left: 'Anda keluar',
   apps_chip_you_testing: 'Anda menguji',
   apps_days_unit: ' hari',
