@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { TARGET_TESTERS } from './progress'
 import type { AdminTesterRow, AppDoc, BadgeTier, BuildDoc, EmailListing, EmailListingRow, PublicProfile, TesterDoc, TesterMethod, TesterStatus } from './types'
+import { id as idDict } from '../locales/id'
+import type { Keys } from '../locales/id'
 
 export interface Live<T> {
   data: T; loading: boolean; error: string | null
@@ -103,20 +105,35 @@ export function errorCode(e: unknown): string | null {
   }
 }
 
+export type Translator = (key: Keys, vars?: Record<string, string | number>) => string
+
+function fallbackT(key: Keys, vars?: Record<string, string | number>): string {
+  let str: string = idDict[key] ?? key
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v))
+    }
+  }
+  return str
+}
+
 /** The backend raises Indonesian messages; everything else gets a fixed sentence (raw Postgres text never reaches the UI). */
-export function errorText(e: unknown) {
+export function errorText(e: unknown, t: Translator = fallbackT) {
   const code = errorCode(e)
   const message = (e as { message?: string } | null)?.message
   if (code && (e as { hint?: string }).hint === code && message) return message
   switch (code) {
-    case 'permission-denied': return 'Anda tidak punya izin untuk perubahan ini.'
-    case 'invalid-argument': return 'Data yang dikirim tidak valid.'
-    case 'already-exists': return 'Data ini sudah ada.'
-    case 'unauthenticated': return 'Silakan masuk dengan akun Google dulu.'
+    case 'permission-denied': return t('err_permission')
+    case 'invalid-argument': return t('err_invalid')
+    case 'already-exists': return t('err_already')
+    case 'unauthenticated': return t('err_unauthenticated')
+    case 'not-found': return t('err_not_found')
+    case 'failed-precondition': return t('err_failed')
+    case 'resource-exhausted': return t('err_exhausted')
   }
-  if (e instanceof TypeError || /fetch|network/i.test(message ?? '')) return 'Server tidak bisa dihubungi. Coba lagi sebentar lagi.'
-  if ((e as { name?: string } | null)?.name?.startsWith('Auth')) return 'Gagal masuk. Coba lagi.'
-  return 'Terjadi kesalahan di server. Coba lagi sebentar lagi.'
+  if (e instanceof TypeError || /fetch|network/i.test(message ?? '')) return t('err_network')
+  if ((e as { name?: string } | null)?.name?.startsWith('Auth')) return t('err_sign_in')
+  return t('err_generic')
 }
 
 export async function rows<T>(p: PromiseLike<{ data: T | null; error: unknown }>): Promise<T> {

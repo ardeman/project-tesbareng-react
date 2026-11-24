@@ -7,7 +7,7 @@ import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { Avatar, useToast } from './bits'
 import { useReducedMotion, useTheme } from '../lib/theme'
 import { useI18n, useT } from '../lib/i18n'
-import { IconAdmin, IconApps, IconBook, IconClose, IconCohort, IconMenu, IconSignOut, IconSun, IconMoon, IconTodo, IconUser, Mark } from './icons'
+import { IconAdmin, IconApps, IconBook, IconClose, IconCohort, IconGoogle, IconMenu, IconSun, IconMoon, IconSignOut, IconTodo, IconUser, Mark } from './icons'
 
 export function Shell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -36,8 +36,26 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [open])
 
   const login = async () => {
-    try { await signIn() } catch (e) { toast(errorText(e)) }
+    try { await signIn() } catch (e) { toast(errorText(e, t)) }
   }
+
+  const toggles = (
+    <div className="bottom-toggles">
+      <button type="button" className="lp-sq" onClick={toggleTheme} aria-pressed={dark}
+        title={dark ? t('dark_mode_on') : t('dark_mode_off')} aria-label={dark ? t('dark_mode_on') : t('dark_mode_off')}>
+        {dark ? <IconMoon /> : <IconSun />}
+        <span className="bottom-icon-label">{dark ? t('theme_dark') : t('theme_light')}</span>
+      </button>
+      {/* Face = current locale; title/aria = switch-to target (readable in that language). */}
+      <button type="button" className="lp-sq" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
+        title={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
+        aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
+        <span style={{ fontWeight: 800, fontSize: 'var(--fs-caption)', letterSpacing: '0.08em' }} aria-hidden="true">
+          {locale === 'id' ? 'ID' : 'EN'}
+        </span>
+      </button>
+    </div>
+  )
 
   return (
     <div className="app dark-ready">
@@ -52,11 +70,15 @@ export function Shell({ children }: { children: ReactNode }) {
 
       <aside id="nav" className={`sidebar ${open ? 'open' : ''}`} aria-label={t('nav_main_label')}>
         <div className="sidebar-head">
-          <Link to="/" className="brand"><Mark />TesBareng</Link>
-          <span className="spacer" />
+          <div className="sidebar-intro">
+            <Link to="/" className="brand"><Mark />TesBareng</Link>
+            <p className="scope">
+              <span className="scope-label">{t('nav_community')}</span>
+              <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP.replace('@googlegroups.com', '')}</a>
+            </p>
+          </div>
           <button ref={closeBtn} className="menu-toggle close" aria-label={t('close_menu')} onClick={() => setOpen(false)}><IconClose /></button>
         </div>
-        <p className="scope">{t('nav_community')} <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP.replace('@googlegroups.com', '')}</a></p>
 
         <nav className="nav-list primary" aria-label={t('nav_main_label')}>
           <NavLink to="/apps" end className="nav-item"><IconApps /><span className="label">{t('nav_apps')}</span></NavLink>
@@ -81,32 +103,29 @@ export function Shell({ children }: { children: ReactNode }) {
         )}
 
         <div className="bottom">
-          <div className="bottom-toggles">
-            <button type="button" className="lp-sq" onClick={toggleTheme} aria-pressed={dark}
-              title={dark ? t('dark_mode_on') : t('dark_mode_off')} aria-label={dark ? t('dark_mode_on') : t('dark_mode_off')}>
-              {dark ? <IconMoon /> : <IconSun />}
-            </button>
-            {/* Language toggle: aria-label is always in the target language so it's readable regardless of current locale */}
-            <button type="button" className="lp-sq" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
-              title={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}
-              aria-label={locale === 'id' ? 'Switch to English' : 'Ganti ke Bahasa Indonesia'}>
-              <span style={{ fontWeight: 800, fontSize: 'var(--fs-caption)', letterSpacing: '0.08em' }} aria-hidden="true">
-                {locale === 'id' ? 'EN' : 'ID'}
-              </span>
-            </button>
-          </div>
-          {!ready ? null : user ? (
-            <div className="user-row">
-              <Link to={`/u/${user.uid}`} className="user-info">
-                <Avatar name={user.displayName ?? '?'} photo={user.photoURL} />
-                <span className="who"><b>{user.displayName ?? t('member_fallback')}</b><span>{t('view_profile')}</span></span>
-              </Link>
-              <button className="btn-icon" onClick={() => signOut()} aria-label={t('sign_out')} title={t('sign_out')}>
-                <IconSignOut />
-              </button>
+          {/* Two dense lines: [theme][lang], then account or Sign in with Google. */}
+          {!ready ? toggles : (
+            <div className="bottom-bar">
+              {toggles}
+              {user ? (
+                <div className="user-row">
+                  <Link to={`/u/${user.uid}`} className="user-info" title={t('view_profile')}>
+                    <Avatar name={user.displayName ?? '?'} photo={user.photoURL} />
+                    <span className="who"><b>{user.displayName ?? t('member_fallback')}</b></span>
+                  </Link>
+                  <button type="button" className="btn icon bottom-signout" onClick={() => { void signOut() }}
+                    aria-label={t('sign_out')} title={t('sign_out')}>
+                    <IconSignOut />
+                    <span className="bottom-icon-label">{t('sign_out')}</span>
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="btn google-signin bottom-signin" onClick={login}>
+                  <IconGoogle />
+                  <span className="bottom-signin-label">{t('sign_in_google')}</span>
+                </button>
+              )}
             </div>
-          ) : (
-            <button className="btn block" onClick={login}>{t('sign_in_google')}</button>
           )}
         </div>
       </aside>

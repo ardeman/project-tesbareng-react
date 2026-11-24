@@ -7,27 +7,31 @@ import {
   clearJoinProgress, emailPlayStepsDone, groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, openPlayInstall,
   playInstallUrl, readEmailJoinProgress, readGroupJoinProgress, writeEmailJoinProgress, writeGroupJoinProgress,
 } from '../lib/joinProgress'
+import { clearPlayUnreachable } from '../lib/playAccess'
 import { fmtDate, isoDate, todayIso } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 import { BUILD_LIMITS, MANUAL_LIMITS, validateBuild, validateManual, type BuildInput, type ManualInput } from '../lib/validate'
 import { useValidation } from '../lib/useValidation'
+import { useT } from '../lib/i18n'
 import { Dialog, ErrorBox, Field, fieldAria, useToast } from './bits'
 import { IconExternal } from './icons'
 
 function useSubmit(onDone: () => void) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const run = async (fn: () => Promise<unknown>) => {
     if (busy) return // already saving: ignore the double tap
     setBusy(true); setErr(null)
-    try { await fn(); onDone() } catch (e) { setErr(errorText(e)) } finally { setBusy(false) }
+    try { await fn(); onDone() } catch (e) { setErr(errorText(e, t)) } finally { setBusy(false) }
   }
   return { busy, err, run }
 }
 
 export function JoinDialog({ open, onClose, app, rejoin }: { open: boolean; onClose: () => void; app: AppDoc; rejoin?: boolean }) {
+  const t = useT()
   return (
-    <Dialog open={open} onClose={onClose} label={isLiveApp(app) ? `Ulas ${app.name}` : `Gabung sebagai tester ${app.name}`}>
+    <Dialog open={open} onClose={onClose} label={isLiveApp(app) ? t('dlg_join_review_label', { name: app.name }) : t('dlg_join_tester_label', { name: app.name })}>
       {isLiveApp(app)
         ? <LiveJoinForm app={app} rejoin={rejoin} onClose={onClose} />
         : app.testerMethod === 'email_list'
@@ -39,12 +43,14 @@ export function JoinDialog({ open, onClose, app, rejoin }: { open: boolean; onCl
 
 /** Production apps: Play Store install → catat (public review comes after join). */
 function LiveJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
+  const t = useT()
   const toast = useToast()
   const [done, setDone] = useState(() => readGroupJoinProgress(app.id))
   const [step, setStep] = useState<'play' | 'confirm'>(() => (readGroupJoinProgress(app.id).installed ? 'confirm' : 'play'))
   const { busy, err, run } = useSubmit(() => {
     clearJoinProgress(app.id)
-    toast(`Anda tercatat mengulas ${app.name}. Tulis ulasan publik di Play Store, lalu tandai sudah kirim.`)
+    clearPlayUnreachable(app.id)
+    toast(t('dlg_toast_reviewer', { name: app.name }))
     onClose()
   })
   const playUrl = playInstallUrl(app)
@@ -65,33 +71,33 @@ function LiveJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppD
   return (
     <form onSubmit={submit}>
       <div className="sheet-body">
-        <h2>Ulas {app.name} di Play Store</h2>
-        {rejoin && <p className="muted">Hari aktif Anda dihitung lagi dari nol mulai hari ini.</p>}
-        <p className="lede">App ini sudah rilis production. Pasang dari Play Store, lalu catat di TesBareng. Setelah itu tulis ulasan publik di halaman Play.</p>
-        <WizardProgress labels={['Pasang di Play', 'Catat']} current={step === 'play' ? 0 : 1} doneFlags={[!!done.installed, false]} />
+        <h2>{t('dlg_live_title', { name: app.name })}</h2>
+        {rejoin && <p className="muted">{t('dlg_rejoin_note')}</p>}
+        <p className="lede">{t('dlg_live_lede')}</p>
+        <WizardProgress labels={[t('dlg_wiz_install_play'), t('dlg_wiz_record')]} current={step === 'play' ? 0 : 1} doneFlags={[!!done.installed, false]} />
         {step === 'play' ? (
           <WizardStep
-            title="1. Buka Play Store dan pasang"
-            body={<>Ketuk tombol di bawah, pasang app-nya, lalu buka sekali. Akun Google di Play harus sama dengan yang Anda pakai di TesBareng.</>}
+            title={t('dlg_step_play_title')}
+            body={t('dlg_step_play_body_live')}
             actionHref={playUrl}
-            actionLabel="Buka di Play Store"
+            actionLabel={t('dlg_open_play')}
             onDone={markInstalled}
-            doneLabel="Sudah memasang"
+            doneLabel={t('dlg_already_installed')}
           />
         ) : (
           <div className="stack-12">
-            <p className="strong">2. Catat di TesBareng</p>
-            <p className="muted">Supaya creator melihat Anda di daftar. Setelah ini, tulis ulasan publik di Play Store (bintang + komentar dengan kata-kata Anda sendiri), lalu tekan Tandai sudah kirim.</p>
-            <button type="button" className="text-action" onClick={() => setStep('play')}>Kembali ke langkah pasang</button>
+            <p className="strong">{t('dlg_record_review_title')}</p>
+            <p className="muted">{t('dlg_record_review_body')}</p>
+            <button type="button" className="text-action" onClick={() => setStep('play')}>{t('dlg_back_to_install')}</button>
           </div>
         )}
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Batal</button>
+        <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
         {step === 'confirm' && (
           <button className="btn primary" disabled={busy || !done.installed}>
-            {busy ? 'Menyimpan…' : 'Catat saya sebagai pengulas'}
+            {busy ? t('saving') : t('dlg_record_as_reviewer')}
           </button>
         )}
       </div>
@@ -111,12 +117,14 @@ function initialGroupStep(appId: string): GroupStep {
 
 /** One step at a time: Group → Play Store (install) → confirm on TesBareng. */
 function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
+  const t = useT()
   const toast = useToast()
   const [step, setStep] = useState<GroupStep>(() => initialGroupStep(app.id))
   const [done, setDone] = useState(() => readGroupJoinProgress(app.id))
   const { busy, err, run } = useSubmit(() => {
     clearJoinProgress(app.id)
-    toast(`Anda tercatat sebagai tester ${app.name}. Hari aktif Anda dihitung mulai hari ini.`)
+    clearPlayUnreachable(app.id)
+    toast(t('dlg_toast_tester', { name: app.name }))
     onClose()
   })
   const playUrl = playInstallUrl(app)
@@ -146,52 +154,50 @@ function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; 
   return (
     <form onSubmit={submit}>
       <div className="sheet-body">
-        <h2>Gabung sebagai tester {app.name}</h2>
-        {rejoin && <p className="muted">Hari aktif Anda dihitung lagi dari nol mulai hari ini.</p>}
-        <p className="lede">Paling mudah di HP. Gabung grup dulu, lalu buka Play Store dan pasang. Login TesBareng hanya di langkah terakhir.</p>
+        <h2>{t('dlg_join_title', { name: app.name })}</h2>
+        {rejoin && <p className="muted">{t('dlg_rejoin_note')}</p>}
+        <p className="lede">{t('dlg_join_lede')}</p>
         <WizardProgress
-          labels={['Gabung grup', 'Pasang di Play', 'Catat']}
+          labels={[t('dlg_wiz_join_group'), t('dlg_wiz_install_play'), t('dlg_wiz_record')]}
           current={idx}
           doneFlags={[!!done.group, !!done.installed, false]}
         />
         {step === 'group' && (
           <WizardStep
-            title="1. Gabung Google Group komunitas"
-            body={<>Ketuk tombol di bawah — Google akan minta <b>pilih akun dulu</b>. Pilih akun yang sama dengan Play Store, lalu di halaman grup ketuk <b>Bergabung</b> / Join. Jangan ganti akun setelah grup terbuka (tombol Join bisa hilang).</>}
+            title={t('dlg_step_group_title')}
+            body={t('dlg_step_group_body')}
             actionHref={COMMUNITY_GROUP_URL}
-            actionLabel="Pilih akun & buka grup"
+            actionLabel={t('dlg_open_group')}
             actionHint={COMMUNITY_GROUP}
             onDone={afterGroup}
-            doneLabel="Sudah gabung grup"
+            doneLabel={t('dlg_already_joined_group')}
           />
         )}
         {step === 'play' && (
           <WizardStep
-            title="2. Buka Play Store dan pasang"
-            body={storeOk
-              ? <>Ketuk tombol di bawah. Di HP, ketuk <b>Install</b> / Pasang, lalu buka app sekali. Kalau tombol Install belum muncul, tunggu sebentar atau buka ulang halaman Play.</>
-              : <>App ini belum punya link Play Store. Sementara pakai link opt-in: ketuk <b>Jadi penguji</b>, lalu Install.</>}
+            title={t('dlg_step_play_title_n')}
+            body={storeOk ? t('dlg_step_play_body_store') : t('dlg_step_play_body_optin')}
             actionHref={playUrl}
-            actionLabel={storeOk ? 'Buka di Play Store' : 'Buka link opt-in'}
+            actionLabel={storeOk ? t('dlg_open_play') : t('dlg_open_optin')}
             onBack={() => setStep('group')}
             onDone={() => mark({ installed: true }, 'confirm')}
-            doneLabel="Sudah memasang"
+            doneLabel={t('dlg_already_installed')}
           />
         )}
         {step === 'confirm' && (
           <div className="stack-12">
-            <p className="strong">3. Catat di TesBareng</p>
-            <p className="muted">Supaya hari aktif Anda terhitung bersama komunitas. Biarkan app terpasang selama uji 14 hari Google berjalan.</p>
-            <button type="button" className="text-action" onClick={() => setStep('play')}>Kembali ke langkah pasang</button>
+            <p className="strong">{t('dlg_record_tester_title')}</p>
+            <p className="muted">{t('dlg_record_tester_body')}</p>
+            <button type="button" className="text-action" onClick={() => setStep('play')}>{t('dlg_back_to_install')}</button>
           </div>
         )}
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Batal</button>
+        <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
         {step === 'confirm' && (
           <button className="btn primary" disabled={busy || !groupPlayStepsDone(done)}>
-            {busy ? 'Menyimpan…' : 'Catat saya sebagai tester'}
+            {busy ? t('saving') : t('dlg_record_as_tester')}
           </button>
         )}
       </div>
@@ -206,6 +212,7 @@ type EmailPhase = 'ask' | 'wait' | 'optin' | 'install' | 'confirm'
  * Play steps are one screen at a time once the creator has listed the email.
  */
 function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
+  const t = useT()
   const toast = useToast()
   const { user } = useAuth()
   const listing = useMyEmailListing(app.id, user?.uid)
@@ -222,7 +229,8 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
   const asked = useSubmit(() => listing.refresh())
   const joined = useSubmit(() => {
     clearJoinProgress(app.id)
-    toast(`Anda tercatat sebagai tester ${app.name}. Hari aktif Anda dihitung mulai hari ini.`)
+    clearPlayUnreachable(app.id)
+    toast(t('dlg_toast_tester', { name: app.name }))
     onClose()
   })
   const l = listing.data
@@ -239,12 +247,12 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (phase === 'ask' && consent) asked.run(async () => { await requestEmailListing(app.id); toast('Permintaan terkirim. Creator akan menambahkan email Anda.') })
+    if (phase === 'ask' && consent) asked.run(async () => { await requestEmailListing(app.id); toast(t('dlg_toast_requested')) })
     if (phase === 'confirm' && emailPlayStepsDone(play)) {
       joined.run(() => api.joinAsTester({ appId: app.id, checklist: { optedIn: true, installed: true } }))
     }
   }
-  const withdraw = () => asked.run(async () => { await cancelEmailListing(app.id); toast('Permintaan dibatalkan. Creator tidak lagi melihat email Anda.') })
+  const withdraw = () => asked.run(async () => { await cancelEmailListing(app.id); toast(t('dlg_toast_withdrawn')) })
   const err = asked.err ?? joined.err ?? listing.error
   const busy = asked.busy || joined.busy
 
@@ -253,69 +261,67 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
   return (
     <form onSubmit={submit}>
       <div className="sheet-body">
-        <h2>Gabung sebagai tester {app.name}</h2>
-        {rejoin && <p className="muted">Hari aktif Anda dihitung lagi dari nol mulai hari ini.</p>}
-        <p className="lede">App ini memakai daftar email di Play Console (bukan Google Group). Creator harus menambahkan email Anda dulu, baru Anda bisa opt-in.</p>
+        <h2>{t('dlg_join_title', { name: app.name })}</h2>
+        {rejoin && <p className="muted">{t('dlg_rejoin_note')}</p>}
+        <p className="lede">{t('dlg_email_lede')}</p>
         <WizardProgress
-          labels={['Minta', 'Tunggu', 'Opt-in', 'Pasang', 'Catat']}
+          labels={[t('dlg_wiz_ask'), t('dlg_wiz_wait'), t('dlg_wiz_optin'), t('dlg_wiz_install'), t('dlg_wiz_record')]}
           current={overviewIdx}
           doneFlags={[!!l, !!(l && l.listedAt), !!play.optedIn, !!play.installed, false]}
         />
-        {listing.loading ? <p className="muted">Memuat…</p> : phase === 'ask' ? (
+        {listing.loading ? <p className="muted">{t('loading')}</p> : phase === 'ask' ? (
           <label className="check">
             <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-            <span><span className="t">Saya setuju creator {app.name} melihat email lengkap akun Google saya</span>
+            <span><span className="t">{t('dlg_consent_title', { name: app.name })}</span>
               {email && <span className="d addr">{email}</span>}
-              <span className="d">Hanya creator app ini yang melihatnya, untuk ditempel di Play Console. Pastikan sama dengan akun Play Store di HP. Bisa dibatalkan kapan saja.</span></span>
+              <span className="d">{t('dlg_consent_hint')}</span></span>
           </label>
         ) : phase === 'wait' ? (
           <div className="notice info" role="status" style={{ marginBottom: 0 }}>
-            <span>Menunggu creator menambahkan email Anda · diminta <span className="num">{fmtDate(l!.requestedAt)}</span>. Biasanya lewat grup WhatsApp atau TesBareng. Anda bisa menutup halaman ini dan kembali nanti.</span>
+            <span>{t('dlg_wait_listed', { date: fmtDate(l!.requestedAt) })}</span>
           </div>
         ) : phase === 'optin' ? (
           <WizardStep
-            title="Jadi penguji di Google Play"
-            body={<>Buka link opt-in dengan akun yang emailnya Anda bagikan, lalu ketuk <b>Jadi penguji</b>.</>}
+            title={t('dlg_optin_title')}
+            body={t('dlg_optin_body')}
             actionHref={app.optInUrl || playUrl || '#'}
-            actionLabel="Buka link opt-in"
+            actionLabel={t('dlg_open_optin')}
             onDone={() => {
               markPlay({ optedIn: true }, 'install')
               if (isLikelyMobile() && storeOk) openPlayInstall(app)
             }}
-            doneLabel="Sudah jadi penguji"
+            doneLabel={t('dlg_already_tester')}
           />
         ) : phase === 'install' ? (
           <WizardStep
-            title="Pasang aplikasinya"
-            body={storeOk
-              ? <>Ketuk <b>Buka di Play Store</b>, lalu Install / Pasang dan buka sekali.</>
-              : <>Setelah jadi penguji, tombol Install muncul. Pakai link opt-in jika halaman Play belum tersedia.</>}
+            title={t('dlg_install_title')}
+            body={storeOk ? t('dlg_install_body_store') : t('dlg_install_body_optin')}
             actionHref={playUrl}
-            actionLabel={storeOk ? 'Buka di Play Store' : 'Buka lagi link opt-in'}
+            actionLabel={storeOk ? t('dlg_open_play') : t('dlg_open_optin_again')}
             onBack={() => setPlayStep('optin')}
             onDone={() => markPlay({ installed: true }, 'confirm')}
-            doneLabel="Sudah memasang"
+            doneLabel={t('dlg_already_installed')}
           />
         ) : (
           <div className="stack-12">
-            <p className="strong">Catat di TesBareng</p>
-            <p className="muted">Supaya hari aktif Anda terhitung. Biarkan app terpasang selama uji berlangsung.</p>
-            <button type="button" className="text-action" onClick={() => setPlayStep('install')}>Kembali ke langkah pasang</button>
+            <p className="strong">{t('dlg_record_review_title')}</p>
+            <p className="muted">{t('dlg_record_email_body')}</p>
+            <button type="button" className="text-action" onClick={() => setPlayStep('install')}>{t('dlg_back_to_install')}</button>
           </div>
         )}
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
         {phase !== 'ask' && !listing.loading && (
-          <button type="button" className="text-action quiet" style={{ marginRight: 'auto' }} disabled={busy} onClick={withdraw}>Batalkan permintaan</button>
+          <button type="button" className="text-action quiet" style={{ marginRight: 'auto' }} disabled={busy} onClick={withdraw}>{t('dlg_withdraw')}</button>
         )}
-        {phase === 'ask' && !consent && <span className="why" id="join-why">Centang persetujuan untuk lanjut.</span>}
-        <button type="button" className="btn" onClick={onClose}>{phase === 'wait' ? 'Tutup' : 'Batal'}</button>
+        {phase === 'ask' && !consent && <span className="why" id="join-why">{t('dlg_consent_needed')}</span>}
+        <button type="button" className="btn" onClick={onClose}>{phase === 'wait' ? t('close') : t('cancel')}</button>
         {phase === 'ask' && (
-          <button className="btn primary" disabled={!consent || busy || listing.loading} aria-describedby={!consent ? 'join-why' : undefined}>{busy ? 'Mengirim…' : 'Minta ditambahkan'}</button>
+          <button className="btn primary" disabled={!consent || busy || listing.loading} aria-describedby={!consent ? 'join-why' : undefined}>{busy ? t('sending') : t('dlg_request_add')}</button>
         )}
         {phase === 'confirm' && (
-          <button className="btn primary" disabled={busy || !emailPlayStepsDone(play)}>{busy ? 'Menyimpan…' : 'Catat saya sebagai tester'}</button>
+          <button className="btn primary" disabled={busy || !emailPlayStepsDone(play)}>{busy ? t('saving') : t('dlg_record_as_tester')}</button>
         )}
       </div>
     </form>
@@ -323,15 +329,16 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
 }
 
 function WizardProgress({ labels, current, doneFlags }: { labels: string[]; current: number; doneFlags: boolean[] }) {
+  const t = useT()
   return (
-    <ol className="steps wizard-steps" aria-label="Langkah">
+    <ol className="steps wizard-steps" aria-label={t('steps_label')}>
       {labels.map((label, i) => {
         const done = doneFlags[i] || i < current
         const here = i === current
         return (
           <li key={label} aria-current={here ? 'step' : undefined}>
             <span className="num" aria-hidden="true">{done && !here ? '✓' : String(i + 1)}</span>
-            <span>{label}{done && !here && <span className="muted small"> · selesai</span>}</span>
+            <span>{label}{done && !here && <span className="muted small">{t('step_done_suffix')}</span>}</span>
           </li>
         )
       })}
@@ -351,6 +358,7 @@ function WizardStep({
   doneLabel: string
   onBack?: () => void
 }) {
+  const t = useT()
   return (
     <div className="stack-12 wizard-step">
       <div className="stack-8">
@@ -362,7 +370,7 @@ function WizardStep({
         <IconExternal />{actionLabel}
       </a>
       <div className="wizard-step-actions">
-        {onBack && <button type="button" className="btn" onClick={onBack}>Kembali</button>}
+        {onBack && <button type="button" className="btn" onClick={onBack}>{t('back')}</button>}
         <button type="button" className="btn" onClick={onDone}>{doneLabel}</button>
       </div>
     </div>
@@ -370,8 +378,9 @@ function WizardStep({
 }
 
 export function FeedbackDialog({ open, onClose, app, entry }: { open: boolean; onClose: () => void; app: AppDoc; entry?: TesterDoc }) {
+  const t = useT()
   return (
-    <Dialog open={open} onClose={onClose} label="Tandai sudah kirim feedback">
+    <Dialog open={open} onClose={onClose} label={t('dlg_feedback_label')}>
       <FeedbackForm app={app} entry={entry} onClose={onClose} />
     </Dialog>
   )
@@ -383,6 +392,7 @@ function parseDeviceSummary(raw = '') {
 }
 
 function FeedbackForm({ onClose, app, entry }: { onClose: () => void; app: AppDoc; entry?: TesterDoc }) {
+  const t = useT()
   const toast = useToast()
   const initial = parseDeviceSummary(entry?.feedbackSummary ?? '')
   const [device, setDevice] = useState(initial.device)
@@ -397,42 +407,40 @@ function FeedbackForm({ onClose, app, entry }: { onClose: () => void; app: AppDo
       const cleanSummary = summary.trim()
       const combined = cleanDevice ? ('[' + cleanDevice + '] ' + cleanSummary).trim() : cleanSummary
       await api.markFeedbackSent({ appId: app.id, sent: true, summary: combined || undefined })
-      toast(already ? 'Catatan feedback diperbarui.' : 'Feedback ditandai terkirim. Kreator akan memverifikasinya di Play Console.')
+      toast(already ? t('dlg_toast_feedback_updated') : t('dlg_toast_feedback_sent'))
     })
   }
   const unmark = () => run(async () => {
     await api.markFeedbackSent({ appId: app.id, sent: false })
-    toast('Tanda feedback dibatalkan.')
+    toast(t('dlg_toast_feedback_cleared'))
   })
   return (
       <form onSubmit={save}>
         <div className="sheet-body">
-          <h2>{already ? 'Catatan feedback Anda' : (isLiveApp(app) ? 'Tandai sudah kirim ulasan' : 'Tandai sudah kirim feedback')}</h2>
+          <h2>{already ? t('dlg_feedback_title_note') : (isLiveApp(app) ? t('dlg_feedback_title_review') : t('dlg_feedback_title'))}</h2>
           {!already && (
-            <p className="lede">{isLiveApp(app)
-              ? 'Tulis ulasan publik di halaman Play Store (bintang + komentar dengan kata-kata Anda sendiri). Ulasan itu tampil untuk semua orang, bukan hanya Testing feedback.'
-              : 'Feedback ditulis di Google Play, bukan di sini: buka halaman aplikasi di Play Store, beri rating dan tulis apa yang berjalan, apa yang rusak, dan apa yang perlu diperbaiki.'}</p>
+            <p className="lede">{isLiveApp(app) ? t('dlg_feedback_lede_live') : t('dlg_feedback_lede')}</p>
           )}
           {!already && (
-            <a className="btn" style={{ justifySelf: 'start' }} href={playInstallUrl(app)} target="_blank" rel="noreferrer"><IconExternal />Buka {app.name} di Play</a>
+            <a className="btn" style={{ justifySelf: 'start' }} href={playInstallUrl(app)} target="_blank" rel="noreferrer"><IconExternal />{t('dlg_open_app_play', { name: app.name })}</a>
           )}
           <div className="field">
-            <label htmlFor="fb-device">Tipe HP / Versi Android <span className="opt">(opsional)</span></label>
-            <input id="fb-device" className="input" maxLength={60} placeholder="Contoh: Samsung A54 / Android 14" value={device} onChange={(e) => setDevice(e.target.value)} aria-describedby="fb-dev-hint" />
-            <span className="hint" id="fb-dev-hint">Membantu kreator saat menjawab kuesioner audit Google Play.</span>
+            <label htmlFor="fb-device">{t('dlg_device_label')}<span className="opt">{t('field_optional')}</span></label>
+            <input id="fb-device" className="input" maxLength={60} placeholder={t('dlg_device_placeholder')} value={device} onChange={(e) => setDevice(e.target.value)} aria-describedby="fb-dev-hint" />
+            <span className="hint" id="fb-dev-hint">{t('dlg_device_hint')}</span>
           </div>
           <div className="field">
-            <label htmlFor="fb-sum">Ringkasan yang Anda tulis <span className="opt">(opsional)</span></label>
+            <label htmlFor="fb-sum">{t('dlg_summary_label')}<span className="opt">{t('field_optional')}</span></label>
             <textarea id="fb-sum" className="input" maxLength={500} value={summary} onChange={(e) => setSummary(e.target.value)} aria-describedby="fb-sum-hint" />
-            <span className="hint" id="fb-sum-hint">Terlihat oleh semua anggota. Maksimal 500 karakter.</span>
+            <span className="hint" id="fb-sum-hint">{t('dlg_summary_hint')}</span>
             <span className="count">{summary.length}/500</span>
           </div>
           {err && <ErrorBox text={err} />}
         </div>
         <div className="sheet-foot">
-          {already && <button type="button" className="text-action quiet" style={{ marginRight: 'auto' }} disabled={busy} onClick={unmark}>Batalkan tanda terkirim</button>}
-          <button type="button" className="btn" onClick={onClose}>Batal</button>
-          <button className="btn primary" disabled={busy}>{busy ? 'Menyimpan…' : already ? 'Simpan catatan' : 'Tandai sudah kirim'}</button>
+          {already && <button type="button" className="text-action quiet" style={{ marginRight: 'auto' }} disabled={busy} onClick={unmark}>{t('dlg_unmark_feedback')}</button>}
+          <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+          <button className="btn primary" disabled={busy}>{busy ? t('saving') : already ? t('dlg_save_note') : t('dlg_mark_sent')}</button>
         </div>
       </form>
   )
@@ -442,12 +450,13 @@ const BUILD_ORDER = ['versionName', 'uploadedAt', 'changelog'] as const
 const blankBuild = (): BuildInput => ({ versionName: '', uploadedAt: todayIso(), changelog: '' })
 
 export function BuildDialog({ open, onClose, app }: { open: boolean; onClose: () => void; app: AppDoc }) {
+  const t = useT()
   const toast = useToast()
   const [f, setF] = useState<BuildInput>(blankBuild)
   const v = useValidation(validateBuild(f, todayIso()), BUILD_ORDER)
   const close = () => { v.reset(); onClose() }
   const { busy, err, run } = useSubmit(() => {
-    toast(`Build ${f.versionName.trim()} dicatat. Tester melihat pengumuman build baru selama 3 hari.`)
+    toast(t('dlg_toast_build', { version: f.versionName.trim() }))
     setF(blankBuild()); close()
   })
   const submit = (e: FormEvent) => {
@@ -458,22 +467,22 @@ export function BuildDialog({ open, onClose, app }: { open: boolean; onClose: ()
     run(() => api.addBuild({ appId: app.id, versionName: f.versionName.trim(), uploadedAt: f.uploadedAt, changelog: f.changelog.trim() }))
   }
   return (
-    <Dialog open={open} onClose={close} label="Catat build baru">
+    <Dialog open={open} onClose={close} label={t('dlg_build_label')}>
       <form onSubmit={submit} noValidate>
         <div className="sheet-body">
-          <h2>Catat build baru</h2>
-          <p className="lede">Satu catatan untuk setiap unggahan ke jalur uji tertutup. Tester diminta memperbarui dan menguji lagi.</p>
-          <Field id="b-versionName" label="Nama versi" hint="Seperti di Play Console, misalnya 1.2.0 (14)." error={v.errors.versionName}>
+          <h2>{t('dlg_build_title')}</h2>
+          <p className="lede">{t('dlg_build_lede')}</p>
+          <Field id="b-versionName" label={t('dlg_build_version')} hint={t('dlg_build_version_hint')} error={v.errors.versionName}>
             <input className="input" maxLength={BUILD_LIMITS.versionName} autoComplete="off" spellCheck={false} value={f.versionName}
               onChange={(e) => setF({ ...f, versionName: e.target.value })} onBlur={v.blur('versionName')}
               {...fieldAria('b-versionName', { hint: true, error: v.errors.versionName })} />
           </Field>
-          <Field id="b-uploadedAt" label="Tanggal unggah" hint="Hari ini tercatat dengan jam sekarang (WIB)." error={v.errors.uploadedAt}>
+          <Field id="b-uploadedAt" label={t('dlg_build_date')} hint={t('dlg_build_date_hint')} error={v.errors.uploadedAt}>
             <input type="date" className="input" max={todayIso()} value={f.uploadedAt}
               onChange={(e) => setF({ ...f, uploadedAt: e.target.value })} onBlur={v.blur('uploadedAt')}
               {...fieldAria('b-uploadedAt', { hint: true, error: v.errors.uploadedAt })} />
           </Field>
-          <Field id="b-changelog" label="Perubahan, satu kalimat" hint="Yang perlu dicoba ulang oleh tester." error={v.errors.changelog}
+          <Field id="b-changelog" label={t('dlg_build_changelog')} hint={t('dlg_build_changelog_hint')} error={v.errors.changelog}
             count={`${f.changelog.length}/${BUILD_LIMITS.changelog}`}>
             <input className="input" maxLength={BUILD_LIMITS.changelog} autoComplete="off" value={f.changelog}
               onChange={(e) => setF({ ...f, changelog: e.target.value })} onBlur={v.blur('changelog')}
@@ -482,8 +491,8 @@ export function BuildDialog({ open, onClose, app }: { open: boolean; onClose: ()
           {err && <ErrorBox text={err} />}
         </div>
         <div className="sheet-foot">
-          <button type="button" className="btn" onClick={close}>Batal</button>
-          <button className="btn primary" aria-busy={busy || undefined}>{busy ? 'Menyimpan…' : 'Catat build'}</button>
+          <button type="button" className="btn" onClick={close}>{t('cancel')}</button>
+          <button className="btn primary" aria-busy={busy || undefined}>{busy ? t('saving') : t('dlg_build_submit')}</button>
         </div>
       </form>
     </Dialog>
@@ -494,11 +503,12 @@ const MANUAL_ORDER = ['displayName', 'email', 'optedInAt'] as const
 const blankManual = (): ManualInput => ({ displayName: '', email: '', optedInAt: todayIso() })
 
 export function ManualTesterDialog({ open, onClose, app }: { open: boolean; onClose: () => void; app: AppDoc }) {
+  const t = useT()
   const toast = useToast()
   const [f, setF] = useState<ManualInput>(blankManual)
   const v = useValidation(validateManual(f, todayIso()), MANUAL_ORDER)
   const close = () => { v.reset(); onClose() }
-  const { busy, err, run } = useSubmit(() => { toast(`${f.displayName.trim()} ditambahkan ke daftar tester.`); setF(blankManual()); close() })
+  const { busy, err, run } = useSubmit(() => { toast(t('dlg_toast_manual', { name: f.displayName.trim() })); setF(blankManual()); close() })
   const submit = (e: FormEvent) => {
     e.preventDefault()
     const bad = v.check()
@@ -506,23 +516,23 @@ export function ManualTesterDialog({ open, onClose, app }: { open: boolean; onCl
     run(() => api.addManualTester({ appId: app.id, displayName: f.displayName.trim(), email: f.email.trim(), optedInAt: f.optedInAt }))
   }
   return (
-    <Dialog open={open} onClose={close} label="Tambah tester manual">
+    <Dialog open={open} onClose={close} label={t('dlg_manual_label')}>
       <form onSubmit={submit} noValidate>
         <div className="sheet-body">
-          <h2>Tambah tester manual</h2>
-          <p className="lede">Untuk tester yang opt-in tanpa lewat TesBareng. Pastikan namanya ada di Play Console.</p>
-          <Field id="m-displayName" label="Nama" hint="Nama yang dikenali anggota lain." error={v.errors.displayName}>
+          <h2>{t('dlg_manual_title')}</h2>
+          <p className="lede">{t('dlg_manual_lede')}</p>
+          <Field id="m-displayName" label={t('dlg_manual_name')} hint={t('dlg_manual_name_hint')} error={v.errors.displayName}>
             <input className="input" maxLength={MANUAL_LIMITS.displayName} autoComplete="off" value={f.displayName}
               onChange={(e) => setF({ ...f, displayName: e.target.value })} onBlur={v.blur('displayName')}
               {...fieldAria('m-displayName', { hint: true, error: v.errors.displayName })} />
           </Field>
-          <Field id="m-email" label="Email Google" error={v.errors.email}
-            hint="Disamarkan di server sebelum disimpan, misalnya bu*****@gmail.com. Email lengkap tidak disimpan.">
+          <Field id="m-email" label={t('dlg_manual_email')} error={v.errors.email}
+            hint={t('dlg_manual_email_hint')}>
             <input type="email" inputMode="email" autoComplete="off" autoCapitalize="none" spellCheck={false} className="input" value={f.email}
               onChange={(e) => setF({ ...f, email: e.target.value })} onBlur={v.blur('email')}
               {...fieldAria('m-email', { hint: true, error: v.errors.email })} />
           </Field>
-          <Field id="m-optedInAt" label="Opt-in sejak" hint="Hari aktif tester ini dihitung dari tanggal ini." error={v.errors.optedInAt}>
+          <Field id="m-optedInAt" label={t('dlg_manual_since')} hint={t('dlg_manual_since_hint')} error={v.errors.optedInAt}>
             <input type="date" className="input" max={todayIso()} value={f.optedInAt}
               onChange={(e) => setF({ ...f, optedInAt: e.target.value })} onBlur={v.blur('optedInAt')}
               {...fieldAria('m-optedInAt', { hint: true, error: v.errors.optedInAt })} />
@@ -530,8 +540,8 @@ export function ManualTesterDialog({ open, onClose, app }: { open: boolean; onCl
           {err && <ErrorBox text={err} />}
         </div>
         <div className="sheet-foot">
-          <button type="button" className="btn" onClick={close}>Batal</button>
-          <button className="btn primary" aria-busy={busy || undefined}>{busy ? 'Menyimpan…' : 'Tambahkan tester'}</button>
+          <button type="button" className="btn" onClick={close}>{t('cancel')}</button>
+          <button className="btn primary" aria-busy={busy || undefined}>{busy ? t('saving') : t('dlg_manual_submit')}</button>
         </div>
       </form>
     </Dialog>
@@ -540,19 +550,21 @@ export function ManualTesterDialog({ open, onClose, app }: { open: boolean; onCl
 
 /** Note and opt-in date only. Verified, Replied and status are edited inline in the tester table (ADR-009 §3). */
 export function TesterDialog({ open, onClose, app, tester }: { open: boolean; onClose: () => void; app: AppDoc; tester?: TesterDoc }) {
+  const t = useT()
   return (
-    <Dialog open={open} onClose={onClose} label={tester ? `Ubah catatan ${tester.displayName}` : 'Ubah catatan tester'}>
+    <Dialog open={open} onClose={onClose} label={tester ? t('dlg_tester_label', { name: tester.displayName }) : t('dlg_tester_label_fallback')}>
       {tester && <TesterForm key={tester.id} app={app} tester={tester} onClose={onClose} />}
     </Dialog>
   )
 }
 
 function TesterForm({ app, tester, onClose }: { app: AppDoc; tester: TesterDoc; onClose: () => void }) {
+  const t = useT()
   const toast = useToast()
   const [f, setF] = useState({ optedInAt: isoDate(tester.optedInAt), note: tester.note ?? '' })
-  const dateErr = !f.optedInAt ? 'Pilih tanggal tester opt-in.' : f.optedInAt > todayIso() ? 'Tanggal opt-in tidak boleh di masa depan.' : undefined
+  const dateErr = !f.optedInAt ? t('dlg_tester_date_required') : f.optedInAt > todayIso() ? t('dlg_tester_date_future') : undefined
   const [showErr, setShowErr] = useState(false)
-  const { busy, err, run } = useSubmit(() => { toast(`Data ${tester.displayName} disimpan.`); onClose() })
+  const { busy, err, run } = useSubmit(() => { toast(t('dlg_toast_tester_saved', { name: tester.displayName })); onClose() })
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (dateErr) { setShowErr(true); document.getElementById('t-d')?.focus(); return }
@@ -568,20 +580,20 @@ function TesterForm({ app, tester, onClose }: { app: AppDoc; tester: TesterDoc; 
           <h2>{tester.displayName}</h2>
           <p className="muted">{tester.maskedEmail}</p>
         </div>
-        <Field id="t-d" label="Opt-in sejak" hint="Mengubah tanggal ini mengubah hitungan hari aktif." error={showErr ? dateErr : undefined}>
+        <Field id="t-d" label={t('dlg_tester_since')} hint={t('dlg_tester_since_hint')} error={showErr ? dateErr : undefined}>
           <input type="date" className="input" max={todayIso()} value={f.optedInAt}
             onChange={(e) => setF({ ...f, optedInAt: e.target.value })} onBlur={() => setShowErr(true)}
             {...fieldAria('t-d', { hint: true, error: showErr ? dateErr : undefined })} />
         </Field>
-        <Field id="t-n" label="Catatan" optional hint="Terlihat oleh semua anggota, misalnya “sudah dicek di Play Console”." count={`${f.note.length}/140`}>
+        <Field id="t-n" label={t('dlg_tester_note')} optional hint={t('dlg_tester_note_hint')} count={`${f.note.length}/140`}>
           <input className="input" maxLength={140} autoComplete="off" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })}
             {...fieldAria('t-n', { hint: true })} />
         </Field>
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Batal</button>
-        <button className="btn primary" aria-busy={busy || undefined}>{busy ? 'Menyimpan…' : 'Simpan'}</button>
+        <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+        <button className="btn primary" aria-busy={busy || undefined}>{busy ? t('saving') : t('save')}</button>
       </div>
     </form>
   )

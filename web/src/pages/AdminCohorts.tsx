@@ -44,11 +44,12 @@ const useOwingCounts = () =>
   }, NO_OWING, [])
 
 /** Same fallback as the public pages when a profile has no display name. */
-const nameOf = (m: { displayName: string }) => m.displayName || 'Anggota'
+const nameOf = (m: { displayName: string }, tr: ReturnType<typeof useT>) => m.displayName || tr('member_fallback')
 
 const STATUS_ORDER: Record<CohortStatus, number> = { forming: 0, active: 1, closed: 2 }
 
 export function Cohorts() {
+  const t = useT()
   const list = useCohorts()
   const owing = useOwingCounts()
   const pending = usePendingRequestCounts()
@@ -78,24 +79,24 @@ export function Cohorts() {
   return (
     <div className="grid ch-layout">
       <section className="panel flush span-4 ch-index" aria-labelledby="ch-list-h">
-        <header><h2 id="ch-list-h">Cohort</h2>{!list.loading && list.data.length > 0 && <span className="meta num">{list.data.length} cohort</span>}</header>
+        <header><h2 id="ch-list-h">{t('admin_ch_list_h')}</h2>{!list.loading && list.data.length > 0 && <span className="meta num">{t('admin_ch_count', { n: list.data.length })}</span>}</header>
         <CreateCohort count={list.data.length} onCreated={(id) => { reloadList(); select(id) }} />
         {list.error ? (
-          <div className="empty-pad"><ErrorBox text="Daftar cohort gagal dimuat." onRetry={list.retry} /></div>
+          <div className="empty-pad"><ErrorBox text={t('admin_ch_list_error')} onRetry={list.retry} /></div>
         ) : list.loading ? (
-          <div className="ch-group" aria-busy="true" aria-label="Memuat cohort">{[0, 1, 2].map((i) => <div className="ch-row" key={i} aria-hidden="true"><Skel w={160} /><Skel w={120} h={12} /></div>)}</div>
+          <div className="ch-group" aria-busy="true" aria-label={t('admin_ch_loading')}>{[0, 1, 2].map((i) => <div className="ch-row" key={i} aria-hidden="true"><Skel w={160} /><Skel w={120} h={12} /></div>)}</div>
         ) : list.data.length === 0 ? (
           <div className="empty-pad">
-            <Empty title="Belum ada cohort.">
-              <p>Beri nama di atas untuk membuat cohort pertama. Setelah itu tambahkan minimal {MIN_APPS} creator dengan aplikasinya.</p>
+            <Empty title={t('admin_ch_empty_title')}>
+              <p>{t('admin_ch_empty_body', { min: MIN_APPS })}</p>
             </Empty>
           </div>
         ) : (
           <>
-            <CohortGroup id="ch-g-now" title="Perlu tindakan" items={attention} owing={owing.data} pending={pending.data} selectedId={selectedId} hrefFor={hrefFor} onPick={() => setFocusDetail(true)}
-              empty="Tidak ada cohort yang berjalan. Buat cohort baru di atas." />
+            <CohortGroup id="ch-g-now" title={t('admin_ch_group_action')} items={attention} owing={owing.data} pending={pending.data} selectedId={selectedId} hrefFor={hrefFor} onPick={() => setFocusDetail(true)}
+              empty={t('admin_ch_no_running')} />
             {done.length > 0 && (
-              <CohortGroup id="ch-g-done" title="Selesai" items={done} owing={owing.data} pending={pending.data} selectedId={selectedId} hrefFor={hrefFor} onPick={() => setFocusDetail(true)} limit={DONE_PREVIEW} />
+              <CohortGroup id="ch-g-done" title={t('admin_ch_group_done')} items={done} owing={owing.data} pending={pending.data} selectedId={selectedId} hrefFor={hrefFor} onPick={() => setFocusDetail(true)} limit={DONE_PREVIEW} />
             )}
           </>
         )}
@@ -105,9 +106,9 @@ export function Cohorts() {
         {selectedId ? (
           <CohortWork key={selectedId} id={selectedId} focus={focusDetail} onFocused={() => setFocusDetail(false)} onChanged={reloadList} />
         ) : !list.loading && !list.error ? (
-          <section className="panel" aria-label="Cohort terpilih">
-            <Empty title="Pilih atau buat cohort.">
-              <p>Anggota, tombol mulai, link grup WhatsApp dan pesan sematan muncul di sini.</p>
+          <section className="panel" aria-label={t('admin_ch_selected')}>
+            <Empty title={t('admin_ch_pick_title')}>
+              <p>{t('admin_ch_pick_body')}</p>
             </Empty>
           </section>
         ) : null}
@@ -122,6 +123,7 @@ function CohortGroup({ id, title, items, owing, pending, selectedId, hrefFor, on
   id: string; title: string; items: CohortDoc[]; owing: Map<string, number>; pending: Map<string, number>; selectedId: string | null
   hrefFor: (id: string) => string; onPick: () => void; limit?: number; empty?: string
 }) {
+  const t = useT()
   const [all, setAll] = useState(false)
   const shown = limit && !all ? items.slice(0, limit) : items
   return (
@@ -137,12 +139,12 @@ function CohortGroup({ id, title, items, owing, pending, selectedId, hrefFor, on
                 <Link to={hrefFor(c.id)} className="ch-row" aria-current={c.id === selectedId ? 'true' : undefined} onClick={onPick}>
                   <span className="ch-row-top"><b>{c.name}</b><StatusChip status={c.status} /></span>
                   <span className="ch-row-meta num">
-                    {c.status === 'forming' && <>{c.appCount}/{MIN_APPS} aplikasi · {c.pureTesterCount} tester murni</>}
-                    {c.status === 'active' && <>Hari {cohortDay(c)} · {c.appCount} aplikasi</>}
-                    {c.status === 'active' && (cohortDay(c) ?? 0) > CLOSE_DAY && <Chip tone="cabai" glyph="!">Lewat Hari {CLOSE_DAY}</Chip>}
-                    {c.status === 'closed' && <>Selesai {fmtDate(c.closedAt)}</>}
-                    {owe > 0 && <Chip tone="cabai" glyph="!">{owe} berutang</Chip>}
-                    {ask > 0 && <Chip tone="langit" glyph="◷">{ask} permintaan</Chip>}
+                    {c.status === 'forming' && t('admin_ch_row_apps', { n: c.appCount, min: MIN_APPS, testers: c.pureTesterCount })}
+                    {c.status === 'active' && t('admin_ch_row_day', { day: cohortDay(c) ?? 0, n: c.appCount })}
+                    {c.status === 'active' && (cohortDay(c) ?? 0) > CLOSE_DAY && <Chip tone="cabai" glyph="!">{t('admin_ch_past_day', { day: CLOSE_DAY })}</Chip>}
+                    {c.status === 'closed' && t('admin_ch_finished_date', { date: fmtDate(c.closedAt) })}
+                    {owe > 0 && <Chip tone="cabai" glyph="!">{t('admin_ch_owing_chip', { n: owe })}</Chip>}
+                    {ask > 0 && <Chip tone="langit" glyph="◷">{t('admin_ch_requests_chip', { n: ask })}</Chip>}
                   </span>
                 </Link>
               </li>
@@ -156,6 +158,7 @@ function CohortGroup({ id, title, items, owing, pending, selectedId, hrefFor, on
 }
 
 function CreateCohort({ count, onCreated }: { count: number; onCreated: (id: string) => void }) {
+  const t = useT()
   const toast = useToast()
   const [name, setName] = useState('')
   const [touched, setTouched] = useState(false)
@@ -163,7 +166,7 @@ function CreateCohort({ count, onCreated }: { count: number; onCreated: (id: str
   const [err, setErr] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const v = name.trim()
-  const fieldErr = !v ? 'Isi nama cohort, misalnya "Cohort #' + (count + 1) + '".' : v.length > NAME_MAX ? `Nama paling panjang ${NAME_MAX} karakter.` : undefined
+  const fieldErr = !v ? t('admin_ch_name_required', { n: count + 1 }) : v.length > NAME_MAX ? t('admin_ch_name_max', { max: NAME_MAX }) : undefined
   const shownErr = touched ? fieldErr : undefined
 
   const submit = async (e: FormEvent) => {
@@ -174,11 +177,11 @@ function CreateCohort({ count, onCreated }: { count: number; onCreated: (id: str
     setBusy(true); setErr(null)
     try {
       const id = await createCohort(v)
-      toast(`${v} dibuat. Tambahkan creator dan aplikasinya.`)
+      toast(t('admin_ch_toast_created', { name: v }))
       setName(''); setTouched(false)
       onCreated(id)
     } catch (x) {
-      setErr(errorText(x))
+      setErr(errorText(x, t))
     } finally {
       setBusy(false)
     }
@@ -186,13 +189,13 @@ function CreateCohort({ count, onCreated }: { count: number; onCreated: (id: str
 
   return (
     <form className="ch-create" onSubmit={submit} noValidate>
-      <Field id="ch-new" label="Nama cohort baru" hint={`1–${NAME_MAX} karakter. Contoh: Cohort #${count + 1}.`} error={shownErr} count={`${name.length}/${NAME_MAX}`}>
+      <Field id="ch-new" label={t('admin_ch_new_label')} hint={t('admin_ch_new_hint', { max: NAME_MAX, n: count + 1 })} error={shownErr} count={`${name.length}/${NAME_MAX}`}>
         <input ref={input} className="input" maxLength={NAME_MAX} autoComplete="off" value={name}
           onChange={(e) => { setName(e.target.value); setErr(null) }} onBlur={() => { if (name) setTouched(true) }}
           {...fieldAria('ch-new', { hint: true, error: shownErr })} />
       </Field>
       {err && <ErrorBox text={err} />}
-      <button className="btn" aria-busy={busy || undefined}><IconPlus aria-hidden="true" />{busy ? 'Membuat…' : 'Buat cohort'}</button>
+      <button className="btn" aria-busy={busy || undefined}><IconPlus aria-hidden="true" />{busy ? t('admin_ch_creating') : t('admin_ch_create')}</button>
     </form>
   )
 }
@@ -200,6 +203,7 @@ function CreateCohort({ count, onCreated }: { count: number; onCreated: (id: str
 // ---------- the selected cohort ----------
 
 function CohortWork({ id, focus, onFocused, onChanged }: { id: string; focus: boolean; onFocused: () => void; onChanged: () => void }) {
+  const t = useT()
   const d = useCohort(id)
   const heading = useRef<HTMLHeadingElement>(null)
   const c = d.data
@@ -208,13 +212,13 @@ function CohortWork({ id, focus, onFocused, onChanged }: { id: string; focus: bo
     if (focus && c) { heading.current?.focus(); onFocused() }
   }, [focus, c, onFocused])
 
-  if (d.error) return <section className="panel" aria-label="Cohort terpilih"><ErrorBox text="Cohort ini gagal dimuat." onRetry={d.retry} /></section>
+  if (d.error) return <section className="panel" aria-label={t('admin_ch_selected')}><ErrorBox text={t('admin_ch_detail_error')} onRetry={d.retry} /></section>
   if (d.loading || c === undefined) return <DetailSkeleton />
   if (c === null) {
     return (
-      <section className="panel" aria-label="Cohort terpilih">
-        <Empty title="Cohort tidak ditemukan.">
-          <p>Mungkin tautannya salah. Pilih cohort dari daftar.</p>
+      <section className="panel" aria-label={t('admin_ch_selected')}>
+        <Empty title={t('admin_ch_not_found_title')}>
+          <p>{t('admin_ch_not_found_body')}</p>
         </Empty>
       </section>
     )
@@ -232,6 +236,7 @@ function CohortWork({ id, focus, onFocused, onChanged }: { id: string; focus: bo
 }
 
 function CohortPanel({ c, heading, onChanged }: { c: CohortDetail; heading: RefObject<HTMLHeadingElement | null>; onChanged: () => void }) {
+  const t = useT()
   const day = cohortDay(c)
   return (
     <section className="panel ch-main" aria-labelledby="ch-h">
@@ -240,10 +245,10 @@ function CohortPanel({ c, heading, onChanged }: { c: CohortDetail; heading: RefO
           <h2 id="ch-h" ref={heading} tabIndex={-1}>{c.name}</h2>
           <p className="ch-meta num">
             <StatusChip status={c.status} />
-            {c.status === 'forming' && <span>Dibuat {fmtDate(c.createdAt)}</span>}
-            {c.status === 'active' && <span>Hari {day} · dimulai {fmtDateTime(c.day0At)}</span>}
-            {c.status === 'active' && (day ?? 0) > CLOSE_DAY && <Chip tone="cabai" glyph="!">Lewat Hari {CLOSE_DAY}</Chip>}
-            {c.status === 'closed' && <span>Selesai {fmtDateTime(c.closedAt)}</span>}
+            {c.status === 'forming' && <span>{t('admin_ch_created', { date: fmtDate(c.createdAt) })}</span>}
+            {c.status === 'active' && <span>{t('admin_ch_started', { day: day ?? 0, date: fmtDateTime(c.day0At) })}</span>}
+            {c.status === 'active' && (day ?? 0) > CLOSE_DAY && <Chip tone="cabai" glyph="!">{t('admin_ch_past_day', { day: CLOSE_DAY })}</Chip>}
+            {c.status === 'closed' && <span>{t('admin_ch_closed', { date: fmtDateTime(c.closedAt) })}</span>}
           </p>
         </div>
         {c.status === 'forming' && <StartAction c={c} heading={heading} onStarted={onChanged} />}
@@ -265,31 +270,33 @@ function CohortPanel({ c, heading, onChanged }: { c: CohortDetail; heading: RefO
 }
 
 function FormingProgress({ c }: { c: CohortDetail }) {
+  const t = useT()
   const n = c.appCount
   const short = MIN_APPS - n
   return (
     <div className="ch-progress">
-      <p className="ch-count num"><b>{n}</b><small> / {MIN_APPS} aplikasi</small><span className="ch-count-sep">·</span><span>{c.pureTesterCount} tester murni</span></p>
-      <Bar value={Math.min(n, MIN_APPS)} max={MIN_APPS} label={`${n} aplikasi, minimal ${MIN_APPS} untuk mulai`} />
+      <p className="ch-count num">{t('admin_ch_row_apps', { n, min: MIN_APPS, testers: c.pureTesterCount })}</p>
+      <Bar value={Math.min(n, MIN_APPS)} max={MIN_APPS} label={t('admin_ch_bar_label', { n, min: MIN_APPS })} />
       <p className="meta">
         {short > 0
-          ? `Butuh ${short} aplikasi lagi. Dengan minimal ${MIN_APPS} aplikasi, setiap aplikasi bisa mendapat tester sebanyak yang dibutuhkannya (sampai 12) dari sesama creator.`
-          : `Cukup untuk mulai: setiap aplikasi mendapat ${ringK(n)} tester dari sesama creator${c.pureTesterCount > 0 ? ', ditambah tester murni' : ''}.`}
+          ? t('admin_ch_need_short', { n: short, min: MIN_APPS })
+          : t('admin_ch_ready', { k: ringK(n), extra: c.pureTesterCount > 0 ? t('admin_ch_ready_extra') : '' })}
       </p>
     </div>
   )
 }
 
 function ActiveSummary({ c }: { c: CohortDetail }) {
+  const t = useT()
   const deadline = (c.day0At ?? 0) + 2 * DAY
   return (
     <div className="ch-progress">
       <dl className="ch-facts num">
-        <div><dt>Aplikasi</dt><dd>{c.appCount}</dd></div>
-        <div><dt>Tester murni</dt><dd>{c.pureTesterCount}</dd></div>
-        <div><dt>Batas opt-in</dt><dd className="ch-fact-text">{fmtDateTime(deadline)}</dd></div>
+        <div><dt>{t('admin_ch_fact_apps')}</dt><dd>{c.appCount}</dd></div>
+        <div><dt>{t('admin_ch_fact_pure')}</dt><dd>{c.pureTesterCount}</dd></div>
+        <div><dt>{t('admin_ch_fact_optin')}</dt><dd className="ch-fact-text">{fmtDateTime(deadline)}</dd></div>
       </dl>
-      <Link className="text-action" to={`/cohorts/${c.id}`}>Buka halaman cohort</Link>
+      <Link className="text-action" to={`/cohorts/${c.id}`}>{t('admin_ch_open_page')}</Link>
     </div>
   )
 }
@@ -297,25 +304,26 @@ function ActiveSummary({ c }: { c: CohortDetail }) {
 // ---------- start (ADR-009 §1 primary, §7 confirm) ----------
 
 function StartAction({ c, heading, onStarted }: { c: CohortDetail; heading: RefObject<HTMLHeadingElement | null>; onStarted: () => void }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   // The start button disappears once the cohort is active: land on the cohort heading instead.
   const focusHeading = useFocusAfterClose(open, heading)
   const deleted = c.members.filter((m) => m.appId && m.appDeleted)
   const why = c.appCount < MIN_APPS
-    ? `Bisa dimulai setelah ada ${MIN_APPS} aplikasi (sekarang ${c.appCount}).`
+    ? t('admin_ch_need_apps', { min: MIN_APPS, n: c.appCount })
     : deleted.length > 0
-      ? `${deleted.map((m) => m.appName ?? 'Aplikasi').join(', ')} sudah dihapus. Keluarkan anggotanya atau pulihkan aplikasinya dulu.`
+      ? t('admin_ch_deleted_apps', { apps: deleted.map((m) => m.appName ?? t('admin_ch_fact_apps')).join(', ') })
       : null
   const thin = !why && c.appCount === MIN_APPS && c.pureTesterCount === 0
   return (
     <div className="ch-start">
       <button type="button" className="btn primary" aria-disabled={why ? true : undefined} aria-describedby={why ? 'ch-start-why' : thin ? 'ch-start-thin' : undefined}
         onClick={() => { if (!why) setOpen(true) }}>
-        Mulai cohort
+        {t('admin_ch_start')}
       </button>
       {why && <p className="meta ch-why" id="ch-start-why">{why}</p>}
-      {thin && <p className="meta ch-why" id="ch-start-thin"><span className="ch-glyph" aria-hidden="true">!</span> Buffer tipis: tanpa tester murni.</p>}
-      <Dialog open={open} onClose={() => setOpen(false)} label={`Mulai ${c.name}`}>
+      {thin && <p className="meta ch-why" id="ch-start-thin"><span className="ch-glyph" aria-hidden="true">!</span>{t('admin_ch_thin_buffer')}</p>}
+      <Dialog open={open} onClose={() => setOpen(false)} label={t('admin_ch_start_label', { name: c.name })}>
         {open && <StartForm c={c} thin={thin} onClose={() => setOpen(false)} onStarted={() => { focusHeading(); onStarted() }} />}
       </Dialog>
     </div>
@@ -323,6 +331,7 @@ function StartAction({ c, heading, onStarted }: { c: CohortDetail; heading: RefO
 }
 
 function StartForm({ c, thin, onClose, onStarted }: { c: CohortDetail; thin: boolean; onClose: () => void; onStarted: () => void }) {
+  const t = useT()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -338,11 +347,11 @@ function StartForm({ c, thin, onClose, onStarted }: { c: CohortDetail; thin: boo
     setBusy(true); setErr(null)
     try {
       await startCohort(c.id)
-      toast(`${c.name} dimulai. Tugas sudah dibagikan; batas opt-in ${fmtDateTime(Date.now() + 2 * DAY)}.`)
+      toast(t('admin_ch_toast_started', { name: c.name, deadline: fmtDateTime(Date.now() + 2 * DAY) }))
       onStarted()
       onClose()
     } catch (x) {
-      setErr(errorText(x))
+      setErr(errorText(x, t))
     } finally {
       setBusy(false)
     }
@@ -351,29 +360,29 @@ function StartForm({ c, thin, onClose, onStarted }: { c: CohortDetail; thin: boo
   return (
     <form onSubmit={submit} noValidate>
       <div className="sheet-body">
-        <h2 ref={title} tabIndex={-1}>Mulai {c.name}?</h2>
-        <p className="lede">Saat dimulai, TesBareng langsung:</p>
+        <h2 ref={title} tabIndex={-1}>{t('admin_ch_start_confirm', { name: c.name })}</h2>
+        <p className="lede">{t('admin_ch_start_lede')}</p>
         <ol className="ch-steps num">
-          <li>Mengacak urutan ring {c.appCount} creator. Setiap creator ditugaskan menguji {k} aplikasi lain, jadi setiap aplikasi mendapat {k} tester.</li>
-          {c.pureTesterCount > 0 && <li>Membagikan {Math.min(14, c.appCount)} aplikasi ke masing-masing dari {c.pureTesterCount} tester murni, mulai dari aplikasi dengan tester paling sedikit.</li>}
-          <li>Menetapkan Hari 0 = sekarang, sekitar {fmtDateTime(now)}. Semua anggota punya 48 jam untuk opt-in, sampai sekitar {fmtDateTime(now + 2 * DAY)}.</li>
-          <li>Mengunci daftar anggota: creator tidak bisa ditambah atau dikeluarkan lagi. Tester murni masih bisa gabung sendiri sampai akhir Hari {LAST_JOIN_DAY - 1}, sekitar {fmtWib(now + LAST_JOIN_DAY * DAY)}.</li>
+          <li>{t('admin_ch_start_s1', { n: c.appCount, k })}</li>
+          {c.pureTesterCount > 0 && <li>{t('admin_ch_start_s2', { apps: Math.min(14, c.appCount), testers: c.pureTesterCount })}</li>}
+          <li>{t('admin_ch_start_s3', { now: fmtDateTime(now), deadline: fmtDateTime(now + 2 * DAY) })}</li>
+          <li>{t('admin_ch_start_s4', { day: LAST_JOIN_DAY - 1, time: fmtWib(now + LAST_JOIN_DAY * DAY) })}</li>
         </ol>
         {thin && (
           <p className="notice admin-notice ch-warn" role="note">
-            <Chip tone="cabai" glyph="!">Buffer tipis</Chip>
-            <span>Dengan {MIN_APPS} aplikasi dan tanpa tester murni, aplikasi yang butuh 12 tester mendapat tepat 12, tanpa cadangan. Satu creator yang tidak ikut tes membuat aplikasi itu turun di bawah 12. Pertimbangkan menunggu beberapa tester murni dulu.</span>
+            <Chip tone="cabai" glyph="!">{t('admin_ch_thin_warn_chip')}</Chip>
+            <span>{t('admin_ch_thin_warn', { min: MIN_APPS })}</span>
           </p>
         )}
         <p className="notice admin-notice" role="note">
-          <span className="chip"><span className="g" aria-hidden="true">!</span>Tidak bisa dibatalkan</span>
-          <span>Tugas yang sudah dibagikan tetap tercatat.</span>
+          <span className="chip"><span className="g" aria-hidden="true">!</span>{t('admin_ch_irreversible')}</span>
+          <span>{t('admin_ch_assign_stays')}</span>
         </p>
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Batal</button>
-        <button className="btn primary" aria-busy={busy || undefined}>{busy ? 'Memulai…' : 'Mulai cohort sekarang'}</button>
+        <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+        <button className="btn primary" aria-busy={busy || undefined}>{busy ? t('admin_ch_starting') : t('admin_ch_start_now')}</button>
       </div>
     </form>
   )
@@ -382,6 +391,7 @@ function StartForm({ c, thin, onClose, onStarted }: { c: CohortDetail; thin: boo
 // ---------- members (forming: add and remove; active: read only) ----------
 
 function Members({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
+  const t = useT()
   const toast = useToast()
   const [adding, setAdding] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -400,15 +410,17 @@ function Members({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
       // The row and its button are gone after the refresh: keep focus in the section.
       heading.current?.focus()
       onChanged()
-      const left = m.appId && c.appCount - 1 < MIN_APPS ? ` Tersisa ${c.appCount - 1} dari minimal ${MIN_APPS} aplikasi.` : ''
+      const left = m.appId && c.appCount - 1 < MIN_APPS ? t('admin_ch_apps_left', { n: c.appCount - 1, min: MIN_APPS }) : ''
       toast({
-        text: m.appId ? `${nameOf(m)} dan ${m.appName ?? 'aplikasinya'} dikeluarkan dari ${c.name}.${left}` : `${nameOf(m)} dikeluarkan dari ${c.name}.`,
+        text: m.appId
+          ? t('admin_ch_toast_removed_creator', { name: nameOf(m, t), app: m.appName ?? t('admin_ch_app_fallback'), cohort: c.name, rest: left })
+          : t('admin_ch_toast_removed', { name: nameOf(m, t), cohort: c.name }),
         duration: 8000,
         action: {
-          label: 'Urungkan',
+          label: t('form_undo'),
           onClick: () => {
             addCohortMember(c.id, m.userId, m.appId).then(
-              () => { toast(`${nameOf(m)} dikembalikan ke ${c.name}.`); onChanged() },
+              () => { toast(t('admin_ch_toast_restored_member', { name: nameOf(m, t), cohort: c.name })); onChanged() },
               (x) => toast(failToast(x)),
             )
           },
@@ -424,24 +436,24 @@ function Members({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
   return (
     <div className="ch-members">
       <div className="ch-members-head">
-        <h3 ref={heading} tabIndex={-1}>Anggota <span className="num muted">({c.members.length})</span></h3>
-        {forming && <button type="button" className="btn sm" onClick={() => setAdding(true)}><IconPlus aria-hidden="true" />Tambah anggota</button>}
+        <h3 ref={heading} tabIndex={-1}>{t('admin_ch_members')} <span className="num muted">({c.members.length})</span></h3>
+        {forming && <button type="button" className="btn sm" onClick={() => setAdding(true)}><IconPlus aria-hidden="true" />{t('admin_ch_add_member')}</button>}
       </div>
       {c.members.length === 0 ? (
-        <Empty title="Belum ada anggota.">
-          <p>Tambahkan creator beserta aplikasi yang mereka bawa. Tester murni bisa gabung sendiri dari halaman cohort.</p>
+        <Empty title={t('admin_ch_no_members_title')}>
+          <p>{t('admin_ch_no_members_body')}</p>
         </Empty>
       ) : (
         <>
-          <MemberList title="Creator dan aplikasinya" items={creators} forming={forming} busyId={busyId} onRemove={remove}
-            empty={`Belum ada creator. Cohort butuh minimal ${MIN_APPS} aplikasi.`} />
-          <MemberList title="Tester murni" items={pure} forming={forming} busyId={busyId} onRemove={remove}
-            empty={forming ? 'Belum ada. Tester murni gabung sendiri dari halaman cohort, atau tambahkan tanpa aplikasi.' : 'Tidak ada tester murni di cohort ini.'} />
+          <MemberList title={t('admin_ch_creators_apps')} items={creators} forming={forming} busyId={busyId} onRemove={remove}
+            empty={t('admin_ch_no_creators', { min: MIN_APPS })} />
+          <MemberList title={t('admin_ch_fact_pure')} items={pure} forming={forming} busyId={busyId} onRemove={remove}
+            empty={forming ? t('admin_ch_no_pure_forming') : t('admin_ch_no_pure')} />
         </>
       )}
 
       {forming && (
-        <Dialog open={adding} onClose={() => setAdding(false)} label={`Tambah anggota ke ${c.name}`}>
+        <Dialog open={adding} onClose={() => setAdding(false)} label={t('admin_ch_add_dialog', { name: c.name })}>
           {adding && <AddMemberForm c={c} onClose={() => setAdding(false)} onAdded={onChanged} />}
         </Dialog>
       )}
@@ -452,6 +464,7 @@ function Members({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
 function MemberList({ title, items, forming, busyId, onRemove, empty }: {
   title: string; items: CohortMember[]; forming: boolean; busyId: string | null; onRemove: (m: CohortMember) => void; empty: string
 }) {
+  const t = useT()
   return (
     <div className="ch-sub">
       <h4 className="ch-sub-h">{title} <span className="num">({items.length})</span></h4>
@@ -459,20 +472,20 @@ function MemberList({ title, items, forming, busyId, onRemove, empty }: {
         <ul>
           {items.map((m) => (
             <li className="row-line ch-member" key={m.userId}>
-              <Avatar name={nameOf(m)} photo={m.photoURL} />
+              <Avatar name={nameOf(m, t)} photo={m.photoURL} />
               <span className="grow cell-2">
-                <Link className="hit ch-name" to={`/u/${m.userId}`}><b>{nameOf(m)}</b></Link>
+                <Link className="hit ch-name" to={`/u/${m.userId}`}><b>{nameOf(m, t)}</b></Link>
                 {m.appId ? (
                   <span className="ch-app">
-                    <Link className="hit" to={`/apps/${m.appId}`}>{m.appName ?? 'Aplikasi'}</Link>
-                    {m.appDeleted && <Chip tone="cabai" glyph="×">Terhapus</Chip>}
+                    <Link className="hit" to={`/apps/${m.appId}`}>{m.appName ?? t('admin_ch_fact_apps')}</Link>
+                    {m.appDeleted && <Chip tone="cabai" glyph="×">{t('admin_ch_deleted_chip')}</Chip>}
                   </span>
-                ) : <span>Tanpa aplikasi</span>}
+                ) : <span>{t('admin_ch_no_app')}</span>}
               </span>
               {forming && (
                 // Quiet on purpose: a column of red buttons would shout. The toast carries the undo.
                 <button type="button" className="btn sm" aria-busy={busyId === m.userId || undefined} onClick={() => onRemove(m)}>
-                  {busyId === m.userId ? 'Mengeluarkan…' : 'Keluarkan'}<span className="sr-only"> {nameOf(m)}</span>
+                  {busyId === m.userId ? t('admin_ch_removing') : t('admin_ch_remove')}<span className="sr-only"> {nameOf(m, t)}</span>
                 </button>
               )}
             </li>
@@ -488,6 +501,7 @@ function MemberList({ title, items, forming, busyId, onRemove, empty }: {
 const reqFmt = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })
 
 function RequestsPanel({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
+  const t = useT()
   const toast = useToast()
   const list = usePendingRequests(c.id)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -502,7 +516,7 @@ function RequestsPanel({ c, onChanged }: { c: CohortDetail; onChanged: () => voi
       await approveCohortRequest(r.id)
       // The row and its button are gone after the refresh: keep focus in the section.
       heading.current?.focus()
-      toast(`${nameOf(r)} dan ${r.appName} masuk ke ${c.name}.`)
+      toast(t('admin_ch_toast_approved', { name: nameOf(r, t), app: r.appName, cohort: c.name }))
       list.refresh(); onChanged()
     } catch (x) {
       toast(failToast(x))
@@ -515,37 +529,37 @@ function RequestsPanel({ c, onChanged }: { c: CohortDetail; onChanged: () => voi
   return (
     <div className="ch-members ch-requests">
       <div className="ch-members-head">
-        <h3 ref={heading} tabIndex={-1}>Permintaan masuk <span className="num muted">({items.length})</span></h3>
+        <h3 ref={heading} tabIndex={-1}>{t('admin_ch_requests')} <span className="num muted">({items.length})</span></h3>
       </div>
-      {list.error ? <ErrorBox text="Permintaan masuk gagal dimuat." onRetry={list.retry} /> : list.loading ? (
-        <div aria-busy="true" aria-label="Memuat permintaan">{[0, 1].map((i) => <div className="row-line" key={i} aria-hidden="true"><Skel w={32} h={32} /><span className="grow"><Skel w={160} /><br /><Skel w={120} h={12} /></span></div>)}</div>
+      {list.error ? <ErrorBox text={t('admin_ch_req_load_error')} onRetry={list.retry} /> : list.loading ? (
+        <div aria-busy="true" aria-label={t('admin_ch_loading_requests')}>{[0, 1].map((i) => <div className="row-line" key={i} aria-hidden="true"><Skel w={32} h={32} /><span className="grow"><Skel w={160} /><br /><Skel w={120} h={12} /></span></div>)}</div>
       ) : items.length === 0 ? (
-        <p className="meta">Tidak ada permintaan yang menunggu. Creator mengajukan aplikasinya dari halaman cohort.</p>
+        <p className="meta">{t('admin_ch_no_requests')}</p>
       ) : (
         <>
-          <p className="meta">Terlama di atas. Setujui untuk menambahkan creator dan aplikasinya; tolak dengan alasan opsional yang dilihat anggota.</p>
+          <p className="meta">{t('admin_ch_req_hint')}</p>
           <ul>
             {items.map((r) => (
               <li className="row-line ch-member ch-req" key={r.id}>
-                <Avatar name={nameOf(r)} photo={r.photoURL} />
+                <Avatar name={nameOf(r, t)} photo={r.photoURL} />
                 <span className="grow cell-2">
-                  <Link className="hit ch-name" to={`/u/${r.userId}`}><b>{nameOf(r)}</b></Link>
+                  <Link className="hit ch-name" to={`/u/${r.userId}`}><b>{nameOf(r, t)}</b></Link>
                   <span className="num">{r.maskedEmail}</span>
-                  <span className="ch-app"><Link className="hit" to={`/apps/${r.appId}`}>{r.appName || 'Aplikasi'}</Link></span>
-                  <span className="num">Diajukan {reqFmt.format(r.createdAt)} WIB</span>
+                  <span className="ch-app"><Link className="hit" to={`/apps/${r.appId}`}>{r.appName || t('admin_ch_fact_apps')}</Link></span>
+                  <span className="num">{t('admin_ch_submitted_at', { date: `${reqFmt.format(r.createdAt)} WIB` })}</span>
                 </span>
                 <span className="ch-req-acts">
                   <button type="button" className="btn sm primary" aria-busy={busyId === r.id || undefined} onClick={() => { void approve(r) }}>
-                    {busyId === r.id ? 'Menyetujui…' : 'Setujui'}<span className="sr-only"> {nameOf(r)}</span>
+                    {busyId === r.id ? t('admin_ch_approving') : t('admin_ch_approve')}<span className="sr-only"> {nameOf(r, t)}</span>
                   </button>
-                  <button type="button" className="btn sm" onClick={() => setRejecting(r)}>Tolak<span className="sr-only"> {nameOf(r)}</span></button>
+                  <button type="button" className="btn sm" onClick={() => setRejecting(r)}>{t('admin_ch_reject')}<span className="sr-only"> {nameOf(r, t)}</span></button>
                 </span>
               </li>
             ))}
           </ul>
         </>
       )}
-      <Dialog open={rejecting != null} onClose={() => setRejecting(null)} label="Tolak permintaan">
+      <Dialog open={rejecting != null} onClose={() => setRejecting(null)} label={t('admin_ch_reject_dialog')}>
         {rejecting && (
           <RejectForm r={rejecting} c={c} onClose={() => setRejecting(null)}
             onDone={() => { heading.current?.focus(); list.refresh(); onChanged() }} />
@@ -556,12 +570,13 @@ function RequestsPanel({ c, onChanged }: { c: CohortDetail; onChanged: () => voi
 }
 
 function RejectForm({ r, c, onClose, onDone }: { r: CohortRequest; c: CohortDetail; onClose: () => void; onDone: () => void }) {
+  const t = useT()
   const toast = useToast()
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const over = reason.trim().length > REQUEST_REASON_MAX
-  const fieldErr = over ? `Alasan paling panjang ${REQUEST_REASON_MAX} karakter.` : undefined
+  const fieldErr = over ? t('admin_ch_reason_max', { max: REQUEST_REASON_MAX }) : undefined
   const area = useRef<HTMLTextAreaElement>(null)
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -570,10 +585,10 @@ function RejectForm({ r, c, onClose, onDone }: { r: CohortRequest; c: CohortDeta
     setBusy(true); setErr(null)
     try {
       await rejectCohortRequest(r.id, reason)
-      toast(`Permintaan ${nameOf(r)} untuk ${r.appName} ditolak.`)
+      toast(t('admin_ch_toast_rejected', { name: nameOf(r, t), app: r.appName }))
       onClose(); onDone()
     } catch (x) {
-      setErr(errorText(x))
+      setErr(errorText(x, t))
     } finally {
       setBusy(false)
     }
@@ -582,18 +597,18 @@ function RejectForm({ r, c, onClose, onDone }: { r: CohortRequest; c: CohortDeta
     <form onSubmit={submit} noValidate>
       <div className="sheet-body">
         <div>
-          <h2>Tolak permintaan?</h2>
-          <p className="lede"><b>{nameOf(r)}</b> dengan <b>{r.appName}</b> untuk {c.name}. Anggota melihat penolakan dan alasannya, lalu bisa mengajukan lagi.</p>
+          <h2>{t('admin_ch_reject_title')}</h2>
+          <p className="lede">{t('admin_ch_reject_lede', { name: nameOf(r, t), app: r.appName, cohort: c.name })}</p>
         </div>
-        <Field id="rj-reason" label="Alasan" optional hint={'Singkat dan jelas, misalnya “Cohort ini sudah penuh, coba cohort berikutnya.”'} error={fieldErr} count={`${reason.trim().length}/${REQUEST_REASON_MAX}`}>
+        <Field id="rj-reason" label={t('admin_ch_reason_label')} optional hint={t('admin_ch_reason_hint')} error={fieldErr} count={`${reason.trim().length}/${REQUEST_REASON_MAX}`}>
           <textarea ref={area} className="input" rows={3} autoComplete="off" value={reason}
             onChange={(e) => { setReason(e.target.value); setErr(null) }} {...fieldAria('rj-reason', { hint: true, error: fieldErr })} />
         </Field>
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Batal</button>
-        <button className="btn danger" aria-busy={busy || undefined}>{busy ? 'Menolak…' : 'Tolak permintaan'}</button>
+        <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+        <button className="btn danger" aria-busy={busy || undefined}>{busy ? t('admin_ch_rejecting') : t('admin_ch_reject_btn')}</button>
       </div>
     </form>
   )
@@ -692,14 +707,14 @@ function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () =
       await addCohortMember(c.id, pick.userId, appId)
       const app = pick.apps.find((a) => a.id === appId)
       toast(app
-        ? t('toast_added_with_app', { name: nameOf(pick), app: app.name })
-        : t('toast_added_pure', { name: nameOf(pick) }))
+        ? t('toast_added_with_app', { name: nameOf(pick, t), app: app.name })
+        : t('toast_added_pure', { name: nameOf(pick, t) }))
       setAdded((xs) => [...xs, pick.userId])
       onAdded()
       setPick(null); setQ(''); setTerm('')
       window.setTimeout(() => search.current?.focus(), 0)
     } catch (x) {
-      setErr(errorText(x))
+      setErr(errorText(x, t))
     } finally {
       setBusy(false)
     }
@@ -714,7 +729,7 @@ function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () =
   // --- app tab handlers ---
   const appBlockedWhy = (cand: AppCandidate) =>
     members.has(cand.creatorId) ? t('creator_already_member')
-      : cand.inCohort !== null ? t('already_in_cohort', { cohort: cand.inCohort || 'cohort lain yang belum ditutup' })
+      : cand.inCohort !== null ? t('already_in_cohort', { cohort: cand.inCohort || t('in_unnamed_cohort') })
         : cand.creatorOwing ? t('creator_owing')
           : null
 
@@ -727,7 +742,7 @@ function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () =
       setAdded((xs) => [...xs, cand.creatorId])
       onAdded()
     } catch (x) {
-      setErr(errorText(x))
+      setErr(errorText(x, t))
     } finally {
       setBusyAppId(null)
     }
@@ -782,9 +797,9 @@ function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () =
                       <li key={cand.userId}>
                         <button type="button" className="ch-cand" aria-disabled={why ? true : undefined} onClick={() => choose(cand)}
                           aria-describedby={`cand-${cand.userId}`}>
-                          <Avatar name={nameOf(cand)} photo={cand.photoURL} />
+                          <Avatar name={nameOf(cand, t)} photo={cand.photoURL} />
                           <span className="cell-2 grow">
-                            <b>{nameOf(cand)}</b>
+                            <b>{nameOf(cand, t)}</b>
                             <span>{cand.maskedEmail}</span>
                             <span id={`cand-${cand.userId}`} className="ch-cand-why">
                               {why ? <><span className="ch-glyph" aria-hidden="true">{cand.owing && !members.has(cand.userId) ? '!' : '✓'}</span>{why}</>
@@ -810,8 +825,8 @@ function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () =
           ) : (
             <>
               <div className="ch-picked">
-                <Avatar name={nameOf(pick)} photo={pick.photoURL} />
-                <span className="cell-2 grow"><b>{nameOf(pick)}</b><span>{pick.maskedEmail}</span></span>
+                <Avatar name={nameOf(pick, t)} photo={pick.photoURL} />
+                <span className="cell-2 grow"><b>{nameOf(pick, t)}</b><span>{pick.maskedEmail}</span></span>
                 <button type="button" className="text-action" onClick={back}>{t('change_member')}</button>
               </div>
               <fieldset className="fieldset ch-opts" aria-describedby={showErr && choiceErr ? 'am-opt-err' : 'am-opt-hint'}>
@@ -903,6 +918,7 @@ function AddMemberForm({ c, onClose, onAdded }: { c: CohortDetail; onClose: () =
 // ---------- closed: standings and settling (FR-37) ----------
 
 function Standings({ c, onChanged }: { c: CohortDetail; onChanged: () => void }) {
+  const t = useT()
   const [settling, setSettling] = useState<CohortMember | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const focusHeading = useFocusAfterClose(!!settling, heading)
@@ -912,28 +928,28 @@ function Standings({ c, onChanged }: { c: CohortDetail; onChanged: () => void })
   return (
     <div className="ch-members">
       <dl className="ch-facts num">
-        <div><dt>Baik</dt><dd>{good}</dd></div>
-        <div><dt>Berutang</dt><dd>{owing.length}</dd></div>
-        <div><dt>Lunas</dt><dd>{settled.length}</dd></div>
+        <div><dt>{t('admin_ch_standing_good')}</dt><dd>{good}</dd></div>
+        <div><dt>{t('admin_ch_standing_owing')}</dt><dd>{owing.length}</dd></div>
+        <div><dt>{t('admin_ch_standing_settled')}</dt><dd>{settled.length}</dd></div>
       </dl>
-      <div className="ch-members-head"><h3 ref={heading} tabIndex={-1}>Kewajiban belum selesai</h3></div>
+      <div className="ch-members-head"><h3 ref={heading} tabIndex={-1}>{t('admin_ch_unfinished')}</h3></div>
       {owing.length === 0 ? (
-        <Empty title="Tidak ada anggota yang berutang.">
-          <p>{settled.length > 0 ? 'Semua anggota yang berutang sudah ditandai lunas.' : 'Semua anggota menyelesaikan kewajibannya saat cohort ditutup.'} Mereka bisa ikut cohort berikutnya.</p>
+        <Empty title={t('admin_ch_no_owing_title')}>
+          <p>{settled.length > 0 ? t('admin_ch_no_owing_settled') : t('admin_ch_no_owing_all')}{t('admin_ch_can_join_next')}</p>
         </Empty>
       ) : (
         <>
-          <p className="meta">Anggota yang berutang tidak bisa ditambahkan ke cohort baru sampai ditandai lunas. Tandai lunas setelah kewajibannya beres, atau bila Anda memutuskan memaafkannya.</p>
+          <p className="meta">{t('admin_ch_owing_hint')}</p>
           <ul>
             {owing.map((m) => (
               <li className="row-line ch-member" key={m.userId}>
-                <Avatar name={nameOf(m)} photo={m.photoURL} />
+                <Avatar name={nameOf(m, t)} photo={m.photoURL} />
                 <span className="grow cell-2">
-                  <Link className="hit ch-name" to={`/u/${m.userId}`}><b>{nameOf(m)}</b></Link>
-                  <span>{m.appId ? (m.appName ?? 'Aplikasi') : 'Tester murni'}</span>
+                  <Link className="hit ch-name" to={`/u/${m.userId}`}><b>{nameOf(m, t)}</b></Link>
+                  <span>{m.appId ? (m.appName ?? t('admin_ch_fact_apps')) : t('admin_ch_fact_pure')}</span>
                 </span>
                 <StandingChip standing="owing" />
-                <button type="button" className="btn sm" onClick={() => setSettling(m)}>Tandai lunas<span className="sr-only"> {nameOf(m)}</span></button>
+                <button type="button" className="btn sm" onClick={() => setSettling(m)}>{t('admin_ch_mark_settled')}<span className="sr-only"> {nameOf(m, t)}</span></button>
               </li>
             ))}
           </ul>
@@ -941,14 +957,14 @@ function Standings({ c, onChanged }: { c: CohortDetail; onChanged: () => void })
       )}
       {settled.length > 0 && (
         <div className="ch-sub">
-          <h4 className="ch-sub-h">Sudah dilunasi <span className="num">({settled.length})</span></h4>
+          <h4 className="ch-sub-h">{t('admin_ch_settled_h')} <span className="num">({settled.length})</span></h4>
           <ul>
             {settled.map((m) => (
               <li className="row-line ch-member" key={m.userId}>
-                <Avatar name={nameOf(m)} photo={m.photoURL} />
+                <Avatar name={nameOf(m, t)} photo={m.photoURL} />
                 <span className="grow cell-2">
-                  <Link className="hit ch-name" to={`/u/${m.userId}`}><b>{nameOf(m)}</b></Link>
-                  <span className="num">Dilunasi {fmtDateTime(m.settledAt)}</span>
+                  <Link className="hit ch-name" to={`/u/${m.userId}`}><b>{nameOf(m, t)}</b></Link>
+                  <span className="num">{t('admin_ch_settled_at', { date: fmtDateTime(m.settledAt) })}</span>
                 </span>
                 <StandingChip standing="settled" />
               </li>
@@ -956,7 +972,7 @@ function Standings({ c, onChanged }: { c: CohortDetail; onChanged: () => void })
           </ul>
         </div>
       )}
-      <Dialog open={!!settling} onClose={() => setSettling(null)} label={settling ? `Tandai ${nameOf(settling)} lunas` : 'Tandai lunas'}>
+      <Dialog open={!!settling} onClose={() => setSettling(null)} label={settling ? t('admin_ch_settle_named', { name: nameOf(settling, t) }) : t('admin_ch_settle_dialog')}>
         {settling && <SettleForm c={c} m={settling} onClose={() => setSettling(null)} onSettled={() => { focusHeading(); setSettling(null); onChanged() }} />}
       </Dialog>
     </div>
@@ -964,6 +980,7 @@ function Standings({ c, onChanged }: { c: CohortDetail; onChanged: () => void })
 }
 
 function SettleForm({ c, m, onClose, onSettled }: { c: CohortDetail; m: CohortMember; onClose: () => void; onSettled: () => void }) {
+  const t = useT()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -973,27 +990,27 @@ function SettleForm({ c, m, onClose, onSettled }: { c: CohortDetail; m: CohortMe
     setBusy(true); setErr(null)
     try {
       await settleMember(c.id, m.userId)
-      toast(`${nameOf(m)} ditandai lunas dan bisa ikut cohort berikutnya.`)
+      toast(t('admin_ch_toast_settled', { name: nameOf(m, t) }))
       onSettled()
     } catch (x) {
-      setErr(errorText(x))
+      setErr(errorText(x, t))
       setBusy(false)
     }
   }
   return (
     <form onSubmit={submit} noValidate>
       <div className="sheet-body">
-        <h2>Tandai {nameOf(m)} lunas?</h2>
-        <p>Status {nameOf(m)} di {c.name} berubah dari Berutang menjadi Lunas, dan ia bisa ditambahkan ke cohort berikutnya.</p>
+        <h2>{t('admin_ch_settle_title', { name: nameOf(m, t) })}</h2>
+        <p>{t('admin_ch_settle_body', { name: nameOf(m, t), cohort: c.name })}</p>
         <p className="notice admin-notice" role="note">
-          <span className="chip"><span className="g" aria-hidden="true">!</span>Tidak bisa dibatalkan</span>
-          <span>Status Lunas tidak bisa dikembalikan ke Berutang.</span>
+          <span className="chip"><span className="g" aria-hidden="true">!</span>{t('admin_ch_irreversible')}</span>
+          <span>{t('admin_ch_settled_irreversible')}</span>
         </p>
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Batal</button>
-        <button className="btn primary" aria-busy={busy || undefined}>{busy ? 'Menyimpan…' : 'Tandai lunas'}</button>
+        <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+        <button className="btn primary" aria-busy={busy || undefined}>{busy ? t('saving') : t('admin_ch_mark_settled_btn')}</button>
       </div>
     </form>
   )
@@ -1002,12 +1019,13 @@ function SettleForm({ c, m, onClose, onSettled }: { c: CohortDetail; m: CohortMe
 // ---------- B7: close cohort (FR-37) ----------
 
 function CloseAction({ c, heading, onClosed }: { c: CohortDetail; heading: RefObject<HTMLHeadingElement | null>; onClosed: () => void }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const focusHeading = useFocusAfterClose(open, heading)
   return (
     <div className="ch-start">
-      <button type="button" className="btn" onClick={() => setOpen(true)}>Tutup cohort</button>
-      <Dialog open={open} onClose={() => setOpen(false)} label={`Tutup ${c.name}`}>
+      <button type="button" className="btn" onClick={() => setOpen(true)}>{t('admin_ch_close_btn')}</button>
+      <Dialog open={open} onClose={() => setOpen(false)} label={t('admin_ch_close_label', { name: c.name })}>
         {open && <CloseForm c={c} onClose={() => setOpen(false)} onClosed={() => { focusHeading(); onClosed() }} />}
       </Dialog>
     </div>
@@ -1015,6 +1033,8 @@ function CloseAction({ c, heading, onClosed }: { c: CohortDetail; heading: RefOb
 }
 
 function CloseForm({ c, onClose, onClosed }: { c: CohortDetail; onClose: () => void; onClosed: () => void }) {
+  const t = useT()
+  const tr = useT()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -1027,31 +1047,31 @@ function CloseForm({ c, onClose, onClosed }: { c: CohortDetail; onClose: () => v
     setBusy(true); setErr(null)
     try {
       await closeCohort(c.id)
-      toast(`${c.name} ditutup. Anggota dengan kewajiban belum selesai ditandai Berutang.`)
+      toast(t('admin_ch_toast_closed', { name: c.name }))
       onClosed(); onClose()
     } catch (x) {
-      setErr(errorText(x)); setBusy(false)
+      setErr(errorText(x, tr)); setBusy(false)
     }
   }
 
   return (
     <form onSubmit={submit} noValidate>
       <div className="sheet-body">
-        <h2 ref={title} tabIndex={-1}>Tutup {c.name}?</h2>
-        <p className="lede">Saat ditutup, TesBareng langsung menetapkan standing setiap anggota.</p>
+        <h2 ref={title} tabIndex={-1}>{t('admin_ch_close_title', { name: c.name })}</h2>
+        <p className="lede">{t('admin_ch_close_lede')}</p>
         <ol className="ch-steps">
-          <li><b>Baik</b> jika semua kewajiban terpenuhi.</li>
-          <li><b>Berutang</b> jika belum. Anggota yang berutang tidak bisa ikut cohort berikutnya sampai ditandai Lunas.</li>
+          <li>{t('admin_ch_close_s1')}</li>
+          <li>{t('admin_ch_close_s2')}</li>
         </ol>
         <p className="notice admin-notice" role="note">
-          <span className="chip"><span className="g" aria-hidden="true">!</span>Tidak bisa dibatalkan</span>
-          <span>Standing yang sudah ditetapkan tidak bisa diubah kembali ke status sebelumnya.</span>
+          <span className="chip"><span className="g" aria-hidden="true">!</span>{t('admin_ch_irreversible')}</span>
+          <span>{t('admin_ch_close_standing')}</span>
         </p>
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Batal</button>
-        <button className="btn danger" aria-busy={busy || undefined}>{busy ? 'Menutup…' : 'Tutup cohort'}</button>
+        <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+        <button className="btn danger" aria-busy={busy || undefined}>{busy ? t('admin_ch_closing') : t('admin_ch_close_btn')}</button>
       </div>
     </form>
   )
@@ -1060,12 +1080,13 @@ function CloseForm({ c, onClose, onClosed }: { c: CohortDetail; onClose: () => v
 // ---------- reset active cohort back to forming ----------
 
 function ResetAction({ c, heading, onReset }: { c: CohortDetail; heading: RefObject<HTMLHeadingElement | null>; onReset: () => void }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const focusHeading = useFocusAfterClose(open, heading)
   return (
     <div className="ch-start">
-      <button type="button" className="btn" onClick={() => setOpen(true)}>Reset ke Forming</button>
-      <Dialog open={open} onClose={() => setOpen(false)} label={`Reset ${c.name}`}>
+      <button type="button" className="btn" onClick={() => setOpen(true)}>{t('admin_ch_reset_btn')}</button>
+      <Dialog open={open} onClose={() => setOpen(false)} label={t('admin_ch_reset_label', { name: c.name })}>
         {open && <ResetForm c={c} onClose={() => setOpen(false)} onReset={() => { focusHeading(); onReset() }} />}
       </Dialog>
     </div>
@@ -1073,6 +1094,8 @@ function ResetAction({ c, heading, onReset }: { c: CohortDetail; heading: RefObj
 }
 
 function ResetForm({ c, onClose, onReset }: { c: CohortDetail; onClose: () => void; onReset: () => void }) {
+  const t = useT()
+  const tr = useT()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -1085,33 +1108,33 @@ function ResetForm({ c, onClose, onReset }: { c: CohortDetail; onClose: () => vo
     setBusy(true); setErr(null)
     try {
       await resetCohort(c.id)
-      toast(`${c.name} direset ke Forming. Tambahkan atau keluarkan anggota, lalu mulai ulang kapan saja.`)
+      toast(t('admin_ch_toast_reset', { name: c.name }))
       onReset(); onClose()
     } catch (x) {
-      setErr(errorText(x)); setBusy(false)
+      setErr(errorText(x, tr)); setBusy(false)
     }
   }
 
   return (
     <form onSubmit={submit} noValidate>
       <div className="sheet-body">
-        <h2 ref={title} tabIndex={-1}>Reset {c.name} ke Forming?</h2>
-        <p className="lede">Saat direset, TesBareng langsung:</p>
+        <h2 ref={title} tabIndex={-1}>{t('admin_ch_reset_title', { name: c.name })}</h2>
+        <p className="lede">{t('admin_ch_reset_lede')}</p>
         <ol className="ch-steps">
-          <li>Menghapus semua penugasan yang sudah dibagikan.</li>
-          <li>Menghapus urutan ring dan waktu penugasan dari setiap anggota.</li>
-          <li>Mengembalikan status cohort ke <b>Forming</b>; anggota tetap ada.</li>
+          <li>{t('admin_ch_reset_s1')}</li>
+          <li>{t('admin_ch_reset_s2')}</li>
+          <li>{t('admin_ch_reset_s3')} <b>{t('cohort_status_forming')}</b>{t('admin_ch_reset_s3b')}</li>
         </ol>
-        <p className="meta">Cohort bisa dimulai ulang kapan saja dari halaman ini. Anggota yang sudah opt-in ke aplikasi tetap tercatat sebagai tester di aplikasi masing-masing.</p>
+        <p className="meta">{t('admin_ch_reset_note')}</p>
         <p className="notice admin-notice" role="note">
-          <span className="chip"><span className="g" aria-hidden="true">!</span>Penugasan hilang</span>
-          <span>Penugasan yang sudah dibagikan tidak bisa dikembalikan. Riwayat opt-in tester di aplikasi tetap ada.</span>
+          <span className="chip"><span className="g" aria-hidden="true">!</span>{t('admin_ch_assign_lost')}</span>
+          <span>{t('admin_ch_assign_lost_note')}</span>
         </p>
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Batal</button>
-        <button className="btn danger" aria-busy={busy || undefined}>{busy ? 'Mereset…' : 'Reset ke Forming'}</button>
+        <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+        <button className="btn danger" aria-busy={busy || undefined}>{busy ? t('admin_ch_resetting') : t('admin_ch_reset_btn')}</button>
       </div>
     </form>
   )
@@ -1120,6 +1143,7 @@ function ResetForm({ c, onClose, onReset }: { c: CohortDetail; onClose: () => vo
 // ---------- B7: reassign behind slot ----------
 
 function ReassignPanel({ c }: { c: CohortDetail }) {
+  const t = useT()
   const status = useAssignmentStatus(c.id)
   const [slot, setSlot] = useState<{ appId: string; testerId: string; appName: string } | null>(null)
   const panelHead = useRef<HTMLHeadingElement>(null)
@@ -1129,8 +1153,8 @@ function ReassignPanel({ c }: { c: CohortDetail }) {
 
   if (status.loading && behindSlots.length === 0) return null
   if (status.error) return (
-    <section className="panel" aria-label="Slot belum opt-in">
-      <p className="meta cabai">Gagal memuat slot tertinggal. <button type="button" className="link" onClick={status.retry}>Coba lagi</button></p>
+    <section className="panel" aria-label={t('admin_ch_slots_sr')}>
+      <p className="meta cabai">{t('admin_ch_slots_load_error')} <button type="button" className="link" onClick={status.retry}>{t('retry')}</button></p>
     </section>
   )
   if (behindSlots.length === 0) return null
@@ -1138,10 +1162,10 @@ function ReassignPanel({ c }: { c: CohortDetail }) {
   return (
     <section className="panel" aria-labelledby="reassign-h">
       <header>
-        <h2 id="reassign-h" ref={panelHead} tabIndex={-1}>Slot belum opt-in</h2>
-        <Chip tone="cabai" glyph="!">{behindSlots.length} slot</Chip>
+        <h2 id="reassign-h" ref={panelHead} tabIndex={-1}>{t('admin_ch_slots_sr')}</h2>
+        <Chip tone="cabai" glyph="!">{t('admin_ch_slots_chip', { n: behindSlots.length })}</Chip>
       </header>
-      <p className="meta">Tester tertinggal. Pindahkan slot ke tester yang belum ditugaskan.</p>
+      <p className="meta">{t('admin_ch_slots_hint')}</p>
       <ul>
         {behindSlots.slice(0, 10).map((s) => {
           const app = c.members.find((m) => m.appId === s.appId)
@@ -1149,18 +1173,18 @@ function ReassignPanel({ c }: { c: CohortDetail }) {
           return (
             <li className="row-line" key={`${s.appId}:${s.testerId}`}>
               <span className="grow cell-2">
-                <b>{app?.appName ?? 'Aplikasi'}</b>
-                <span>{tester?.displayName || 'Tester'} · belum opt-in</span>
+                <b>{app?.appName ?? t('admin_ch_fact_apps')}</b>
+                <span>{tester?.displayName || t('admin_ch_tester_fallback')} · {t('admin_ch_not_opted')}</span>
               </span>
               <button type="button" className="btn sm"
-                onClick={() => setSlot({ appId: s.appId, testerId: s.testerId, appName: app?.appName ?? 'Aplikasi' })}>
-                Pindahkan<span className="sr-only"> slot {app?.appName}</span>
+                onClick={() => setSlot({ appId: s.appId, testerId: s.testerId, appName: app?.appName ?? t('admin_ch_fact_apps') })}>
+                {t('admin_ch_move')}<span className="sr-only"> {t('admin_ch_move_slot')} {app?.appName}</span>
               </button>
             </li>
           )
         })}
       </ul>
-      <Dialog open={!!slot} onClose={() => setSlot(null)} label={slot ? `Pindahkan slot ${slot.appName}` : 'Pindahkan slot'}>
+      <Dialog open={!!slot} onClose={() => setSlot(null)} label={slot ? t('admin_ch_move_named', { app: slot.appName }) : t('admin_ch_move_slot')}>
         {slot && <ReassignForm c={c} slot={slot} onClose={() => setSlot(null)} onDone={() => { focusHead(); setSlot(null) }} />}
       </Dialog>
     </section>
@@ -1170,6 +1194,7 @@ function ReassignPanel({ c }: { c: CohortDetail }) {
 function ReassignForm({ c, slot, onClose, onDone }: {
   c: CohortDetail; slot: { appId: string; testerId: string; appName: string }; onClose: () => void; onDone: () => void
 }) {
+  const t = useT()
   const toast = useToast()
   const [newId, setNewId] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1182,35 +1207,35 @@ function ReassignForm({ c, slot, onClose, onDone }: {
     setBusy(true); setErr(null)
     try {
       await reassignSlot(c.id, slot.appId, slot.testerId, newId)
-      const name = c.members.find((m) => m.userId === newId)?.displayName ?? 'Tester baru'
-      toast(`Slot ${slot.appName} dipindahkan ke ${name}.`)
+      const name = c.members.find((m) => m.userId === newId)?.displayName ?? t('admin_ch_new_tester')
+      toast(t('admin_ch_toast_moved', { app: slot.appName, name }))
       onDone()
     } catch (x) {
-      setErr(errorText(x)); setBusy(false)
+      setErr(errorText(x, t)); setBusy(false)
     }
   }
 
   return (
     <form onSubmit={submit} noValidate>
       <div className="sheet-body">
-        <h2>Pindahkan slot {slot.appName}?</h2>
-        <p className="lede">Pilih tester pengganti dari anggota cohort ini.</p>
+        <h2>{t('admin_ch_move_title', { app: slot.appName })}</h2>
+        <p className="lede">{t('admin_ch_move_lede')}</p>
         <fieldset className="fieldset ch-opts">
-          <legend>Tester pengganti</legend>
+          <legend>{t('admin_ch_replace_legend')}</legend>
           {candidates.length === 0
-            ? <p className="meta">Tidak ada kandidat. Tambah tester murni ke cohort ini dulu.</p>
+            ? <p className="meta">{t('admin_ch_no_candidates')}</p>
             : candidates.map((m) => (
               <label key={m.userId} className="ch-opt">
                 <input type="radio" name="ra-new" value={m.userId} checked={newId === m.userId} onChange={() => setNewId(m.userId)} />
-                <span className="cell-2"><b>{nameOf(m)}</b><span>{m.appId ? (m.appName ?? 'Creator') : 'Tester murni'}</span></span>
+                <span className="cell-2"><b>{nameOf(m, t)}</b><span>{m.appId ? (m.appName ?? t('admin_ch_creator')) : t('admin_ch_fact_pure')}</span></span>
               </label>
             ))}
         </fieldset>
         {err && <ErrorBox text={err} />}
       </div>
       <div className="sheet-foot">
-        <button type="button" className="btn" onClick={onClose}>Batal</button>
-        <button className="btn primary" disabled={!newId} aria-busy={busy || undefined}>{busy ? 'Memindahkan…' : 'Pindahkan slot'}</button>
+        <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
+        <button className="btn primary" disabled={!newId} aria-busy={busy || undefined}>{busy ? t('admin_ch_moving') : t('admin_ch_move_slot')}</button>
       </div>
     </form>
   )
@@ -1219,37 +1244,41 @@ function ReassignForm({ c, slot, onClose, onDone }: {
 // ---------- B7: WA reminder text for behind members ----------
 
 function ReminderPanel({ c }: { c: CohortDetail }) {
+  const t = useT()
   const oblig = useObligations(c.id)
   const behind = useMemo(() => oblig.data.filter((o) => o.isBehind), [oblig.data])
 
   if (oblig.loading && behind.length === 0) return null
   if (oblig.error) return (
-    <section className="panel" aria-label="Anggota tertinggal">
-      <p className="meta cabai">Gagal memuat data kewajiban. <button type="button" className="link" onClick={oblig.retry}>Coba lagi</button></p>
+    <section className="panel" aria-label={t('admin_ch_behind_sr')}>
+      <p className="meta cabai">{t('admin_ch_behind_load_error')} <button type="button" className="link" onClick={oblig.retry}>{t('retry')}</button></p>
     </section>
   )
   if (behind.length === 0) return null
 
   const lines = behind.map((o) => {
     const m = c.members.find((mm) => mm.userId === o.userId)
-    return `• ${m?.displayName || 'Anggota'}: ${o.behindCount} slot belum opt-in`
+    const name = m?.displayName || t('admin_ch_members')
+    return o.owesOptIn
+      ? t('admin_ch_reminder_line', { name, count: o.optInMissing })
+      : t('admin_ch_reminder_milestones', { name })
   })
 
   return (
     <section className="panel" aria-labelledby="remind-h">
       <header>
-        <h2 id="remind-h">Anggota tertinggal</h2>
+        <h2 id="remind-h">{t('admin_ch_behind_sr')}</h2>
         <Chip tone="cabai" glyph="!">{behind.length}</Chip>
       </header>
-      <p className="meta">Salin dan kirim ke grup WhatsApp sebagai pengingat opt-in.</p>
+      <p className="meta">{t('admin_ch_behind_hint')}</p>
       <ul className="ch-behind-list">
         {behind.map((o) => {
           const m = c.members.find((mm) => mm.userId === o.userId)
           return (
             <li className="row-line" key={o.userId}>
               <span className="grow cell-2">
-                <b>{m?.displayName || 'Anggota'}</b>
-                <span className="num">{o.behindCount} slot belum opt-in</span>
+                <b>{m?.displayName || t('admin_ch_members')}</b>
+                <span className="num">{o.owesOptIn ? t('admin_ch_slots_behind', { n: o.optInMissing }) : t('admin_ch_milestones_behind')}</span>
               </span>
             </li>
           )
@@ -1257,9 +1286,9 @@ function ReminderPanel({ c }: { c: CohortDetail }) {
       </ul>
       <textarea
         className="input ch-pin" readOnly
-        value={`Pengingat opt-in cohort:\n${lines.join('\n')}`}
+        value={`${t('admin_ch_reminder_prefix')}\n${lines.join('\n')}`}
         rows={behind.length + 2}
-        aria-label="Teks pengingat untuk disalin ke WhatsApp"
+        aria-label={t('admin_ch_reminder_aria')}
       />
     </section>
   )
@@ -1267,15 +1296,16 @@ function ReminderPanel({ c }: { c: CohortDetail }) {
 
 // ---------- WhatsApp link (FR-49–51, FR-53) ----------
 
-function waError(v: string): string | undefined {
-  const t = v.trim()
-  if (!t) return undefined
-  if (!t.startsWith(WA_PREFIX)) return `Link harus diawali ${WA_PREFIX}. Salin dari "Undang ke grup lewat link" di WhatsApp.`
-  if (t.length <= WA_PREFIX.length || /\s/.test(t)) return 'Link belum lengkap. Salin ulang link undangan grupnya.'
+function waError(v: string, tr: ReturnType<typeof useT>): string | undefined {
+  const s = v.trim()
+  if (!s) return undefined
+  if (!s.startsWith(WA_PREFIX)) return tr('admin_ch_wa_prefix_err', { prefix: WA_PREFIX })
+  if (s.length <= WA_PREFIX.length || /\s/.test(s)) return tr('admin_ch_wa_incomplete')
   return undefined
 }
 
 function LinkPanel({ c }: { c: CohortDetail }) {
+  const t = useT()
   const link = useCohortLink(c.id, true)
   const toast = useToast()
   // What the server holds after our own save, until the background refresh catches up.
@@ -1288,7 +1318,7 @@ function LinkPanel({ c }: { c: CohortDetail }) {
   const [err, setErr] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const input = useRef<HTMLInputElement>(null)
-  const fieldErr = waError(value)
+  const fieldErr = waError(value, t)
   const shownErr = touched ? fieldErr : undefined
   const removing = !value.trim() && !!current
   const unchanged = value.trim() === (current ?? '')
@@ -1306,20 +1336,20 @@ function LinkPanel({ c }: { c: CohortDetail }) {
     if (busy) return
     setTouched(true); setNote('')
     if (fieldErr) { input.current?.focus(); return }
-    if (unchanged) { setNote(current ? 'Link ini sudah tersimpan.' : 'Belum ada link untuk disimpan.'); return }
+    if (unchanged) { setNote(current ? t('admin_ch_saved_same') : t('admin_ch_nothing_save')); return }
     setBusy(true); setErr(null)
     const prev = current ?? null
     try {
       const next = await save(value)
-      if (next) toast(`Link grup ${c.name} disimpan. Anggota cohort melihatnya di halaman cohort.`)
+      if (next) toast(t('admin_ch_toast_link_saved', { name: c.name }))
       else {
         toast({
-          text: `Link grup ${c.name} dihapus.`, duration: 8000,
-          action: prev ? { label: 'Urungkan', onClick: () => { save(prev).then(() => toast('Link grup dikembalikan.'), (x) => toast(failToast(x))) } } : undefined,
+          text: t('admin_ch_toast_link_removed', { name: c.name }), duration: 8000,
+          action: prev ? { label: t('form_undo'), onClick: () => { save(prev).then(() => toast(t('admin_ch_toast_link_restored')), (x) => toast(failToast(x))) } } : undefined,
         })
       }
     } catch (x) {
-      setErr(errorText(x))
+      setErr(errorText(x, t))
     } finally {
       setBusy(false)
     }
@@ -1328,19 +1358,19 @@ function LinkPanel({ c }: { c: CohortDetail }) {
   return (
     <section className="panel" aria-labelledby="wa-h">
       <header>
-        <h2 id="wa-h">Grup WhatsApp</h2>
-        {!link.loading && !link.error && (current ? <Chip glyph="✓">Terpasang</Chip> : <Chip glyph="—">Belum ada</Chip>)}
+        <h2 id="wa-h">{t('admin_ch_wa_h')}</h2>
+        {!link.loading && !link.error && (current ? <Chip glyph="✓">{t('admin_ch_wa_on')}</Chip> : <Chip glyph="—">{t('admin_ch_wa_off')}</Chip>)}
       </header>
       {c.status === 'closed' && current && (
         <p className="notice admin-notice ch-notice" role="note">
-          <span className="chip"><span className="g" aria-hidden="true">!</span>Cohort ditutup</span>
-          <span>Arsipkan grup WhatsApp-nya di Komunitas supaya tidak dipakai lagi.</span>
+          <span className="chip"><span className="g" aria-hidden="true">!</span>{t('admin_ch_wa_closed_chip')}</span>
+          <span>{t('admin_ch_wa_closed_note')}</span>
         </p>
       )}
-      {link.error ? <ErrorBox text="Link grup gagal dimuat." onRetry={link.retry} /> : (
+      {link.error ? <ErrorBox text={t('admin_ch_wa_load_error')} onRetry={link.retry} /> : (
         <form className="ch-link-form" onSubmit={submit} noValidate>
-          <Field id="wa-url" label="Link undangan grup" error={shownErr}
-            hint={<>Diawali <span className="ch-code">{WA_PREFIX}</span>. Hanya anggota cohort ini dan admin yang melihatnya; bergabung ke grup tetap opsional. Kosongkan lalu simpan untuk menghapus link.</>}>
+          <Field id="wa-url" label={t('admin_ch_wa_label')} error={shownErr}
+            hint={<>{t('admin_ch_wa_hint_prefix')} <span className="ch-code">{WA_PREFIX}</span>{t('admin_ch_wa_hint')}</>}>
             <input ref={input} className="input" type="url" inputMode="url" autoComplete="off" spellCheck={false} disabled={link.loading}
               value={link.loading ? '' : value} onChange={(e) => { setV(e.target.value); setErr(null); setNote('') }} onBlur={() => setTouched(true)}
               {...fieldAria('wa-url', { hint: true, error: shownErr })} />
@@ -1348,10 +1378,10 @@ function LinkPanel({ c }: { c: CohortDetail }) {
           {err && <ErrorBox text={err} />}
           <div className="ch-link-foot">
             <button className={`btn ${removing ? 'danger' : ''}`} aria-busy={busy || undefined} disabled={link.loading}>
-              {busy ? 'Menyimpan…' : removing ? 'Hapus link' : 'Simpan link'}
+              {busy ? t('saving') : removing ? t('admin_ch_remove_link') : t('admin_ch_save_link')}
             </button>
             {current && !link.loading && (
-              <a className="text-action ch-ext" href={current} target="_blank" rel="noreferrer">Buka grup<IconExternal aria-hidden="true" /><span className="sr-only"> (tab baru)</span></a>
+              <a className="text-action ch-ext" href={current} target="_blank" rel="noreferrer">{t('admin_ch_open_group')}<IconExternal aria-hidden="true" /><span className="sr-only">{t('coh_new_tab')}</span></a>
             )}
             <span className="meta" role="status" aria-live="polite">{note}</span>
           </div>
@@ -1364,28 +1394,29 @@ function LinkPanel({ c }: { c: CohortDetail }) {
 // ---------- pinned-message template (FR-52) ----------
 
 function PinnedPanel({ c }: { c: CohortDetail }) {
+  const t = useT()
   const toast = useToast()
   const area = useRef<HTMLTextAreaElement>(null)
   const msg = pinnedMessage(c)
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(msg)
-      toast('Pesan disalin. Tempel di grup WhatsApp, lalu sematkan.')
+      toast(t('admin_ch_toast_copied'))
     } catch {
       // Clipboard blocked (permissions, older WebView): select the text so one Ctrl+C / "Salin" finishes the job.
       area.current?.focus()
       area.current?.select()
-      toast({ text: 'Browser tidak mengizinkan salin otomatis. Teksnya sudah dipilih: tekan Ctrl+C, atau tahan lalu pilih Salin.', duration: 8000 })
+      toast({ text: t('admin_ch_toast_copy_fail'), duration: 8000 })
     }
   }
   return (
     <section className="panel" aria-labelledby="pin-h">
       <header>
-        <h2 id="pin-h">Pesan sematan grup</h2>
-        <button type="button" className="btn sm" onClick={copy}>Salin pesan</button>
+        <h2 id="pin-h">{t('admin_ch_pin_h')}</h2>
+        <button type="button" className="btn sm" onClick={copy}>{t('admin_ch_copy_pin')}</button>
       </header>
       <p className="meta ch-pin-note" id="pin-d">
-        Jadwal, tautan halaman cohort dan aturan grup.{c.status === 'forming' ? ' Tanggal tiap hari muncul setelah cohort dimulai.' : ''}
+        {t('admin_ch_pin_note')}{c.status === 'forming' ? t('admin_ch_pin_forming') : ''}
       </p>
       <textarea ref={area} className="input ch-pin" readOnly value={msg} rows={msg.split('\n').length} aria-labelledby="pin-h" aria-describedby="pin-d" />
     </section>
@@ -1393,8 +1424,9 @@ function PinnedPanel({ c }: { c: CohortDetail }) {
 }
 
 function DetailSkeleton() {
+  const t = useT()
   return (
-    <section className="panel" aria-busy="true" aria-label="Memuat cohort">
+    <section className="panel" aria-busy="true" aria-label={t('admin_ch_loading')}>
       <Skel w={220} h={24} />
       <div style={{ marginTop: 'var(--s-3)' }}><Skel w="100%" h={16} /></div>
       <div style={{ marginTop: 'var(--s-4)' }}>{[0, 1, 2].map((i) => <div className="row-line" key={i}><Skel w={32} h={32} /><span className="grow"><Skel w={160} /><br /><Skel w={120} h={12} /></span></div>)}</div>

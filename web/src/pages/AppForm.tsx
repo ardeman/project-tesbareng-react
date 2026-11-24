@@ -7,10 +7,36 @@ import { useAuth } from '../lib/auth'
 import { api, errorText, restoreApp, softDeleteApp, updateApp, useApp, useBuilds, usePublicProfile, type AppInput } from '../lib/data'
 import { COMMUNITY_GROUP, EMAIL_LIST_MIN_TESTING } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
-import { appStatusLabel, fmtDate, isoDate, TARGET_TESTERS } from '../lib/progress'
+import { fmtDate, isoDate, TARGET_TESTERS } from '../lib/progress'
+import { useT } from '../lib/i18n'
 import type { AppDoc, AppStatus, TesterMethod } from '../lib/types'
 import { useValidation } from '../lib/useValidation'
-import { LIMITS, OPT_IN_PREFIX, validateApp } from '../lib/validate'
+import { LIMITS, OPT_IN_PREFIX, STORE_PREFIX, type Errors } from '../lib/validate'
+
+function validateAppI18n(
+  v: AppInput,
+  opts: { creating: boolean; groupConfirmed: boolean; released?: boolean },
+  t: ReturnType<typeof useT>,
+): Errors {
+  const e: Errors = {}
+  const released = !!opts.released
+  if (!v.name.trim()) e.name = t('form_val_name_required')
+  else if (v.name.trim().length > LIMITS.name) e.name = t('form_val_max_chars', { n: LIMITS.name })
+  if (!v.description.trim()) e.description = t('form_val_description_required')
+  else if (v.description.trim().length > LIMITS.description) e.description = t('form_val_max_chars', { n: LIMITS.description })
+  if (!released) {
+    if (!v.optInUrl.trim().startsWith(OPT_IN_PREFIX) || v.optInUrl.trim().length <= OPT_IN_PREFIX.length)
+      e.optInUrl = t('form_val_optin_required', { prefix: OPT_IN_PREFIX })
+  } else if (v.optInUrl.trim() && (!v.optInUrl.trim().startsWith(OPT_IN_PREFIX) || v.optInUrl.trim().length <= OPT_IN_PREFIX.length)) {
+    e.optInUrl = t('form_val_optin_optional', { prefix: OPT_IN_PREFIX })
+  }
+  if (!v.storeUrl?.trim()) e.storeUrl = t('form_val_store_required')
+  else if (!v.storeUrl.trim().startsWith(STORE_PREFIX)) e.storeUrl = t('form_val_store_prefix', { prefix: STORE_PREFIX })
+  if (v.packageName?.trim() && !/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/.test(v.packageName.trim())) e.packageName = t('form_val_package_format')
+  if ((v.feedbackGuide?.trim().length ?? 0) > LIMITS.feedbackGuide) e.feedbackGuide = t('form_val_max_chars', { n: LIMITS.feedbackGuide })
+  if (opts.creating && !released && !opts.groupConfirmed) e.groupConfirmed = t('form_val_group_confirm')
+  return e
+}
 
 /** Field ids in the order they appear on screen: submit focuses the first one in error. */
 const FIELD_ORDER = ['name', 'description', 'packageName', 'optInUrl', 'storeUrl', 'testStartDate', 'feedbackGuide', 'groupConfirmed'] as const
@@ -19,27 +45,30 @@ const UNDO_MS = 8000
 const EMPTY: AppInput = { name: '', description: '', optInUrl: '', storeUrl: '', packageName: '', testStartDate: '', feedbackGuide: '' }
 
 export function AppForm() {
+  const t = useT()
   const { id } = useParams()
   const { user, ready, isAdmin, signIn } = useAuth()
   const toast = useToast()
   const app = useApp(id)
-  usePageMeta(id ? (app.data && !app.data.deleted ? `Ubah ${app.data.name}` : 'Ubah aplikasi') : 'Tambah aplikasi')
+  usePageMeta(id
+    ? (app.data && !app.data.deleted ? t('form_meta_edit_named', { name: app.data.name }) : t('form_meta_edit'))
+    : t('form_meta_add'))
 
   if (!ready || (id && app.loading)) return <FormSkeleton />
   if (!user) {
     return (
       <div className="state-page">
-        <h1 className="page-title">{id ? 'Edit aplikasi' : 'Tambah aplikasi'}</h1>
-        <p>Masuk dengan akun Google yang Anda pakai di Play Console.</p>
-        <button className="btn primary" onClick={() => signIn().catch((e) => toast(errorText(e)))}>Masuk dengan Google</button>
+        <h1 className="page-title">{id ? t('form_title_edit') : t('form_title_add')}</h1>
+        <p>{t('form_sign_in_body')}</p>
+        <button className="btn primary" onClick={() => signIn().catch((e) => toast(errorText(e, t)))}>{t('sign_in_google')}</button>
       </div>
     )
   }
   if (id) {
-    if (app.error) return <ErrorBox text="Aplikasi gagal dimuat. Periksa koneksi Anda, lalu coba lagi." onRetry={app.retry} />
-    if (!app.data || app.data.deleted) return <NotFound what="Aplikasi" />
+    if (app.error) return <ErrorBox text={t('form_load_error')} onRetry={app.retry} />
+    if (!app.data || app.data.deleted) return <NotFound what={t('nav_apps')} />
     if (app.data.creatorUid !== user.uid && !isAdmin) {
-      return <ErrorBox text={`Hanya pembuat aplikasi ini yang bisa mengubahnya. Kembali ke halaman aplikasi untuk melihatnya.`} />
+      return <ErrorBox text={t('form_edit_forbidden')} />
     }
     return <Form key={app.data.id} existing={app.data} />
   }
@@ -47,6 +76,7 @@ export function AppForm() {
 }
 
 function Form({ existing }: { existing?: AppDoc }) {
+  const t = useT()
   const navigate = useNavigate()
   const toast = useToast()
   const creating = !existing
@@ -89,16 +119,16 @@ function Form({ existing }: { existing?: AppDoc }) {
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
   const guard = (e: MouseEvent) => {
-    if (dirty && !leaving.current && !window.confirm('Perubahan belum disimpan. Tinggalkan halaman ini?')) e.preventDefault()
+    if (dirty && !leaving.current && !window.confirm(t('form_leave_unsaved'))) e.preventDefault()
   }
 
   const errorsNow = useMemo(
-    () => validateApp(v, {
+    () => validateAppI18n(v, {
       creating: creating && method === 'google_group' && !isReleased,
       groupConfirmed: group,
       released: isReleased,
-    }),
-    [v, creating, group, method, isReleased],
+    }, t),
+    [v, creating, group, method, isReleased, t],
   )
   const { errors, blur, check } = useValidation(errorsNow, FIELD_ORDER)
 
@@ -129,8 +159,8 @@ function Form({ existing }: { existing?: AppDoc }) {
         })
         leaving.current = true
         toast(isReleased
-          ? `${clean.name} terdaftar sebagai app rilis. Ajukan ke cohort untuk minta ulasan publik.`
-          : `${clean.name} terdaftar. Bagikan halamannya ke grup.`)
+          ? t('form_toast_registered_live', { name: clean.name })
+          : t('form_toast_registered_closed', { name: clean.name }))
         navigate(`/apps/${appId}`)
       } else {
         await updateApp(existing.id, {
@@ -140,10 +170,10 @@ function Form({ existing }: { existing?: AppDoc }) {
           testerSlots: slots,
         })
         leaving.current = true
-        toast('Perubahan disimpan.')
+        toast(t('form_toast_saved'))
         navigate(`/apps/${existing.id}`)
       }
-    } catch (err) { setFail(errorText(err)) } finally { setBusy(false) }
+    } catch (err) { setFail(errorText(err, t)) } finally { setBusy(false) }
   }
 
   // ADR-009 §7: delete at once, undo from the toast. The creator may restore within 10 minutes (restore_app).
@@ -156,14 +186,14 @@ function Form({ existing }: { existing?: AppDoc }) {
       leaving.current = true
       navigate('/apps')
       toast({
-        text: `${name} dihapus.`,
+        text: t('form_toast_deleted', { name }),
         duration: UNDO_MS,
         action: {
-          label: 'Urungkan',
+          label: t('form_undo'),
           onClick: () => {
             restoreApp(id)
-              .then(() => { toast(`${name} dipulihkan.`); navigate(`/apps/${id}`) })
-              .catch((err) => toast(failToast(err, 'Hubungi admin untuk memulihkannya.')))
+              .then(() => { toast(t('form_toast_restored', { name })); navigate(`/apps/${id}`) })
+              .catch((err) => toast(failToast(err, t('form_toast_restore_fail'))))
           },
         },
       })
@@ -192,30 +222,28 @@ function Form({ existing }: { existing?: AppDoc }) {
   return (
     <>
     <form className="form-wrap" onSubmit={submit} noValidate>
-      <Link to={existing ? `/apps/${existing.id}` : '/apps'} className="crumb" onClick={guard}><IconBack />{existing ? existing.name : 'Aplikasi'}</Link>
+      <Link to={existing ? `/apps/${existing.id}` : '/apps'} className="crumb" onClick={guard}><IconBack />{existing ? existing.name : t('nav_apps')}</Link>
       <div className="title-row">
         <div>
-          <h1>{creating ? 'Tambah aplikasi' : 'Edit aplikasi'}</h1>
+          <h1>{creating ? t('form_title_add') : t('form_title_edit')}</h1>
           <p className="sub">{creating
-            ? (isReleased
-              ? 'App rilis: anggota memasang dari Play Store dan menulis ulasan publik. Bisa diajukan ke cohort.'
-              : 'Aplikasi langsung tampil di daftar dengan status Mencari tester.')
-            : `Didaftarkan ${fmtDate(existing.createdAt)}.`}</p>
+            ? (isReleased ? t('form_sub_create_live') : t('form_sub_create_closed'))
+            : t('form_sub_registered', { date: fmtDate(existing.createdAt) })}</p>
         </div>
       </div>
 
       <section className="form-section">
-        <div className="label-col"><h2>Aplikasinya</h2><p>Yang dilihat anggota di daftar dan di halaman aplikasi.</p></div>
+        <div className="label-col"><h2>{t('form_section_app_h')}</h2><p>{t('form_section_app_p')}</p></div>
         <div className="form-panel">
-          {field('name', 'Nama aplikasi', <input className="input" maxLength={LIMITS.name} value={v.name} onChange={set('name')} {...aria('name')} />, undefined, LIMITS.name)}
-          {field('description', 'Deskripsi singkat', <textarea className="input" rows={3} maxLength={LIMITS.description} value={v.description} onChange={set('description')} {...aria('description', true)} />, 'Untuk siapa aplikasinya dan apa gunanya.', LIMITS.description)}
-          {field('packageName', 'Nama paket (opsional)', <input className="input" placeholder="id.namadev.aplikasi" value={v.packageName} onChange={set('packageName')} {...aria('packageName', true)} />, 'Mencegah aplikasi yang sama didaftarkan dua kali.')}
+          {field('name', t('form_label_name'), <input className="input" maxLength={LIMITS.name} value={v.name} onChange={set('name')} {...aria('name')} />, undefined, LIMITS.name)}
+          {field('description', t('form_label_description'), <textarea className="input" rows={3} maxLength={LIMITS.description} value={v.description} onChange={set('description')} {...aria('description', true)} />, t('form_hint_description'), LIMITS.description)}
+          {field('packageName', `${t('form_label_package')}${t('field_optional')}`, <input className="input" placeholder={t('form_package_placeholder')} value={v.packageName} onChange={set('packageName')} {...aria('packageName', true)} />, t('form_hint_package'))}
           {creating && (
             <label className="check" style={{ padding: 0 }}>
               <input type="checkbox" checked={released} onChange={(e) => setReleased(e.target.checked)} />
               <span>
-                <span className="t">App sudah rilis production</span>
-                <span className="d">Untuk minta ulasan publik di Play Store lewat cohort. Tidak perlu link opt-in uji tertutup.</span>
+                <span className="t">{t('form_live_check_t')}</span>
+                <span className="d">{t('form_live_check_d')}</span>
               </span>
             </label>
           )}
@@ -224,36 +252,30 @@ function Form({ existing }: { existing?: AppDoc }) {
 
       <section className="form-section">
         <div className="label-col">
-          <h2>Link Google Play</h2>
-          <p>{isReleased
-            ? 'Halaman Play Store wajib — di situlah tester memasang app dan menulis ulasan publik.'
-            : 'Link opt-in ada di Play Console → Uji tertutup → Penguji → “Gabung di web”.'}</p>
+          <h2>{t('form_section_play_h')}</h2>
+          <p>{isReleased ? t('form_section_play_p_live') : t('form_section_play_p_closed')}</p>
         </div>
         <div className="form-panel">
-          {!isReleased && field('optInUrl', 'Link opt-in uji tertutup', <input className="input" type="url" inputMode="url" placeholder={`${OPT_IN_PREFIX}nama.paket`} value={v.optInUrl} onChange={set('optInUrl')} {...aria('optInUrl', true)} />, `Diawali ${OPT_IN_PREFIX}`)}
-          {field('storeUrl', 'Link halaman Play Store', <input className="input" type="url" inputMode="url" placeholder="https://play.google.com/store/apps/details?id=…" value={v.storeUrl} onChange={set('storeUrl')} {...aria('storeUrl', true)} />, isReleased
-            ? 'Wajib. Tester dibuka ke halaman ini untuk memasang dan menulis ulasan yang tampil publik.'
-            : 'Wajib. Setelah gabung grup, tester dibuka ke halaman ini (terutama di HP) untuk memasang app dan menulis feedback.')}
+          {!isReleased && field('optInUrl', t('form_label_optin'), <input className="input" type="url" inputMode="url" placeholder={`${OPT_IN_PREFIX}nama.paket`} value={v.optInUrl} onChange={set('optInUrl')} {...aria('optInUrl', true)} />, t('form_hint_optin_prefix', { prefix: OPT_IN_PREFIX }))}
+          {field('storeUrl', t('form_label_store'), <input className="input" type="url" inputMode="url" placeholder={t('form_store_placeholder')} value={v.storeUrl} onChange={set('storeUrl')} {...aria('storeUrl', true)} />, isReleased ? t('form_hint_store_live') : t('form_hint_store_closed'))}
         </div>
       </section>
 
       <section className="form-section">
         <div className="label-col">
-          <h2>{isReleased ? 'Status & ulasan' : 'Pengujian'}</h2>
-          <p>{isReleased
-            ? 'App rilis memakai status Rilis produksi. Build opsional; fokusnya ulasan publik di Play.'
-            : 'Isi tanggal mulai saat jalur uji tertutup Anda aktif. Build sejak tanggal ini dihitung sebagai build selama uji.'}</p>
+          <h2>{isReleased ? t('form_section_test_h_live') : t('form_section_test_h_closed')}</h2>
+          <p>{isReleased ? t('form_section_test_p_live') : t('form_section_test_p_closed')}</p>
         </div>
         <div className="form-panel">
-          {!isReleased && field('testStartDate', 'Tanggal mulai uji (opsional)', <input className="input" type="date" value={v.testStartDate} onChange={set('testStartDate')} {...aria('testStartDate')} />)}
+          {!isReleased && field('testStartDate', `${t('form_label_test_start')}${t('field_optional')}`, <input className="input" type="date" value={v.testStartDate} onChange={set('testStartDate')} {...aria('testStartDate')} />)}
           {!creating && (
             <div className="field">
-              <label htmlFor="f-status">Status</label>
+              <label htmlFor="f-status">{t('form_label_status')}</label>
               <select id="f-status" className="input" value={status} onChange={(e) => setStatus(e.target.value as AppStatus)}>
-                {(Object.keys(appStatusLabel) as AppStatus[]).map((s) => <option key={s} value={s}>{appStatusLabel[s]}</option>)}
+                {(['recruiting', 'testing', 'applied', 'live'] as AppStatus[]).map((s) => <option key={s} value={s}>{t(`app_status_${s}`)}</option>)}
               </select>
               {status === 'live' && (
-                <span className="hint">Rilis produksi: tester memasang dari Play Store dan menulis ulasan publik. Bisa diajukan ke cohort.</span>
+                <span className="hint">{t('form_hint_status_live')}</span>
               )}
             </div>
           )}
@@ -262,79 +284,79 @@ function Form({ existing }: { existing?: AppDoc }) {
 
       <section className="form-section">
         <div className="label-col">
-          <h2>Panduan feedback</h2>
-          <p>Tulis sebagai pertanyaan atau hal yang perlu dicoba, bukan teks ulasan siap salin. Ulasan identik dari banyak akun bisa dianggap tidak asli oleh Google.</p>
+          <h2>{t('form_section_feedback_h')}</h2>
+          <p>{t('form_section_feedback_p')}</p>
         </div>
         <div className="form-panel">
           {field(
             'feedbackGuide',
-            'Yang ingin Anda uji (opsional)',
+            `${t('form_label_feedback')}${t('field_optional')}`,
             <textarea
               className="input"
               rows={5}
               maxLength={LIMITS.feedbackGuide}
-              placeholder={"Gunakan tanda strip (-) dan Enter per baris:\n- Coba alur login dengan akun Google\n- Apakah tombol di layar kecil responsif?\n- Coba navigasi menu utama"}
+              placeholder={t('form_feedback_placeholder')}
               value={v.feedbackGuide}
               onChange={set('feedbackGuide')}
               {...aria('feedbackGuide', true)}
             />,
-            'Tips: Gunakan tanda minus (-) dan Enter per baris agar otomatis menjadi daftar checklist misi untuk tester.',
+            t('form_hint_feedback'),
             LIMITS.feedbackGuide
           )}
-          <div className="preview-card" role="group" aria-label="Pratinjau untuk tester">
-            <span className="small muted">Yang dilihat tester di panduan “Cara dapat app ini”:</span>
-            <span className="t">Yang ingin diuji creator</span>
-            <p className="guide-quote">{v.feedbackGuide?.trim() || <span className="muted">Creator belum menulis panduan feedback.</span>}</p>
+          <div className="preview-card" role="group" aria-label={t('form_preview_label')}>
+            <span className="small muted">{t('form_preview_lede')}</span>
+            <span className="t">{t('form_preview_title')}</span>
+            <p className="guide-quote">{v.feedbackGuide?.trim() || <span className="muted">{t('form_preview_empty')}</span>}</p>
           </div>
         </div>
       </section>
 
       <section className="form-section">
         <div className="label-col">
-          <h2>{isReleased ? 'Pengulas' : 'Tester'}</h2>
-          <p>{isReleased
-            ? 'Berapa anggota yang Anda minta menulis ulasan publik di Play Store (lewat cohort atau berbagi link).'
-            : 'Berapa tester yang Anda butuhkan dari komunitas, dan cara mereka ditambahkan. Di Play Console, satu jalur uji tertutup memakai Google Groups atau daftar email, tidak bisa keduanya.'}</p>
+          <h2>{isReleased ? t('form_section_who_h_live') : t('form_section_who_h_closed')}</h2>
+          <p>{isReleased ? t('form_section_who_p_live') : t('form_section_who_p_closed')}</p>
         </div>
         <div className="form-panel">
           <div className="field">
-            <label htmlFor="f-slots">Butuh berapa {isReleased ? 'pengulas' : 'tester'} dari TesBareng?</label>
+            <label htmlFor="f-slots">{isReleased ? t('form_slots_label_live') : t('form_slots_label_closed')}</label>
             <select id="f-slots" className="input num" style={{ maxWidth: '12rem' }} value={slots} onChange={(e) => setSlots(Number(e.target.value))} aria-describedby="f-slots-hint">
-              {Array.from({ length: TARGET_TESTERS }, (_, i) => TARGET_TESTERS - i).map((n) => <option key={n} value={n}>{n} {isReleased ? 'pengulas' : 'tester'}</option>)}
+              {Array.from({ length: TARGET_TESTERS }, (_, i) => TARGET_TESTERS - i).map((n) => (
+                <option key={n} value={n}>{n} {isReleased ? t('form_slots_option_live') : t('form_slots_option_closed')}</option>
+              ))}
             </select>
             <span className="hint" id="f-slots-hint">{isReleased
-              ? 'Di cohort, app Anda mendapat jumlah ini (+ cadangan) dan Anda mengulas app anggota lain sebanyak itu juga.'
-              : `Google butuh ${TARGET_TESTERS} tester total selama 14 hari. Kalau sebagian sudah ada dari grup atau daftar Anda yang lain, isi sisanya saja.`}{existing && !isReleased ? ' Mengubahnya tidak memindahkan penugasan cohort yang sudah berjalan.' : ''}</span>
+              ? t('form_slots_hint_live')
+              : t('form_slots_hint_closed', { target: TARGET_TESTERS })}{existing && !isReleased ? t('form_slots_hint_edit_note') : ''}</span>
           </div>
           {!isReleased && (
           <fieldset style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }} aria-describedby={groupStep ? undefined : 'f-method-hint'}>
-            <legend className="sr-only">Cara tester ditambahkan</legend>
+            <legend className="sr-only">{t('form_method_legend')}</legend>
             <label className="check">
               <input type="radio" name="tester-method" value="google_group" checked={method === 'google_group'} onChange={() => setMethod('google_group')} />
-              <span><span className="t">Google Group komunitas (disarankan)</span>
-                <span className="d">Anggota gabung {COMMUNITY_GROUP}, lalu buka halaman Play Store app Anda untuk memasang, dan mencatat di TesBareng. Email mereka tetap tersamar.</span></span>
+              <span><span className="t">{t('form_method_group_t')}</span>
+                <span className="d">{t('form_method_group_d', { group: COMMUNITY_GROUP })}</span></span>
             </label>
             <label className="check">
               <input type="radio" name="tester-method" value="email_list" checked={method === 'email_list'} onChange={() => setMethod('email_list')} disabled={emailListLocked} aria-describedby={emailListLocked ? 'f-email-lock' : undefined} />
-              <span><span className="t">Daftar email</span>
-                <span className="d">Untuk jalur yang sudah memakai daftar email. Tester meminta ditambahkan dan setuju emailnya terlihat oleh Anda; Anda menempelkannya di Play Console, lalu menandai “Sudah ditambahkan”.</span>
+              <span><span className="t">{t('form_method_email_t')}</span>
+                <span className="d">{t('form_method_email_d')}</span>
                 {emailListLocked && (
                   <span className="d lock" id="f-email-lock">
                     {creatorStats.data === undefined
-                      ? 'Memeriksa jumlah aplikasi yang Anda tes…'
-                      : <>Terkunci. Terbuka setelah Anda menguji <span className="num">{EMAIL_LIST_MIN_TESTING}</span> aplikasi anggota lain (sekarang <span className="num">{testingCount}</span>). <Link to="/apps">Cari aplikasi untuk dites</Link></>}
+                      ? t('form_email_lock_loading')
+                      : <>{t('form_email_lock_body', { min: EMAIL_LIST_MIN_TESTING, count: testingCount })} <Link to="/apps">{t('form_email_lock_link')}</Link></>}
                   </span>
                 )}</span>
             </label>
             {/* The group checkbox below carries the full Play Console path; say it once. */}
-            {!groupStep && <span className="hint" id="f-method-hint">Play Console → Uji tertutup → Penguji.</span>}
+            {!groupStep && <span className="hint" id="f-method-hint">{t('form_method_hint')}</span>}
           </fieldset>
           )}
           {groupStep && (
             <label className="check" style={{ padding: 0 }}>
               <input id="f-groupConfirmed" type="checkbox" checked={group} onChange={(e) => setGroup(e.target.checked)} onBlur={blur('groupConfirmed')} aria-describedby={`f-group-hint${errors.groupConfirmed ? ' f-groupConfirmed-err' : ''}`} aria-invalid={!!errors.groupConfirmed || undefined} />
-              <span><span className="t">Saya sudah menambahkan {COMMUNITY_GROUP} sebagai daftar penguji di jalur uji tertutup.</span>
-                <span className="d" id="f-group-hint">Play Console → Uji tertutup → Penguji → Google Groups.</span>
+              <span><span className="t">{t('form_group_confirm_t', { group: COMMUNITY_GROUP })}</span>
+                <span className="d" id="f-group-hint">{t('form_group_confirm_d')}</span>
                 {errors.groupConfirmed && <span className="d err-text" id="f-groupConfirmed-err" role="alert">{errors.groupConfirmed}</span>}</span>
             </label>
           )}
@@ -345,14 +367,14 @@ function Form({ existing }: { existing?: AppDoc }) {
 
       {fail && <ErrorBox text={fail} />}
       <div className="form-foot">
-        <Link className="btn" to={existing ? `/apps/${existing.id}` : '/apps'} onClick={guard}>Batal</Link>
-        <button className="btn primary" disabled={busy}>{busy ? 'Menyimpan…' : creating ? 'Daftarkan aplikasi' : 'Simpan perubahan'}</button>
+        <Link className="btn" to={existing ? `/apps/${existing.id}` : '/apps'} onClick={guard}>{t('cancel')}</Link>
+        <button className="btn primary" disabled={busy}>{busy ? t('saving') : creating ? t('form_submit_add') : t('form_submit_save')}</button>
       </div>
 
       {existing && (
         <section className="form-section danger-zone">
-          <div className="label-col"><h2>Hapus aplikasi</h2><p>Aplikasi disembunyikan dari daftar. Anda punya 8 detik untuk menekan Urungkan, dan 10 menit untuk memulihkannya sendiri; setelah itu hanya admin yang bisa. Riwayat tester tetap tersimpan.</p></div>
-          <div><button type="button" className="btn danger" disabled={deleting} onClick={remove}>{deleting ? 'Menghapus…' : `Hapus ${existing.name}`}</button></div>
+          <div className="label-col"><h2>{t('form_section_delete_h')}</h2><p>{t('form_section_delete_p')}</p></div>
+          <div><button type="button" className="btn danger" disabled={deleting} onClick={remove}>{deleting ? t('form_deleting') : t('form_delete_btn', { name: existing.name })}</button></div>
         </section>
       )}
     </form>
@@ -365,6 +387,7 @@ function Form({ existing }: { existing?: AppDoc }) {
 const FEW_BUILDS = 4
 
 function BuildsSection({ app, onAdd }: { app: AppDoc; onAdd: () => void }) {
+  const t = useT()
   const builds = useBuilds(app.id)
   const [all, setAll] = useState(false)
   const sorted = useMemo(() => [...builds.data].sort((a, b) => b.uploadedAt - a.uploadedAt), [builds.data])
@@ -372,11 +395,11 @@ function BuildsSection({ app, onAdd }: { app: AppDoc; onAdd: () => void }) {
   return (
     <section className="form-section">
       <div className="label-col">
-        <h2>Log build</h2>
-        <p>Catat setiap unggahan ke jalur uji tertutup. Tester melihat pengumuman build baru selama 3 hari.</p>
+        <h2>{t('form_builds_h')}</h2>
+        <p>{t('form_builds_p')}</p>
       </div>
       <div className="form-panel">
-        {builds.error ? <ErrorBox text="Log build gagal dimuat. Coba lagi sebentar lagi." onRetry={builds.retry} /> : builds.loading ? <Skel w={200} /> : sorted.length === 0 ? <p className="muted">Belum ada build yang dicatat. Tekan Catat build baru setelah Anda mengunggah versi ke Play Console.</p> : (
+        {builds.error ? <ErrorBox text={t('form_builds_error')} onRetry={builds.retry} /> : builds.loading ? <Skel w={200} /> : sorted.length === 0 ? <p className="muted">{t('form_builds_empty')}</p> : (
           <ol id="form-build-list">
             {shown.map((b) => (
               <li className="row-line" key={b.id}>
@@ -387,7 +410,7 @@ function BuildsSection({ app, onAdd }: { app: AppDoc; onAdd: () => void }) {
           </ol>
         )}
         {sorted.length > FEW_BUILDS && <ShowAll open={all} total={sorted.length} onToggle={() => setAll((x) => !x)} controls="form-build-list" />}
-        <button type="button" className="btn" style={{ justifySelf: 'start' }} onClick={onAdd}><IconPlus />Catat build baru</button>
+        <button type="button" className="btn" style={{ justifySelf: 'start' }} onClick={onAdd}><IconPlus />{t('form_builds_add')}</button>
       </div>
     </section>
   )

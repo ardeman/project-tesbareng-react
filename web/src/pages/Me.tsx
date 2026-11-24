@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge, Bar, Chip, Empty, ErrorBox, FeedbackChip, Seats, Skel, StatusPill, TierProgress, useToast } from '../components/bits'
-import { IconPlus } from '../components/icons'
+import { IconGoogle, IconPlus } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
@@ -9,19 +9,22 @@ import { errorText, setEmailReminders, usePublicProfile } from '../lib/data'
 import { useMyObligations } from '../lib/cohorts'
 import { useMyTodos } from '../lib/todos'
 import { isLiveApp } from '../lib/joinProgress'
+import { clearPlayUnreachable, isPlayUnreachable } from '../lib/playAccess'
 import { daysActive, relDay, openSeats, TARGET_DAYS } from '../lib/progress'
+import { useT } from '../lib/i18n'
 
 export function Me() {
   const { user, isAdmin, ready, signIn } = useAuth()
   const toast = useToast()
-  usePageMeta('Tugas saya', 'Aplikasi yang sedang Anda uji, feedback yang belum dikirim, dan build baru yang menunggu diuji ulang.')
+  const t = useT()
+  usePageMeta(t('me_meta_title'), t('me_meta_desc'))
   if (!ready) return <Skel w={200} h={32} />
   if (!user) {
     return (
       <div className="state-page">
-        <h1 className="page-title">Tugas saya</h1>
-        <p>Masuk untuk melihat aplikasi yang sedang Anda uji, feedback yang belum dikirim, dan build baru yang menunggu diuji ulang.</p>
-        <button className="btn primary" onClick={() => signIn().catch((e) => toast(errorText(e)))}>Masuk dengan Google</button>
+        <h1 className="page-title">{t('me_meta_title')}</h1>
+        <p>{t('me_sign_in_body')}</p>
+        <button type="button" className="btn primary google-signin" onClick={() => signIn().catch((e) => toast(errorText(e, t)))}><IconGoogle />{t('sign_in_google')}</button>
       </div>
     )
   }
@@ -29,7 +32,10 @@ export function Me() {
 }
 
 function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
+  const t = useT()
   const { entries, apps, myApps, requests, testing, todos, total, loading } = useMyTodos(uid, isAdmin)
+  // Soft Play-unreachable flags live in localStorage; bump to re-read after clear.
+  const [playTick, setPlayTick] = useState(0)
   const profile = usePublicProfile(uid)
   const obligations = useMyObligations(uid)
 
@@ -43,8 +49,8 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
 
   const suggestList = (
     <>
-            <h3 className="subhead">Butuh tester sekarang</h3>
-              {apps.loading ? <RowsSkeleton /> : suggestions.length === 0 ? <p className="muted" style={{ marginTop: 'var(--s-2)' }}>Semua aplikasi yang mencari tester sudah Anda uji.</p> : (
+            <h3 className="subhead">{t('me_need_testers_h')}</h3>
+              {apps.loading ? <RowsSkeleton /> : suggestions.length === 0 ? <p className="muted" style={{ marginTop: 'var(--s-2)' }}>{t('me_need_testers_all')}</p> : (
                 <ul>
                   {suggestions.map((a) => (
                     <li className="row-line" key={a.id}>
@@ -55,38 +61,46 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                   ))}
                 </ul>
               )}
-  
+
     </>
   )
-  const unjoined = todos.filter((t) => t.kind === 'join' || t.kind === 'listed').length
-  const emailWait = todos.filter((t) => t.kind === 'emails').reduce((n, t) => n + (t.count ?? 0), 0)
-  const owe = todos.filter((t) => t.kind === 'feedback').length
-  const builds = todos.filter((t) => t.kind === 'build').length
+  const unjoined = todos.filter((t0) => t0.kind === 'join' || t0.kind === 'listed').length
+  const emailWait = todos.filter((t0) => t0.kind === 'emails').reduce((n, t0) => n + (t0.count ?? 0), 0)
+  const owe = todos.filter((t0) => t0.kind === 'feedback').length
+  const builds = todos.filter((t0) => t0.kind === 'build').length
   const asks = requests.data.reduce((n, r) => n + r.count, 0)
   const p = profile.data
   const listed = myApps.data.length
   const nudge = p && listed > 0 && p.testingCount < listed
 
+  const summaryParts = [
+    unjoined > 0 && t('me_summary_unjoined', { n: unjoined }),
+    owe > 0 && t('me_summary_feedback', { n: owe }),
+    builds > 0 && t('me_summary_builds', { n: builds }),
+    emailWait > 0 && t('me_summary_emails', { n: emailWait }),
+    asks > 0 && t('me_summary_requests', { n: asks }),
+  ].filter(Boolean)
+
   return (
     <>
       <div className="title-row">
         <div>
-          <h1>Tugas saya</h1>
+          <h1>{t('me_meta_title')}</h1>
           <p className="sub">
             {loading ? <Skel w={340} h={16} /> : total === 0
-              ? testing.length === 0 ? 'Anda belum menguji aplikasi apa pun.' : 'Tidak ada tugas tertunda. Semua aplikasi yang Anda uji sudah dapat feedback.'
-              : <><b>{[unjoined > 0 && `${unjoined} belum opt-in`, owe > 0 && `${owe} feedback belum dikirim`, builds > 0 && `${builds} build baru menunggu diuji ulang`, emailWait > 0 && `${emailWait} email tester menunggu ditambahkan`, asks > 0 && `${asks} permintaan cohort menunggu keputusan`].filter(Boolean).join(', ')}</b>.</>}
+              ? testing.length === 0 ? t('me_sub_none_never') : t('me_sub_none_caught_up')
+              : <><b>{summaryParts.join(', ')}</b>.</>}
           </p>
         </div>
-        <div className="actions"><Link className="btn" to="/apps">Cari aplikasi yang butuh tester</Link></div>
+        <div className="actions"><Link className="btn" to="/apps">{t('me_find_apps')}</Link></div>
       </div>
 
-      {(entries.error || apps.error) && <ErrorBox text="Data Anda gagal dimuat." onRetry={() => { entries.retry(); apps.retry() }} />}
+      {(entries.error || apps.error) && <ErrorBox text={t('me_load_error')} onRetry={() => { entries.retry(); apps.retry() }} />}
 
       {!obligations.error && obligations.data.filter((o) => o.isBehind).length > 0 && (
         <section className="panel" aria-labelledby="cohort-oblig-h" style={{ marginBottom: 'var(--s-4)' }}>
           <header>
-            <h2 id="cohort-oblig-h">Kewajiban cohort tertinggal</h2>
+            <h2 id="cohort-oblig-h">{t('me_oblig_h')}</h2>
             <Chip tone="cabai" glyph="!">{obligations.data.filter((o) => o.isBehind).length}</Chip>
           </header>
           <ul>
@@ -94,9 +108,9 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
               <li className="row-line" key={`${o.cohortId}:${o.userId}`}>
                 <span className="grow cell-2">
                   <Link to={`/cohorts/${o.cohortId}`}><b>{o.cohortName}</b></Link>
-                  <span className="num">{o.behindCount} slot belum opt-in dalam batas waktu</span>
+                  <span className="num">{o.owesOptIn ? t('me_oblig_slots', { n: o.optInMissing }) : t('me_oblig_milestones')}</span>
                 </span>
-                <Chip tone="cabai" glyph="!">Tertinggal</Chip>
+                <Chip tone="cabai" glyph="!">{t('me_oblig_behind')}</Chip>
               </li>
             ))}
           </ul>
@@ -106,71 +120,81 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
       <div className="grid">
         <div className="span-7 col-fill stretch">
           <section className="panel" aria-labelledby="todo-h">
-            <header><h2 id="todo-h">Perlu dikerjakan</h2><span className="meta num">{loading ? '' : `${total} tugas`}</span></header>
+            <header><h2 id="todo-h">{t('me_todo_h')}</h2><span className="meta num">{loading ? '' : t('me_todo_count', { n: total })}</span></header>
             {loading ? <RowsSkeleton /> : total === 0 ? (
-              // ADR-001 §2.6: spot illustration for the empty Tugas saya state goes in Empty's `art` slot.
               testing.length === 0
                 ? (
-                  <Empty title="Mulai dari dua langkah.">
+                  <Empty title={t('me_empty_start_title')}>
                     <ol className="first-run">
-                      <li><a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">Pilih akun &amp; buka Google Group<span className="sr-only"> (tab baru)</span></a> — untuk app uji tertutup, akun yang sama dengan Play Store. App sudah rilis tidak perlu langkah ini.</li>
-                      <li>Pilih aplikasi di <Link to="/apps">daftar aplikasi</Link>. Ikuti panduan di halaman app: Play Store → pasang → catat (lalu ulasan publik kalau app sudah rilis). Tugasnya muncul di sini.</li>
+                      <li><a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{t('me_empty_start_1')}<span className="sr-only">{t('me_empty_start_1_sr')}</span></a>{t('me_empty_start_1_rest')}</li>
+                      <li>{t('me_empty_start_2_pre')}<Link to="/apps">{t('me_empty_start_2_link')}</Link>{t('me_empty_start_2_post')}</li>
                     </ol>
                   </Empty>
                 )
-                : <Empty title="Beres, tidak ada tugas tertunda."><p>Cek lagi besok, atau bantu aplikasi lain yang masih butuh tester.</p></Empty>
+                : <Empty title={t('me_empty_done_title')}><p>{t('me_empty_done_body')}</p></Empty>
             ) : (
               <ul>
                 {requests.data.map((r, i) => (
                   <li className="row-line" key={`requests:${r.cohortId}`}>
                     <span className="grow cell-2">
                       <Link to={`/cohorts/${r.cohortId}`}><b>{r.cohortName}</b></Link>
-                      <span className="num">{r.count} permintaan masuk menunggu disetujui atau ditolak.</span>
+                      <span className="num">{t('me_request_waiting', { n: r.count })}</span>
                     </span>
-                    <Link className={`btn sm${i === 0 ? ' primary' : ''}`} to={`/admin?bagian=cohort&cohort=${r.cohortId}`}>Tinjau permintaan</Link>
+                    <Link className={`btn sm${i === 0 ? ' primary' : ''}`} to={`/admin?bagian=cohort&cohort=${r.cohortId}`}>{t('me_review_requests')}</Link>
                   </li>
                 ))}
-                {todos.slice(0, 4).map(({ entry, app, kind, count }, i) => (
+                {todos.slice(0, 4).map(({ entry, app, kind, count }, i) => {
+                  const playBlocked = (kind === 'join' || kind === 'listed') && isPlayUnreachable(app.id) && playTick >= 0
+                  return (
                   <li className="row-line" key={`${kind}:${app.id}`}>
                     <span className="grow cell-2">
                       <Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
                       <span>
                         {kind === 'join'
-                          ? (isLiveApp(app)
-                            ? 'Ditugaskan melalui cohort. App sudah rilis: pasang dari Play → catat di TesBareng → tulis ulasan publik, dalam 48 jam.'
-                            : 'Ditugaskan melalui cohort. Gabung grup → pasang dari Play → catat di TesBareng, dalam 48 jam.')
+                          ? (playBlocked ? t('me_todo_join_blocked') : (isLiveApp(app) ? t('me_todo_join_live') : t('me_todo_join_group')))
                           : kind === 'listed'
-                            ? 'Creator sudah menambahkan email Anda. Sekarang buka Play / opt-in, pasang, lalu catat di TesBareng.'
+                            ? (playBlocked ? t('me_todo_join_blocked') : t('me_todo_listed'))
                           : kind === 'emails'
-                            ? `${count} tester menunggu emailnya Anda tambahkan di Play Console.`
+                            ? t('me_todo_emails', { n: count ?? 0 })
                           : kind === 'build'
-                            ? `Build baru dirilis ${relDay(app.lastBuildAt)}. Perbarui dari Play Store lalu uji lagi.`
-                            : `Hari ke-${daysActive(entry!)}. ${isLiveApp(app) ? 'Ulasan publik di Play' : 'Feedback di Play'} belum Anda tandai terkirim.`}
+                            ? t('me_todo_build', { when: relDay(app.lastBuildAt) })
+                            : t('me_todo_feedback_day', {
+                                d: daysActive(entry!),
+                                what: isLiveApp(app) ? t('me_todo_feedback_review') : t('me_todo_feedback_play'),
+                              })}
                       </span>
                     </span>
-                    <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
-                      {kind === 'join' || kind === 'listed' ? 'Lanjut uji app' : kind === 'emails' ? 'Tambahkan email' : kind === 'build' ? 'Uji build baru' : (isLiveApp(app) ? 'Kirim ulasan' : 'Kirim feedback')}
-                    </Link>
+                    {playBlocked ? (
+                      <span style={{ display: 'flex', gap: 'var(--s-2)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <button type="button" className="btn sm" onClick={() => { clearPlayUnreachable(app.id); setPlayTick((n) => n + 1) }}>{t('me_cta_play_clear')}</button>
+                        <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>{t('me_cta_play_retry')}</Link>
+                      </span>
+                    ) : (
+                      <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>
+                        {kind === 'join' || kind === 'listed' ? t('me_cta_continue') : kind === 'emails' ? t('me_cta_add_email') : kind === 'build' ? t('me_cta_new_build') : (isLiveApp(app) ? t('me_cta_send_review') : t('me_cta_send_feedback'))}
+                      </Link>
+                    )}
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             )}
-            {todos.length > 4 && <p className="muted small num" style={{ marginTop: 'var(--s-2)' }}>{todos.length - 4} tugas lain: buka aplikasi di daftar “Sedang saya uji”.</p>}
+            {todos.length > 4 && <p className="muted small num" style={{ marginTop: 'var(--s-2)' }}>{t('me_todo_more', { n: todos.length - 4 })}</p>}
           </section>
 
           <section className="panel fill" aria-labelledby="testing-h">
-            <header><h2 id="testing-h">Sedang saya uji</h2><span className="meta num">{testing.length} aplikasi aktif</span></header>
+            <header><h2 id="testing-h">{t('me_testing_h')}</h2><span className="meta num">{t('me_testing_count', { n: testing.length })}</span></header>
             <div className="grow-body">
-              {loading ? <RowsSkeleton /> : testing.length === 0 ? <><p className="muted">Belum ada. Mulai dari aplikasi dengan kursi paling kosong:</p>{suggestList}</> : (
+              {loading ? <RowsSkeleton /> : testing.length === 0 ? <><p className="muted">{t('me_testing_empty')}</p>{suggestList}</> : (
                 <ul>
                   {testing.slice(0, 4).map(({ entry, app }) => {
                     const d = daysActive(entry)
                     return (
                       <li className="row-line" key={entry.appId}>
                         <span className="grow cell-2"><Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
-                          <span className="creator-nums" style={{ marginTop: 'var(--s-1)' }}><FeedbackChip t={entry} />{entry.replied && <span>dibalas creator</span>}</span></span>
+                          <span className="creator-nums" style={{ marginTop: 'var(--s-1)' }}><FeedbackChip t={entry} />{entry.replied && <span>{t('me_replied_creator')}</span>}</span></span>
                         <span className="w-meter hide-sm">
-                          <Bar value={Math.min(d, TARGET_DAYS)} max={TARGET_DAYS} label={`Hari aktif di ${app.name}`} />
+                          <Bar value={Math.min(d, TARGET_DAYS)} max={TARGET_DAYS} label={t('me_days_active_label', { name: app.name })} />
                         </span>
                         <span className="num w-num">{d}<span className="of"> / {TARGET_DAYS}</span></span>
                       </li>
@@ -179,37 +203,37 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                 </ul>
               )}
             </div>
-            {testing.length > 4 && <Link className="text-action" style={{ marginTop: 'var(--s-2)', alignSelf: 'flex-start' }} to={`/u/${uid}`}>Lihat semua {testing.length} aplikasi di profil</Link>}
+            {testing.length > 4 && <Link className="text-action" style={{ marginTop: 'var(--s-2)', alignSelf: 'flex-start' }} to={`/u/${uid}`}>{t('me_see_all_profile', { n: testing.length })}</Link>}
           </section>
         </div>
 
         <div className="span-5 col-fill stretch">
           <section className="panel" aria-labelledby="recip-h">
-            <header><h2 id="recip-h">Timbal balik Anda</h2><Link className="text-action small" to={`/u/${uid}`}>Profil publik</Link></header>
+            <header><h2 id="recip-h">{t('me_recip_h')}</h2><Link className="text-action small" to={`/u/${uid}`}>{t('me_public_profile')}</Link></header>
             <div className="recip-grid">
-              <div><div className="kpi-label">Menguji</div><div className="kpi-value num">{p ? <>{p.testingCount}<small> aplikasi</small></> : <Skel w={60} h={24} />}</div><p className="small muted" style={{ marginTop: 'var(--s-1)' }}>aktif, atau selesai 14 hari</p></div>
-              <div><div className="kpi-label">Feedback terkirim</div><div className="kpi-value num">{p ? <>{p.feedbackSentCount}<small> · {p.feedbackVerifiedCount} terverifikasi</small></> : <Skel w={60} h={24} />}</div></div>
+              <div><div className="kpi-label">{t('me_kpi_testing')}</div><div className="kpi-value num">{p ? <>{p.testingCount}<small>{t('me_kpi_apps_unit')}</small></> : <Skel w={60} h={24} />}</div><p className="small muted" style={{ marginTop: 'var(--s-1)' }}>{t('me_kpi_testing_note')}</p></div>
+              <div><div className="kpi-label">{t('me_kpi_feedback')}</div><div className="kpi-value num">{p ? <>{p.feedbackSentCount}<small>{t('me_kpi_feedback_verified', { n: p.feedbackVerifiedCount })}</small></> : <Skel w={60} h={24} />}</div></div>
             </div>
             <div className="recip-tier">
               <div className="creator-nums">
-                <span className="kpi-label">Aplikasi diuji 14+ hari</span>
+                <span className="kpi-label">{t('me_kpi_tested_14')}</span>
                 {p && <Badge tier={p.badgeTier} />}
               </div>
               {p ? <TierProgress count={p.appsTestedCount} tier={p.badgeTier} nextAt={p.nextTierAt} /> : <Skel w={200} />}
             </div>
-            {nudge && <p className="notice" style={{ margin: 'var(--s-3) 0 0' }}><span className="chip"><span className="g" aria-hidden="true">!</span>Timbal balik</span>Anda punya {listed} aplikasi terdaftar tapi baru menguji {p!.testingCount}. Bantu yang lain supaya dibantu balik.</p>}
+            {nudge && <p className="notice" style={{ margin: 'var(--s-3) 0 0' }}><span className="chip"><span className="g" aria-hidden="true">!</span>{t('me_nudge_chip')}</span>{t('me_nudge_body', { listed, testing: p!.testingCount })}</p>}
             {testing.length > 0 && suggestList}
           </section>
 
           <section className="panel" id="pengingat" aria-labelledby="notif-h">
-            <header><h2 id="notif-h">Pengingat</h2></header>
+            <header><h2 id="notif-h">{t('me_reminders_h')}</h2></header>
             {p ? <DigestToggle initial={p.emailReminders} onSaved={profile.retry} /> : <Skel w={240} />}
           </section>
 
           <section className="panel fill" aria-labelledby="mine-h">
-            <header><h2 id="mine-h">Aplikasi saya</h2><span className="meta num">{myApps.data.length} aplikasi</span></header>
+            <header><h2 id="mine-h">{t('me_mine_h')}</h2><span className="meta num">{t('me_mine_count', { n: myApps.data.length })}</span></header>
             <div className="grow-body">
-              {myApps.loading ? <RowsSkeleton /> : myApps.data.length === 0 ? <Empty title="Belum ada aplikasi terdaftar."><p>Daftarkan aplikasi Anda agar komunitas bisa ikut menguji.</p></Empty> : (
+              {myApps.loading ? <RowsSkeleton /> : myApps.data.length === 0 ? <Empty title={t('me_mine_empty_title')}><p>{t('me_mine_empty_body')}</p></Empty> : (
                 <ul>
                   {myApps.data.map((a) => (
                     <li className="row-line" key={a.id}>
@@ -221,7 +245,7 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                 </ul>
               )}
             </div>
-            <Link className="btn" style={{ alignSelf: 'flex-start', marginTop: 'var(--s-3)' }} to="/apps/new"><IconPlus />Tambah aplikasi</Link>
+            <Link className="btn" style={{ alignSelf: 'flex-start', marginTop: 'var(--s-3)' }} to="/apps/new"><IconPlus />{t('me_add_app')}</Link>
           </section>
         </div>
       </div>
@@ -232,10 +256,10 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
 /** FR-46: daily digest on/off. Optimistic, rolled back with a toast if the RPC fails. */
 function DigestToggle({ initial, onSaved }: { initial: boolean; onSaved: () => void }) {
   const toast = useToast()
+  const t = useT()
   const [on, setOn] = useState(initial)
   const [saving, setSaving] = useState(false)
   const inFlight = useRef(false)
-  // follow the server value when the refetched profile changes it, but never mid-save
   useEffect(() => { if (!inFlight.current) setOn(initial) }, [initial])
 
   const change = async (next: boolean) => {
@@ -244,11 +268,11 @@ function DigestToggle({ initial, onSaved }: { initial: boolean; onSaved: () => v
     inFlight.current = true
     try {
       await setEmailReminders(next)
-      toast(next ? 'Ringkasan harian diaktifkan.' : 'Ringkasan harian dimatikan.')
+      toast(next ? t('me_digest_on') : t('me_digest_off'))
       onSaved()
     } catch (e) {
       setOn(!next)
-      toast(errorText(e))
+      toast(errorText(e, t))
     } finally {
       inFlight.current = false
       setSaving(false)
@@ -258,8 +282,8 @@ function DigestToggle({ initial, onSaved }: { initial: boolean; onSaved: () => v
   return (
     <label className="switch-row">
       <span>
-        <span className="t">Kirim ringkasan tugas harian lewat email (19.00 WIB)</span>
-        <span className="d" id="digest-d">{saving ? 'Menyimpan…' : 'Satu email per hari, hanya jika ada tugas. Bisa dimatikan kapan saja.'}</span>
+        <span className="t">{t('me_digest_label')}</span>
+        <span className="d" id="digest-d">{saving ? t('saving') : t('me_digest_hint')}</span>
       </span>
       <span className="switch">
         <input type="checkbox" role="switch" checked={on} disabled={saving} aria-describedby="digest-d" onChange={(e) => change(e.target.checked)} />

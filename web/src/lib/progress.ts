@@ -94,7 +94,13 @@ const dayHeadFmt = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'num
 const dateTimeFmt = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: TZ })
 /** YYYY-MM-DD in WIB (en-CA formats as ISO order). */
 const isoFmt = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: TZ })
-const rtf = new Intl.RelativeTimeFormat('id-ID', { numeric: 'auto' })
+const rtfs = {
+  id: new Intl.RelativeTimeFormat('id-ID', { numeric: 'auto' }),
+  en: new Intl.RelativeTimeFormat('en', { numeric: 'auto' }),
+}
+let rtf = rtfs.id
+/** Relative dates follow the UI language ("bulan lalu" / "last month"); set by I18nProvider. */
+export function setRelLocale(l: 'id' | 'en') { rtf = rtfs[l] }
 
 export const fmtDate = (t?: number | null) => (t != null ? dateFmt.format(t) : '—')
 export const fmtShort = (t?: number | null) => (t != null ? shortFmt.format(t) : '—')
@@ -112,6 +118,11 @@ export const wibDayStart = (iso: string) => new Date(`${iso}T00:00:00+07:00`).ge
 /** Whole WIB calendar days between two instants (today = 0, yesterday = 1). */
 function calendarDays(t: number, now: number) {
   return Math.round((wibDayStart(isoDate(now)) - wibDayStart(isoDate(t))) / DAY_MS)
+}
+
+/** Whole WIB calendar days from `t` to now (0 = today). Lets lists print their own short age ("2 mgg lalu"). */
+export function daysAgo(t: number, now = Date.now()) {
+  return Math.max(0, calendarDays(t, now))
 }
 
 /** Relative time in Bahasa Indonesia via Intl: "2 jam lalu", "kemarin", "3 hari lalu", "bulan lalu". */
