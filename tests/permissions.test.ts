@@ -154,6 +154,7 @@ describe("direct table writes are denied for every client role", () => {
     await denied(db.from("profiles").update({ role: "admin" }).eq("id", tester.id));
     await denied(db.from("profiles").update({ display_name: "Ganti" }).eq("id", other.id));
     await denied(db.from("profiles").update({ email_reminders: false }).eq("id", other.id));
+    await denied(db.from("profiles").update({ joined_community_group: true }).eq("id", other.id));
     await denied(db.from("profiles").insert({ id: other.id, display_name: "x", masked_email: "xx*****@gmail.com" }));
     await denied(db.from("profiles").delete().eq("id", other.id));
   });
@@ -178,6 +179,9 @@ describe("direct table writes are denied for every client role", () => {
     await denied(db.from("email_listings").insert({ app_id: appId, user_id: other.id }));
     await denied(db.from("email_listings").update({ listed_at: new Date().toISOString() }).eq("app_id", appId));
     await denied(db.from("email_listings").delete().eq("app_id", appId));
+    await denied(db.from("play_access_reports").insert({ app_id: appId, user_id: other.id }));
+    await denied(db.from("play_access_reports").update({ reported_at: new Date().toISOString() }).eq("app_id", appId));
+    await denied(db.from("play_access_reports").delete().eq("app_id", appId));
   });
 
   it.each(roleNames)("%s cannot write the stats views", async (role) => {

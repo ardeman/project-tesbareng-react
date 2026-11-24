@@ -41,6 +41,18 @@ export function readGroupJoinProgress(appId: string): GroupJoinProgress {
   return { group: !!o.group, installed: !!(o.installed || o.optedIn) }
 }
 
+/**
+ * Soft session progress, plus the durable profile flag when signed in
+ * (`profiles.joined_community_group`). Signed-out callers pass false/undefined.
+ */
+export function effectiveGroupJoinProgress(
+  appId: string,
+  joinedCommunityGroup?: boolean,
+): GroupJoinProgress {
+  const p = readGroupJoinProgress(appId)
+  return joinedCommunityGroup ? { ...p, group: true } : p
+}
+
 export function writeGroupJoinProgress(appId: string, patch: GroupJoinProgress) {
   writeRaw(appId, { ...readRaw(appId), ...patch })
 }

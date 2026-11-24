@@ -52,6 +52,7 @@ function toApp(r: Row, s: Row | undefined): AppDoc {
     creatorFeedbackSentCount: s?.creator_feedback_sent_count ?? 0,
     creatorFeedbackVerifiedCount: s?.creator_feedback_verified_count ?? 0,
     creatorBadgeTier: s?.creator_badge_tier ?? 'none',
+    playUnreachableCount: s?.play_unreachable_count ?? 0,
     createdAt: ms(r.created_at)!,
     updatedAt: ms(r.updated_at) ?? undefined,
     deleted: r.deleted,
@@ -144,7 +145,7 @@ export async function rows<T>(p: PromiseLike<{ data: T | null; error: unknown }>
 
 // ---------- realtime (app detail only; one channel per app, shared by its hooks) ----------
 
-type Table = 'apps' | 'testers' | 'builds'
+type Table = 'apps' | 'testers' | 'builds' | 'play_access_reports'
 const channels = new Map<string, { channel: RealtimeChannel; listeners: Set<(t: Table) => void> }>()
 
 function onAppChange(appId: string, listener: (t: Table) => void) {
@@ -157,6 +158,7 @@ function onAppChange(appId: string, listener: (t: Table) => void) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'apps', filter: `id=eq.${appId}` }, emit('apps'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'testers', filter: `app_id=eq.${appId}` }, emit('testers'))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'builds', filter: `app_id=eq.${appId}` }, emit('builds'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'play_access_reports', filter: `app_id=eq.${appId}` }, emit('play_access_reports'))
       .subscribe()
     entry = { channel, listeners }
     channels.set(appId, entry)
@@ -255,7 +257,7 @@ export const useApp = (id?: string) =>
           return app ? toApp(app, stats ?? undefined) : null
         }
       : null,
-    undefined, [id], { liveApp: id },
+    undefined, [id], { liveApp: id, liveTables: ['apps', 'play_access_reports'] },
   )
 
 export const useTesters = (appId?: string) =>
@@ -492,6 +494,46 @@ export const markEmailListed = (appId: string, uid: string, listed: boolean) =>
   rpc('mark_email_listed', { p_app_id: appId, p_user_id: uid, p_listed: listed })
 
 export const setEmailReminders = (enabled: boolean) => rpc('set_email_reminders', { p_enabled: enabled })
+export const setJoinedCommunityGroup = (joined: boolean) => rpc('set_joined_community_group', { p_joined: joined })
+
+/** Whether the signed-in member has an open Play-unavailable report on this app. */
+export const useMyPlayUnreachable = (appId?: string, uid?: string | null) =>
+  useFetch(
+    appId && uid
+      ? async () => {
+          const r = await rows<Row[]>(
+            supabase.from('play_access_reports').select('app_id').eq('app_id', appId).eq('user_id', uid).limit(1),
+          )
+          return r.length > 0
+        }
+      : null,
+    false, [appId, uid], { liveApp: appId, liveTables: ['play_access_reports'] },
+  )
+
+/** App ids the member has reported as Play-unavailable (Tugas saya). */
+export const useMyPlayUnreachableApps = (uid?: string | null) =>
+  useFetch(
+    uid
+      ? async () => {
+          const r = await rows<Row[]>(supabase.from('play_access_reports').select('app_id').eq('user_id', uid))
+          return new Set(r.map((x) => x.app_id as string))
+        }
+      : null,
+    new Set<string>(), [uid],
+  )
+
+export const reportPlayUnreachable = (appId: string) => rpc('report_play_unreachable', { p_app_id: appId })
+export const clearMyPlayUnreachable = (appId: string) => rpc('clear_my_play_unreachable', { p_app_id: appId })
+export const clearAppPlayUnreachable = (appId: string) => rpc('clear_app_play_unreachable', { p_app_id: appId })
+
+/** Best-effort: clear own report after a successful join (ignore missing report). */
+export async function clearMyPlayUnreachableQuiet(appId: string) {
+  try {
+    await clearMyPlayUnreachable(appId)
+  } catch {
+    /* no report, or already cleared */
+  }
+}
 
 export const updateApp = (appId: string, input: AppInput & { status?: AppDoc['status']; testerMethod?: TesterMethod; testerSlots?: number }) =>
   rpc('update_app', { p_app_id: appId, ...appArgs(input), p_status: input.status ?? null })

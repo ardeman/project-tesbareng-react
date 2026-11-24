@@ -11,7 +11,10 @@ Rows are snake_case. The web client maps them to camelCase in one place (`web/sr
 ```
 profiles            select: everyone · write: none (trigger + RPC only)
   id uuid pk → auth.users, display_name (≤ 50), photo_url, masked_email,
-  role 'member' | 'admin', email_reminders bool (default true; daily digest opt-out, PRD FR-46), created_at
+  role 'member' | 'admin', email_reminders bool (default true; daily digest opt-out, PRD FR-46),
+  joined_community_group bool (default false; self-reported join of the community Google Group;
+    once for all google_group apps; clearable if the member left; signed-out beginners use session soft progress only;
+    backfilled for members who already had a tester entry on a closed-test google_group app; also set by join_as_tester), created_at
 
 apps                select: everyone where deleted = false; admin sees all · write: none (RPC only)
   id uuid pk, name (≤ 50), description (≤ 280), opt_in_url (nullable when status=live), store_url (required on create/update; older rows may be null — UI falls back to opt_in_url; required when status=live), package_name?,
@@ -76,6 +79,13 @@ cohort_requests     select: own rows + admin (RLS) · write: none (RPC only)   (
   Triggers close a pending row: cohort leaves forming → 'expired'; member inserted into that cohort →
   'approved' (with an app) or 'withdrawn' (pure tester); app soft-deleted → 'withdrawn'.
 
+play_access_reports select: everyone · write: none (RPC only)
+  app_id → apps, user_id → profiles, reported_at
+  pk (app_id, user_id)
+  Self-reported "Play not available" (wrong account or dead closed track). Public count via
+  app_stats; reporter clears own row; creator/admin clears all on the app when confirming
+  the track works.
+
 reminder_log        no client access (service role only)
   id uuid pk, user_id, kind, ref_id?, sent_on date, created_at
   unique (user_id, kind, ref_id, sent_on)
@@ -87,7 +97,7 @@ An app is in at most one non-closed cohort. The constraint spans two tables, so 
 
 The full email exists only in `auth.users`, which the API does not expose. `security definer` functions read it to mask it. The member sees their own address from their session (`supabase.auth.getUser()`).
 
-Realtime publishes `apps`, `testers`, `builds` and `check_ins`. The web app subscribes only on the app detail page (one channel per app); other pages, the cohort pages and matrix included, refetch on mount and on window focus.
+Realtime publishes `apps`, `testers`, `builds`, `check_ins` and `play_access_reports`. The web app subscribes only on the app detail page (one channel per app); other pages, the cohort pages and matrix included, refetch on mount and on window focus.
 
 ## Computed views (counters)
 
@@ -104,6 +114,7 @@ Both views use `security_invoker = true`, so the RLS of the base tables applies.
 | `creator_testing_count`, `creator_feedback_sent_count`, `creator_feedback_verified_count` | the creator's `profile_stats` (FR-27b) |
 | `creator_badge_tier` | the creator's `profile_stats.badge_tier` (FR-27j) |
 | `counted_days` | whole days the `tester_slots`-th most senior active tester has been opted in (0 while fewer active testers than slots): the days Google counts, since it needs all testers active together. The app list shows it; app detail computes the same number from the tester rows. |
+| `play_unreachable_count` | open `play_access_reports` rows for the app (self-reported Play unavailable) |
 
 `profile_stats` (one row per profile), entries on soft-deleted apps never count:
 
@@ -187,6 +198,10 @@ All are `security definer` with `set search_path = ''`. Every one except `mask_e
 | `update_tester` | `p_tester_id, p_patch` (JSON object, snake_case keys) | — | Creator or admin: `status, opted_in_at, left_at, note, feedback_verified, replied`. Admin also: `feedback_sent, feedback_sent_at, feedback_summary` (moderation). Any other key → `permission-denied`. Status change without `left_at`: active clears it, left/removed keep it or set now. |
 | `add_build` | `p_app_id, p_version_name, p_uploaded_at, p_changelog` | `uuid` | Creator or admin. ≤ 40 / ≤ 140, date not in the future. 10 per app per rolling 24 h → `resource-exhausted`. |
 | `set_email_reminders` | `p_enabled` | — | Signed-in member, own profile only. Null → `invalid-argument`. |
+| `set_joined_community_group` | `p_joined` | — | Signed-in member, own profile only. Self-reported Google Group membership; null → `invalid-argument`. |
+| `report_play_unreachable` | `p_app_id` | — | Signed-in; not the creator; not Removed on that app. Idempotent. Soft-deleted → `not-found`. |
+| `clear_my_play_unreachable` | `p_app_id` | — | Deletes the caller's own report; none → `not-found`. |
+| `clear_app_play_unreachable` | `p_app_id` | — | Creator or admin. Clears all reports on the app (confirm Play / track works). |
 | `check_in` | `p_app_id, p_kind, p_build_id?` | `uuid` | Own entry on the app: none → `not-found`, not Active → `failed-precondition`. Unknown kind, `build_id` missing for `updated_build`, given for another kind, or from another app → `invalid-argument`. Window not open yet (milestone table; `b` = the open assignment's `assigned_at` when the app is in a non-closed cohort assigned to the caller, else the entry's `opted_in_at`) → `failed-precondition`. Same kind (and build) twice → `already-exists`. |
 | `create_cohort` | `p_name` | `uuid` | Admin. Name trimmed, 1–50 → else `invalid-argument`. Starts `forming`. |
 | `add_cohort_member` | `p_cohort_id, p_user_id, p_app_id?` | — | Admin. Cohort missing → `not-found`; not `forming` → `failed-precondition`. Profile missing → `not-found`. Already a member → `already-exists`. Member has `standing = 'owing'` in any cohort → `failed-precondition`. App missing or soft-deleted → `not-found`; not owned by `p_user_id` → `invalid-argument`; already in this or another non-closed cohort → `already-exists`. Null `p_app_id` adds a pure tester. |

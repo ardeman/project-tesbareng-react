@@ -5,11 +5,10 @@ import { IconGoogle, IconPlus } from '../components/icons'
 import { useAuth } from '../lib/auth'
 import { COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
-import { errorText, setEmailReminders, usePublicProfile } from '../lib/data'
+import { clearMyPlayUnreachable, errorText, setEmailReminders, useMyPlayUnreachableApps, usePublicProfile } from '../lib/data'
 import { useMyObligations } from '../lib/cohorts'
 import { useMyTodos } from '../lib/todos'
 import { isLiveApp } from '../lib/joinProgress'
-import { clearPlayUnreachable, isPlayUnreachable } from '../lib/playAccess'
 import { daysActive, relDay, openSeats, TARGET_DAYS } from '../lib/progress'
 import { useT } from '../lib/i18n'
 
@@ -33,9 +32,11 @@ export function Me() {
 
 function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
   const t = useT()
+  const toast = useToast()
+  const { profile: authProfile } = useAuth()
+  const joinedGroup = !!authProfile?.joinedCommunityGroup
   const { entries, apps, myApps, requests, testing, todos, total, loading } = useMyTodos(uid, isAdmin)
-  // Soft Play-unreachable flags live in localStorage; bump to re-read after clear.
-  const [playTick, setPlayTick] = useState(0)
+  const myPlayBlocked = useMyPlayUnreachableApps(uid)
   const profile = usePublicProfile(uid)
   const obligations = useMyObligations(uid)
 
@@ -124,10 +125,12 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
             {loading ? <RowsSkeleton /> : total === 0 ? (
               testing.length === 0
                 ? (
-                  <Empty title={t('me_empty_start_title')}>
+                  <Empty title={t(joinedGroup ? 'me_empty_start_title_grouped' : 'me_empty_start_title')}>
                     <ol className="first-run">
-                      <li><a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{t('me_empty_start_1')}<span className="sr-only">{t('me_empty_start_1_sr')}</span></a>{t('me_empty_start_1_rest')}</li>
-                      <li>{t('me_empty_start_2_pre')}<Link to="/apps">{t('me_empty_start_2_link')}</Link>{t('me_empty_start_2_post')}</li>
+                      <li>{joinedGroup
+                        ? t('me_empty_start_1_grouped')
+                        : <><a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{t('me_empty_start_1')}<span className="sr-only">{t('me_empty_start_1_sr')}</span></a>{t('me_empty_start_1_rest')}</>}</li>
+                      <li>{t('me_empty_start_2_pre')}<Link to="/apps">{t('me_empty_start_2_link')}</Link>{t(joinedGroup ? 'me_empty_start_2_post_grouped' : 'me_empty_start_2_post')}</li>
                     </ol>
                   </Empty>
                 )
@@ -144,14 +147,14 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                   </li>
                 ))}
                 {todos.slice(0, 4).map(({ entry, app, kind, count }, i) => {
-                  const playBlocked = (kind === 'join' || kind === 'listed') && isPlayUnreachable(app.id) && playTick >= 0
+                  const playBlocked = (kind === 'join' || kind === 'listed') && myPlayBlocked.data.has(app.id)
                   return (
                   <li className="row-line" key={`${kind}:${app.id}`}>
                     <span className="grow cell-2">
                       <Link to={`/apps/${app.id}`}><b>{app.name}</b></Link>
                       <span>
                         {kind === 'join'
-                          ? (playBlocked ? t('me_todo_join_blocked') : (isLiveApp(app) ? t('me_todo_join_live') : t('me_todo_join_group')))
+                          ? (playBlocked ? t('me_todo_join_blocked') : (isLiveApp(app) ? t('me_todo_join_live') : t(joinedGroup ? 'me_todo_join_grouped' : 'me_todo_join_group')))
                           : kind === 'listed'
                             ? (playBlocked ? t('me_todo_join_blocked') : t('me_todo_listed'))
                           : kind === 'emails'
@@ -166,7 +169,9 @@ function MeSignedIn({ uid, isAdmin }: { uid: string; isAdmin: boolean }) {
                     </span>
                     {playBlocked ? (
                       <span style={{ display: 'flex', gap: 'var(--s-2)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        <button type="button" className="btn sm" onClick={() => { clearPlayUnreachable(app.id); setPlayTick((n) => n + 1) }}>{t('me_cta_play_clear')}</button>
+                        <button type="button" className="btn sm" onClick={() => {
+                          clearMyPlayUnreachable(app.id).catch((e) => toast(errorText(e, t)))
+                        }}>{t('me_cta_play_clear')}</button>
                         <Link className={`btn sm${i === 0 && requests.data.length === 0 ? ' primary' : ''}`} to={`/apps/${app.id}`}>{t('me_cta_play_retry')}</Link>
                       </span>
                     ) : (
