@@ -337,18 +337,37 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
           {assigned && <AssignedChip cohort={assigned.name} />}
           {belumTes && <Chip tone="cabai" glyph="!">{t('landing_cell_late_short')}</Chip>}
         </div>
-        <span>{app.creatorName}{t('apps_registered_on', { when: relDay(app.createdAt) })}{cohort && <> · {cohort.name}</>}</span>
-        <span className="md-show">{t('apps_creator_testing_n', { n: c.t })} <Badge tier={app.creatorBadgeTier} size="sm" /></span>
+        {/* One meta line only — creator testing stays in its own column when there is room (not folded in). */}
+        <span className="app-meta">
+          {app.creatorName}
+          <Badge tier={app.creatorBadgeTier} size="sm" />
+          {t('apps_registered_on', { when: relDay(app.createdAt) })}
+          {cohort && <> · {cohort.name}</>}
+        </span>
       </td>
-      <td className="cell-2"><SeatCell app={app} /><span className="md-show num">{t('apps_counted_days_line', { counted: counted(app), target: TARGET_DAYS })}</span></td>
+      <td className="cell-2">
+        <SeatCell app={app} />
+        {/* Folded days: compact X/14, not a full sentence under the seats. */}
+        <span className="md-show num app-days-fold">{counted(app)} / {TARGET_DAYS}</span>
+      </td>
       <td className="num md-hide"><b>{counted(app)}</b><span className="of"> / {TARGET_DAYS}</span></td>
       <td className="num">
-        {app.feedbackSentCount === 0 ? <span className="dash">0</span> : <><b>{app.feedbackSentCount}</b><span className="muted fb-ver">{t('apps_feedback_verified_n', { n: app.feedbackVerifiedCount })}</span></>}
+        {app.feedbackSentCount === 0
+          ? <span className="dash">0</span>
+          : (
+            <>
+              <b>{app.feedbackSentCount}</b>
+              {app.feedbackVerifiedCount > 0 && (
+                <span className="muted fb-ver">{t('apps_feedback_verified_n', { n: app.feedbackVerifiedCount })}</span>
+              )}
+            </>
+          )}
       </td>
       <td className="muted md-hide">
         <span className="creator-nums">
-          {c.t === 0 ? <span>{t('apps_creator_none')}</span> : <span><b style={{ color: 'var(--ink)' }}>{t('apps_creator_apps_feedback', { n: c.t })}</b>{t('apps_creator_feedback_n', { n: c.f })}</span>}
-          <Badge tier={app.creatorBadgeTier} size="sm" />
+          {c.t === 0
+            ? <span>{t('apps_creator_none')}</span>
+            : <span><b style={{ color: 'var(--ink)' }}>{t('apps_creator_apps_feedback', { n: c.t })}</b>{t('apps_creator_feedback_n', { n: c.f })}</span>}
         </span>
       </td>
       <td><StatusPill status={app.status} /></td>
@@ -359,7 +378,6 @@ function DesktopRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
 function PhoneRow({ row }: { row: Row }) {
   const t = useT()
   const { app, cohort, assigned, belumTes, own, mine } = row
-  const c = creatorLine(app)
   return (
     <Link to={`/apps/${app.id}`} className="mrow">
       <span className="l1">{app.name}</span>
@@ -367,17 +385,19 @@ function PhoneRow({ row }: { row: Row }) {
       <span className="l2">
         <Seats active={app.activeTesterCount} total={app.testerSlots} />
         <SlotChip app={app} />
-        <span className="num">{t('apps_counted_days_line', { counted: counted(app), target: TARGET_DAYS })}</span>
-        <span>feedback {app.feedbackSentCount}</span>
+        <span className="num">{counted(app)} / {TARGET_DAYS}</span>
+        {app.feedbackSentCount > 0 && <span className="num">feedback {app.feedbackSentCount}</span>}
       </span>
       <span className="l2">
         <StatusPill status={app.status} />
         <MineChips own={own} mine={mine} />
         {assigned && <AssignedChip cohort={assigned.name} />}
         {belumTes && <Chip tone="cabai" glyph="!">{t('landing_cell_late_short')}</Chip>}
-        <span>{app.creatorName}{t('apps_testing_other_n', { n: c.t })}</span>
-        <Badge tier={app.creatorBadgeTier} size="sm" />
-        {cohort && <span className="mrow-cohort">{cohort.name}</span>}
+        <span className="app-meta">
+          {app.creatorName}
+          <Badge tier={app.creatorBadgeTier} size="sm" />
+          {cohort && <span className="mrow-cohort"> · {cohort.name}</span>}
+        </span>
       </span>
     </Link>
   )

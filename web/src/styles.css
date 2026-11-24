@@ -827,8 +827,14 @@ html { scroll-padding-top: 76px; } /* clears the 60 px sticky bar: record-bar on
 }
 .cell-2 .name-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); min-width: 0; }
 .cell-2 .name-line b { display: inline; overflow-wrap: anywhere; }
+/* Creator · listed · cohort on one quiet line; badge inline with the name. */
+.cell-2 > span.app-meta,
+.app-meta { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; }
+.app-days-fold { margin-top: 2px; color: var(--muted); font-size: var(--fs-caption); }
 .mrow-cohort { overflow-wrap: anywhere; }
 .app-table .seat-cell { display: flex; flex-wrap: wrap; gap: 0 var(--s-2); }
+/* Keep app-list rows closer to the 48 px sheet rhythm when content is short. */
+table.data.app-table td.cell-2 { padding-top: 10px; padding-bottom: 10px; }
 /* Tablet and small laptop (sidebar + four columns): the feedback column stacks so Status is not clipped. */
 @media (max-width: 1279px) {
   .app-table th:nth-last-child(3) { white-space: normal; }
