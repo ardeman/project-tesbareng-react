@@ -18,6 +18,8 @@ export const en: Record<Keys, string> = {
   my_apps_nav_label: 'My apps',
   dark_mode_on: 'Dark mode: on',
   dark_mode_off: 'Dark mode: off',
+  theme_light: 'Light',
+  theme_dark: 'Dark',
   view_profile: 'View profile',
   member_fallback: 'Member',
   sign_in_google: 'Sign in with Google',

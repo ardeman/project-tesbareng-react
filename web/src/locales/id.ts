@@ -16,6 +16,8 @@ export const id = {
   my_apps_nav_label: 'Aplikasi saya',
   dark_mode_on: 'Mode gelap: nyala',
   dark_mode_off: 'Mode gelap: mati',
+  theme_light: 'Terang',
+  theme_dark: 'Gelap',
   view_profile: 'Lihat profil',
   member_fallback: 'Anggota',
   sign_in_google: 'Masuk dengan Google',

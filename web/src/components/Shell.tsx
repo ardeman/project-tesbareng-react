@@ -44,6 +44,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <button type="button" className="lp-sq" onClick={toggleTheme} aria-pressed={dark}
         title={dark ? t('dark_mode_on') : t('dark_mode_off')} aria-label={dark ? t('dark_mode_on') : t('dark_mode_off')}>
         {dark ? <IconMoon /> : <IconSun />}
+        <span className="bottom-icon-label">{dark ? t('theme_dark') : t('theme_light')}</span>
       </button>
       {/* Face = current locale; title/aria = switch-to target (readable in that language). */}
       <button type="button" className="lp-sq" onClick={() => setLocale(locale === 'id' ? 'en' : 'id')}
@@ -104,13 +105,14 @@ export function Shell({ children }: { children: ReactNode }) {
               {toggles}
               {user ? (
                 <div className="user-row">
-                  <Link to={`/u/${user.uid}`} className="user-info">
+                  <Link to={`/u/${user.uid}`} className="user-info" title={t('view_profile')}>
                     <Avatar name={user.displayName ?? '?'} photo={user.photoURL} />
-                    <span className="who"><b>{user.displayName ?? t('member_fallback')}</b><span>{t('view_profile')}</span></span>
+                    <span className="who"><b>{user.displayName ?? t('member_fallback')}</b></span>
                   </Link>
                   <button type="button" className="btn icon bottom-signout" onClick={() => { void signOut() }}
                     aria-label={t('sign_out')} title={t('sign_out')}>
                     <IconSignOut />
+                    <span className="bottom-icon-label">{t('sign_out')}</span>
                   </button>
                 </div>
               ) : (
