@@ -419,7 +419,8 @@ Supersedes the v1 Firestore model. SQL uses snake_case; the web client maps rows
 ```
 profiles                      -- public read; never holds the full email
   id uuid pk → auth.users, display_name, photo_url, masked_email,
-  role ('member' | 'admin'), email_reminders bool default true, created_at
+  role ('member' | 'admin'), email_reminders bool default true,
+  joined_community_group bool default false, created_at
 
 apps                          -- public read where deleted = false; admin sees all
   id uuid pk, creator_id → profiles, name, description, opt_in_url,
@@ -430,6 +431,7 @@ apps                          -- public read where deleted = false; admin sees a
   deleted bool default false, created_at, updated_at
 
 email_listings                -- public read; no email column (ADR-011)
+play_access_reports           -- public read; self-reported Play unavailable (pk app_id+user_id)
   app_id → apps, user_id → profiles, requested_at, listed_at?
   pk (app_id, user_id)
 
@@ -518,6 +520,10 @@ Days active per tester stays a client calculation.
 | `add_build(app_id, version_name, uploaded_at, changelog)` | Creator, admin | 10 per app per rolling 24 h |
 | `check_in(app_id, kind, build_id?)` | Tester | Own Active entry; window rules (§6.10); once per kind (per build) |
 | `set_email_reminders(enabled)` | Signed-in user | Own profile only |
+| `set_joined_community_group(joined)` | Signed-in user | Own profile only (self-reported community Google Group join) |
+| `report_play_unreachable(app_id)` | Signed-in user | Not creator; not Removed; idempotent |
+| `clear_my_play_unreachable(app_id)` | Signed-in user | Own report only |
+| `clear_app_play_unreachable(app_id)` | Creator or Admin | Clears all reports on the app |
 | `create_cohort(name)` | Admin |  |
 | `join_cohort_as_tester(cohort_id)` | Member | Cohort Forming, or Active and ≤ Day 7; not already a member; not Owing; if Active, assign 14 apps by lowest coverage and set `assigned_at` |
 | `add_cohort_member(cohort_id, user_id, app_id?)` | Admin | Cohort Forming; app owned by user and not in another open cohort; user not Owing |

@@ -12,15 +12,18 @@ import { useAuth } from '../lib/auth'
 import { useMyAssignedApps } from '../lib/cohorts'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import { usePageMeta } from '../lib/pageMeta'
-import { api, errorCode, markEmailListed, updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useEmailListings, useMyEmailListing, useTesters } from '../lib/data'
+import {
+  api, clearAppPlayUnreachable, clearMyPlayUnreachable, errorCode, errorText, markEmailListed, reportPlayUnreachable,
+  updateTesterAsCreator, useApp, useBadgesOf, useBuilds, useEmailListings, useMyEmailListing, useMyPlayUnreachable,
+  useTesters,
+} from '../lib/data'
 import { checkIn, milestones, useCheckIns, type CheckIn, type CheckInKind, type Milestone } from '../lib/checkins'
 import { useT } from '../lib/i18n'
 import type { Keys } from '../locales/id'
 import {
-  groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, markResumeJoin, openPlayInstall, playInstallUrl,
-  readGroupJoinProgress, takeResumeJoin, writeGroupJoinProgress, type GroupJoinProgress,
+  effectiveGroupJoinProgress, groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, markResumeJoin,
+  openPlayInstall, playInstallUrl, takeResumeJoin, writeGroupJoinProgress, type GroupJoinProgress,
 } from '../lib/joinProgress'
-import { clearPlayUnreachable, isPlayUnreachable, markPlayUnreachable } from '../lib/playAccess'
 import {
   computeProgress, daysActive, fmtDate, fmtDateTime, fmtDayHeading, inDays, isNewBuild, isoDate, openSeats, relTime, TARGET_BUILDS, TARGET_DAYS, TARGET_TESTERS,
   type Progress,
@@ -60,7 +63,7 @@ export function AppDetail() {
   const app = useApp(id)
   const testers = useTesters(id)
   const builds = useBuilds(id)
-  const { user, isAdmin, signIn } = useAuth()
+  const { user, profile, isAdmin, signIn, setJoinedCommunityGroup } = useAuth()
   // "Ditugaskan" in the header (PRD §5.2 step 2). If it fails to load, the label is simply absent.
   const myAssigned = useMyAssignedApps(user?.uid)
   const toast = useToast()
@@ -88,9 +91,12 @@ export function AppDetail() {
   const flow = useCheckInFlow(id, user && app.data && !app.data.deleted && app.data.creatorUid !== user.uid ? ownActive : undefined, builds.data.map((b) => b.id).join(','))
   const guideRef = useRef<HTMLElement>(null)
   const [guideTick, setGuideTick] = useState(0)
-  const [playTick, setPlayTick] = useState(0)
   const appId = app.data?.id
-  const groupProgress = useMemo(() => (appId ? readGroupJoinProgress(appId) : {}), [appId, guideTick])
+  const myPlayBlocked = useMyPlayUnreachable(appId, user?.uid)
+  const groupProgress = useMemo(
+    () => (appId ? effectiveGroupJoinProgress(appId, profile?.joinedCommunityGroup) : {}),
+    [appId, guideTick, profile?.joinedCommunityGroup],
+  )
 
   // After Google OAuth, reopen the join wizard on this app.
   useEffect(() => {
@@ -230,11 +236,14 @@ export function AppDetail() {
           note: user ? t('appd_note_play_done_logged') : t('appd_note_play_done_anon'),
         }
       } else {
+        const grouped = !!groupProgress.group
         result = {
           primary: { label: t('appd_act_start_test'), onClick: focusGuide },
           secondary: [playAction],
           overflow: storeOverflow,
-          note: storeOk ? t('appd_note_beginner_store') : t('appd_note_beginner_optin'),
+          note: storeOk
+            ? (grouped ? t('appd_note_beginner_store_grouped') : user ? t('appd_note_beginner_store_logged') : t('appd_note_beginner_store_anon'))
+            : (grouped ? t('appd_note_beginner_optin_grouped') : user ? t('appd_note_beginner_optin_logged') : t('appd_note_beginner_optin_anon')),
         }
       }
     }
@@ -246,34 +255,55 @@ export function AppDetail() {
         { label: t('form_title_edit'), to: `/apps/${a.id}/edit` },
       ]
     }
-    // Soft device flag when Play shows "App not available" (no Play Console API).
-    if (!isOwner && mine?.status !== 'active' && mine?.status !== 'removed') {
-      const blocked = playTick >= 0 && isPlayUnreachable(a.id)
+    // Shared Play-unavailable reports (no Play Console API).
+    if (!isOwner && mine?.status !== 'removed') {
+      const blocked = !!myPlayBlocked.data
       result.overflow = [
         ...result.overflow,
         blocked
           ? {
               label: t('appd_act_clear_play'),
               onSelect: () => {
-                clearPlayUnreachable(a.id)
-                setPlayTick((n) => n + 1)
-                toast(t('appd_toast_play_cleared'))
+                void (async () => {
+                  try {
+                    if (!user) await signIn()
+                    await clearMyPlayUnreachable(a.id)
+                    toast(t('appd_toast_play_cleared'))
+                  } catch (e) { toast(errorText(e, t)) }
+                })()
               },
             }
           : {
               label: t('appd_act_report_play'),
               onSelect: () => {
-                markPlayUnreachable(a.id)
-                setPlayTick((n) => n + 1)
-                toast(t('appd_toast_play_reported'))
+                void (async () => {
+                  try {
+                    if (!user) await signIn()
+                    await reportPlayUnreachable(a.id)
+                    toast(t('appd_toast_play_reported'))
+                  } catch (e) { toast(errorText(e, t)) }
+                })()
               },
             },
+      ]
+    }
+    if ((isOwner || isAdmin) && a.playUnreachableCount > 0) {
+      result.overflow = [
+        ...result.overflow,
+        {
+          label: t('appd_act_confirm_play'),
+          onSelect: () => {
+            clearAppPlayUnreachable(a.id)
+              .then(() => toast(t('appd_toast_play_confirmed')))
+              .catch((e) => toast(errorText(e, t)))
+          },
+        },
       ]
     }
     return result
   })()
 
-  const playBlocked = !isOwner && mine?.status !== 'active' && mine?.status !== 'removed' && playTick >= 0 && isPlayUnreachable(a.id)
+  const playCount = a.playUnreachableCount
 
   return (
     <>
@@ -282,11 +312,23 @@ export function AppDetail() {
 
       <Finding app={a} p={progress} loading={loading} description={a.description} />
 
-      {playBlocked && (
+      {playCount > 0 && (
         <div className="notice" role="status">
-          <span>{t('appd_play_blocked_notice')}</span>
+          <span>{t('appd_play_blocked_notice', { n: playCount })}</span>
           <span className="spacer" />
-          <button type="button" className="link" onClick={() => { clearPlayUnreachable(a.id); setPlayTick((n) => n + 1); toast(t('appd_toast_play_cleared')) }}>{t('appd_act_clear_play')}</button>
+          {isOwner || isAdmin ? (
+            <button type="button" className="link" onClick={() => {
+              clearAppPlayUnreachable(a.id)
+                .then(() => toast(t('appd_toast_play_confirmed')))
+                .catch((e) => toast(errorText(e, t)))
+            }}>{t('appd_act_confirm_play')}</button>
+          ) : myPlayBlocked.data ? (
+            <button type="button" className="link" onClick={() => {
+              clearMyPlayUnreachable(a.id)
+                .then(() => toast(t('appd_toast_play_cleared')))
+                .catch((e) => toast(errorText(e, t)))
+            }}>{t('appd_act_clear_play')}</button>
+          ) : null}
         </div>
       )}
 
@@ -305,6 +347,9 @@ export function AppDetail() {
             ref={guideRef}
             app={a}
             progress={groupProgress}
+            signedIn={!!user}
+            onMarkJoinedGroup={() => setJoinedCommunityGroup(true).catch(() => {})}
+            onClearJoinedGroup={() => setJoinedCommunityGroup(false).catch(() => {})}
             emailListed={a.testerMethod === 'email_list' ? (myListing.data ? (myListing.data.listedAt ? 'listed' : 'waiting') : (user ? 'none' : 'signed_out')) : undefined}
             onProgress={() => setGuideTick((n) => n + 1)}
             onRecord={openJoinOrLogin}
@@ -584,10 +629,13 @@ type EmailGuideState = 'signed_out' | 'none' | 'waiting' | 'listed'
 
 /** Play-first path for social-share visitors: Group → Play Store → Catat (no login until Catat). */
 const BeginnerGuide = forwardRef(function BeginnerGuide({
-  app, progress, emailListed, onProgress, onRecord, onAskEmail, onOpenJoin,
+  app, progress, signedIn, onMarkJoinedGroup, onClearJoinedGroup, emailListed, onProgress, onRecord, onAskEmail, onOpenJoin,
 }: {
   app: AppDoc
   progress: GroupJoinProgress
+  signedIn: boolean
+  onMarkJoinedGroup: () => void
+  onClearJoinedGroup: () => void
   emailListed?: EmailGuideState
   onProgress: () => void
   onRecord: () => void
@@ -607,7 +655,13 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
 
   const afterGroup = () => {
     mark({ group: true })
+    if (signedIn) onMarkJoinedGroup()
     if (isLikelyMobile()) openPlayInstall(app)
+  }
+
+  const leftGroup = () => {
+    mark({ group: false })
+    if (signedIn) onClearJoinedGroup()
   }
 
   if (isLiveApp(app)) {
@@ -700,7 +754,11 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
     <section ref={ref} tabIndex={-1} className="panel stack-16 span-12 beginner-guide" aria-labelledby="beginner-h" id="cara-dapat-app">
       <div>
         <h2 id="beginner-h">{tr('appd_beginner_get_h')}</h2>
-        <p className="muted">{tr('appd_beginner_group_lede')}</p>
+        <p className="muted">{tr(
+          progress.group
+            ? 'appd_beginner_group_lede_grouped'
+            : signedIn ? 'appd_beginner_group_lede_logged' : 'appd_beginner_group_lede_anon',
+        )}</p>
       </div>
       <ol className="beginner-steps">
         <li className={progress.group ? 'done' : step === 1 ? 'current' : undefined}>
@@ -714,7 +772,15 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
                 <button type="button" className="btn sm" onClick={afterGroup}>{tr('appd_beginner_joined')}</button>
               </div>
             )}
-            {progress.group && <p className="muted small addr">{COMMUNITY_GROUP}</p>}
+            {progress.group && (
+              <div className="stack-8">
+                <p className="muted small addr">{COMMUNITY_GROUP}</p>
+                <div className="beginner-step-actions">
+                  <a className="btn sm" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer"><IconExternal />{tr('group_reopen')}</a>
+                  <button type="button" className="btn sm" onClick={leftGroup}>{tr('group_left')}</button>
+                </div>
+              </div>
+            )}
           </div>
         </li>
         <li className={progress.installed ? 'done' : step === 2 ? 'current' : undefined}>
@@ -736,7 +802,7 @@ const BeginnerGuide = forwardRef(function BeginnerGuide({
           <span className="num" aria-hidden="true">3</span>
           <div className="beginner-step-body">
             <p className="t">{tr('appd_beginner_record_t')}</p>
-            <p className="d">{tr('appd_beginner_record_d')}</p>
+            <p className="d">{tr(signedIn ? 'appd_beginner_record_d_logged' : 'appd_beginner_record_d')}</p>
             {step === 3 && (
               <button type="button" className="btn primary sm" onClick={onRecord}>{tr('appd_act_record_tester')}</button>
             )}
@@ -1127,6 +1193,8 @@ function TesterTable({ app, testers, loading, canManage, myUid, appPassed, onEdi
 }) {
   const tr = useT()
   const toast = useToast()
+  const { profile } = useAuth()
+  const joinedGroup = !!profile?.joinedCommunityGroup
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'days', dir: 'desc' })
   const [openRows, setOpenRows] = useState<Set<string>>(() => new Set())
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -1332,7 +1400,9 @@ function TesterTable({ app, testers, loading, canManage, myUid, appPassed, onEdi
           <Empty title={tr('appd_empty_testers_title')}>
             <p>{canManage
               ? (isLiveApp(app) ? tr('appd_empty_creator_live') : tr('appd_empty_creator_closed'))
-              : (isLiveApp(app) ? tr('appd_empty_visitor_live') : tr('appd_empty_visitor_closed'))}</p>
+              : (isLiveApp(app)
+                ? tr('appd_empty_visitor_live')
+                : tr(joinedGroup ? 'appd_empty_visitor_closed_grouped' : 'appd_empty_visitor_closed'))}</p>
           </Empty>
         </div>
       )}

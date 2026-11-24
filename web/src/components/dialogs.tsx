@@ -1,13 +1,16 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useAuth } from '../lib/auth'
 import { supabase } from '../lib/supabase'
-import { api, cancelEmailListing, errorText, requestEmailListing, updateTesterAsCreator, useMyEmailListing } from '../lib/data'
+import {
+  api, cancelEmailListing, clearMyPlayUnreachableQuiet, errorText, requestEmailListing, updateTesterAsCreator,
+  useMyEmailListing,
+} from '../lib/data'
 import { COMMUNITY_GROUP, COMMUNITY_GROUP_URL } from '../lib/community'
 import {
-  clearJoinProgress, emailPlayStepsDone, groupPlayStepsDone, hasStoreUrl, isLikelyMobile, isLiveApp, openPlayInstall,
-  playInstallUrl, readEmailJoinProgress, readGroupJoinProgress, writeEmailJoinProgress, writeGroupJoinProgress,
+  clearJoinProgress, effectiveGroupJoinProgress, emailPlayStepsDone, groupPlayStepsDone, hasStoreUrl, isLikelyMobile,
+  isLiveApp, openPlayInstall, playInstallUrl, readEmailJoinProgress, readGroupJoinProgress, writeEmailJoinProgress,
+  writeGroupJoinProgress,
 } from '../lib/joinProgress'
-import { clearPlayUnreachable } from '../lib/playAccess'
 import { fmtDate, isoDate, todayIso } from '../lib/progress'
 import type { AppDoc, TesterDoc } from '../lib/types'
 import { BUILD_LIMITS, MANUAL_LIMITS, validateBuild, validateManual, type BuildInput, type ManualInput } from '../lib/validate'
@@ -49,7 +52,6 @@ function LiveJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppD
   const [step, setStep] = useState<'play' | 'confirm'>(() => (readGroupJoinProgress(app.id).installed ? 'confirm' : 'play'))
   const { busy, err, run } = useSubmit(() => {
     clearJoinProgress(app.id)
-    clearPlayUnreachable(app.id)
     toast(t('dlg_toast_reviewer', { name: app.name }))
     onClose()
   })
@@ -65,7 +67,10 @@ function LiveJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppD
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (step !== 'confirm' || !done.installed) return
-    run(() => api.joinAsTester({ appId: app.id, checklist: { installed: true } }))
+    run(async () => {
+      await api.joinAsTester({ appId: app.id, checklist: { installed: true } })
+      await clearMyPlayUnreachableQuiet(app.id)
+    })
   }
 
   return (
@@ -108,8 +113,8 @@ function LiveJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppD
 type GroupStep = 'group' | 'play' | 'confirm'
 const GROUP_STEPS: GroupStep[] = ['group', 'play', 'confirm']
 
-function initialGroupStep(appId: string): GroupStep {
-  const p = readGroupJoinProgress(appId)
+function initialGroupStep(appId: string, joinedCommunityGroup?: boolean): GroupStep {
+  const p = effectiveGroupJoinProgress(appId, joinedCommunityGroup)
   if (!p.group) return 'group'
   if (!p.installed) return 'play'
   return 'confirm'
@@ -119,11 +124,19 @@ function initialGroupStep(appId: string): GroupStep {
 function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; rejoin?: boolean }) {
   const t = useT()
   const toast = useToast()
-  const [step, setStep] = useState<GroupStep>(() => initialGroupStep(app.id))
-  const [done, setDone] = useState(() => readGroupJoinProgress(app.id))
+  const { profile, setJoinedCommunityGroup } = useAuth()
+  const joinedFlag = !!profile?.joinedCommunityGroup
+  const [step, setStep] = useState<GroupStep>(() => initialGroupStep(app.id, joinedFlag))
+  const [done, setDone] = useState(() => effectiveGroupJoinProgress(app.id, joinedFlag))
+  // Profile loads after mount; seed the durable flag once it arrives.
+  useEffect(() => {
+    if (!joinedFlag || done.group) return
+    const seeded = effectiveGroupJoinProgress(app.id, true)
+    setDone(seeded)
+    setStep(initialGroupStep(app.id, true))
+  }, [joinedFlag, app.id, done.group])
   const { busy, err, run } = useSubmit(() => {
     clearJoinProgress(app.id)
-    clearPlayUnreachable(app.id)
     toast(t('dlg_toast_tester', { name: app.name }))
     onClose()
   })
@@ -140,15 +153,28 @@ function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; 
 
   const afterGroup = () => {
     mark({ group: true }, 'play')
+    setJoinedCommunityGroup(true).catch(() => {})
     // On mobile, open Play Store right away so the user lands on Install.
     if (isLikelyMobile()) openPlayInstall(app)
+  }
+
+  const leftGroup = () => {
+    const merged = { ...done, group: false }
+    setDone(merged)
+    writeGroupJoinProgress(app.id, merged)
+    setJoinedCommunityGroup(false).catch(() => {})
+    setStep('group')
   }
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
     if (step !== 'confirm' || !groupPlayStepsDone(done)) return
     // Play Store path implies they can install (= opted in via the community group).
-    run(() => api.joinAsTester({ appId: app.id, checklist: { joinedGroup: true, optedIn: true, installed: true } }))
+    run(async () => {
+      await api.joinAsTester({ appId: app.id, checklist: { joinedGroup: true, optedIn: true, installed: true } })
+      await setJoinedCommunityGroup(true).catch(() => {})
+      await clearMyPlayUnreachableQuiet(app.id)
+    })
   }
 
   return (
@@ -156,22 +182,39 @@ function JoinForm({ onClose, app, rejoin }: { onClose: () => void; app: AppDoc; 
       <div className="sheet-body">
         <h2>{t('dlg_join_title', { name: app.name })}</h2>
         {rejoin && <p className="muted">{t('dlg_rejoin_note')}</p>}
-        <p className="lede">{t('dlg_join_lede')}</p>
+        <p className="lede">{t(done.group ? 'dlg_join_lede_grouped' : 'dlg_join_lede')}</p>
         <WizardProgress
           labels={[t('dlg_wiz_join_group'), t('dlg_wiz_install_play'), t('dlg_wiz_record')]}
           current={idx}
           doneFlags={[!!done.group, !!done.installed, false]}
         />
         {step === 'group' && (
-          <WizardStep
-            title={t('dlg_step_group_title')}
-            body={t('dlg_step_group_body')}
-            actionHref={COMMUNITY_GROUP_URL}
-            actionLabel={t('dlg_open_group')}
-            actionHint={COMMUNITY_GROUP}
-            onDone={afterGroup}
-            doneLabel={t('dlg_already_joined_group')}
-          />
+          done.group ? (
+            <div className="stack-12 wizard-step">
+              <div className="stack-8">
+                <p className="strong">{t('dlg_step_group_title')}</p>
+                <p className="muted">{t('dlg_group_done_body')}</p>
+                <p className="muted small addr">{COMMUNITY_GROUP}</p>
+              </div>
+              <a className="btn primary" href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer" style={{ justifySelf: 'start' }}>
+                <IconExternal />{t('group_reopen')}
+              </a>
+              <div className="wizard-step-actions">
+                <button type="button" className="btn" onClick={leftGroup}>{t('group_left')}</button>
+                <button type="button" className="btn" onClick={() => setStep('play')}>{t('dlg_continue_after_group')}</button>
+              </div>
+            </div>
+          ) : (
+            <WizardStep
+              title={t('dlg_step_group_title')}
+              body={t('dlg_step_group_body')}
+              actionHref={COMMUNITY_GROUP_URL}
+              actionLabel={t('dlg_open_group')}
+              actionHint={COMMUNITY_GROUP}
+              onDone={afterGroup}
+              doneLabel={t('dlg_already_joined_group')}
+            />
+          )
         )}
         {step === 'play' && (
           <WizardStep
@@ -229,7 +272,6 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
   const asked = useSubmit(() => listing.refresh())
   const joined = useSubmit(() => {
     clearJoinProgress(app.id)
-    clearPlayUnreachable(app.id)
     toast(t('dlg_toast_tester', { name: app.name }))
     onClose()
   })
@@ -249,7 +291,10 @@ function EmailJoinForm({ onClose, app, rejoin }: { onClose: () => void; app: App
     e.preventDefault()
     if (phase === 'ask' && consent) asked.run(async () => { await requestEmailListing(app.id); toast(t('dlg_toast_requested')) })
     if (phase === 'confirm' && emailPlayStepsDone(play)) {
-      joined.run(() => api.joinAsTester({ appId: app.id, checklist: { optedIn: true, installed: true } }))
+      joined.run(async () => {
+        await api.joinAsTester({ appId: app.id, checklist: { optedIn: true, installed: true } })
+        await clearMyPlayUnreachableQuiet(app.id)
+      })
     }
   }
   const withdraw = () => asked.run(async () => { await cancelEmailListing(app.id); toast(t('dlg_toast_withdrawn')) })

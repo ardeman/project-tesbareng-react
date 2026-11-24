@@ -658,3 +658,94 @@ describe("set_email_reminders (PRD FR-46)", () => {
     await expectCode(anon().rpc("set_email_reminders", { p_enabled: false }), "unauthenticated");
   });
 });
+
+describe("set_joined_community_group", () => {
+  const flag = async (id: string) =>
+    (await must(anon().from("profiles").select("joined_community_group").eq("id", id).single()))
+      .joined_community_group as boolean;
+
+  it("is off by default for a fresh member", async () => {
+    const fresh = await member("fresh.group", "Fresh Group");
+    expect(await flag(fresh.id)).toBe(false);
+  });
+
+  it("changes only the caller's own flag and can clear", async () => {
+    await must(other.db.rpc("set_joined_community_group", { p_joined: true }));
+    expect(await flag(other.id)).toBe(true);
+    expect(await flag(tester.id)).toBe(false);
+    await must(other.db.rpc("set_joined_community_group", { p_joined: false }));
+    expect(await flag(other.id)).toBe(false);
+  });
+
+  it("join_as_tester on a Google Group app sets the durable flag", async () => {
+    const appId = await createApp(creator);
+    await must(other.db.rpc("set_joined_community_group", { p_joined: false }));
+    expect(await flag(other.id)).toBe(false);
+    await must(join(other, appId));
+    expect(await flag(other.id)).toBe(true);
+  });
+
+  it("rejects null", async () => {
+    await expectCode(other.db.rpc("set_joined_community_group", { p_joined: null }), "invalid-argument");
+  });
+
+  it("requires auth", async () => {
+    await expectCode(anon().rpc("set_joined_community_group", { p_joined: true }), "unauthenticated");
+  });
+});
+
+describe("play_access_reports", () => {
+  const count = async (appId: string) =>
+    (await must(anon().from("app_stats").select("play_unreachable_count").eq("app_id", appId).single()))
+      .play_unreachable_count as number;
+
+  it("members can report; count is public; own clear and creator clear work", async () => {
+    const appId = await createApp(creator);
+    expect(await count(appId)).toBe(0);
+
+    await must(tester.db.rpc("report_play_unreachable", { p_app_id: appId }));
+    await must(other.db.rpc("report_play_unreachable", { p_app_id: appId }));
+    expect(await count(appId)).toBe(2);
+    // Idempotent.
+    await must(tester.db.rpc("report_play_unreachable", { p_app_id: appId }));
+    expect(await count(appId)).toBe(2);
+
+    await must(tester.db.rpc("clear_my_play_unreachable", { p_app_id: appId }));
+    expect(await count(appId)).toBe(1);
+
+    await must(creator.db.rpc("clear_app_play_unreachable", { p_app_id: appId }));
+    expect(await count(appId)).toBe(0);
+  });
+
+  it("creator cannot report own app; removed cannot report; clear mine needs a row", async () => {
+    const appId = await createApp(creator);
+    await expectCode(creator.db.rpc("report_play_unreachable", { p_app_id: appId }), "permission-denied");
+
+    await must(join(tester, appId));
+    await must(creator.db.rpc("update_tester", {
+      p_tester_id: (await must(service.from("testers").select("id").eq("app_id", appId).eq("user_id", tester.id).single())).id,
+      p_patch: { status: "removed" },
+    }));
+    await expectCode(tester.db.rpc("report_play_unreachable", { p_app_id: appId }), "permission-denied");
+
+    await expectCode(other.db.rpc("clear_my_play_unreachable", { p_app_id: appId }), "not-found");
+  });
+
+  it("admin can clear all; visitor cannot report; non-manager cannot clear app", async () => {
+    const appId = await createApp(creator);
+    await must(other.db.rpc("report_play_unreachable", { p_app_id: appId }));
+    await expectCode(tester.db.rpc("clear_app_play_unreachable", { p_app_id: appId }), "permission-denied");
+    await must(admin.db.rpc("clear_app_play_unreachable", { p_app_id: appId }));
+    expect(await count(appId)).toBe(0);
+    await expectCode(anon().rpc("report_play_unreachable", { p_app_id: appId }), "unauthenticated");
+  });
+
+  it("join_as_tester clears the caller's own Play report", async () => {
+    const appId = await createApp(creator);
+    await must(tester.db.rpc("report_play_unreachable", { p_app_id: appId }));
+    await must(other.db.rpc("report_play_unreachable", { p_app_id: appId }));
+    expect(await count(appId)).toBe(2);
+    await must(join(tester, appId));
+    expect(await count(appId)).toBe(1);
+  });
+});
