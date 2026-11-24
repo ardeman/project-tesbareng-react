@@ -30,12 +30,17 @@ img, svg { display: block; }
   position: sticky; top: 0; height: 100svh; display: flex; flex-direction: column; gap: var(--s-1);
   padding: var(--s-4) var(--s-3) var(--s-3); overflow-x: hidden; overflow-y: auto; border-right: var(--bw) solid var(--ink); background: var(--kertas);
 }
-.sidebar-head { display: flex; align-items: center; }
-.sidebar-head .spacer { flex: 1; }
+.sidebar-head { display: flex; align-items: flex-start; gap: var(--s-2); }
+.sidebar-intro { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; min-height: var(--target); font-weight: 800; font-size: var(--fs-h2); letter-spacing: -0.01em; }
 .brand svg { width: 24px; height: 24px; flex: none; }
-.scope { color: var(--muted); font-size: var(--fs-small); line-height: 1.4; }
-.scope a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+/* Narrow sidebar: label above the group id. Wide drawer: one line. */
+.scope { display: grid; gap: 2px; color: var(--muted); font-size: var(--fs-small); line-height: 1.4; }
+.scope-label { color: var(--muted); }
+.scope a {
+  color: var(--ink); font-weight: 700; text-decoration: underline; text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
 .nav-list { display: grid; gap: var(--s-1); }
 .nav-list.primary { margin-top: var(--s-4); }
 .sidebar .group-label {
@@ -576,6 +581,8 @@ dialog.sheet[open] { animation: rise var(--t-enter) var(--ease); }
     transition: transform calc(var(--t-control) * 0.75) var(--ease), visibility 0s linear calc(var(--t-control) * 0.75);
   }
   .sidebar.open { visibility: visible; transform: none; transition: transform var(--t-control) var(--ease); }
+  /* Drawer is wide enough for label + group on one line. */
+  .scope { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.4em; row-gap: 0; }
   .canvas { padding: var(--s-4) var(--s-4) var(--s-6); }
   .span-8, .span-7, .span-6, .span-5, .span-4 { grid-column: 1 / -1; }
   .form-section { grid-template-columns: minmax(0, 1fr); gap: var(--s-3); }

@@ -70,11 +70,15 @@ export function Shell({ children }: { children: ReactNode }) {
 
       <aside id="nav" className={`sidebar ${open ? 'open' : ''}`} aria-label={t('nav_main_label')}>
         <div className="sidebar-head">
-          <Link to="/" className="brand"><Mark />TesBareng</Link>
-          <span className="spacer" />
+          <div className="sidebar-intro">
+            <Link to="/" className="brand"><Mark />TesBareng</Link>
+            <p className="scope">
+              <span className="scope-label">{t('nav_community')}</span>
+              <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP.replace('@googlegroups.com', '')}</a>
+            </p>
+          </div>
           <button ref={closeBtn} className="menu-toggle close" aria-label={t('close_menu')} onClick={() => setOpen(false)}><IconClose /></button>
         </div>
-        <p className="scope">{t('nav_community')} <a href={COMMUNITY_GROUP_URL} target="_blank" rel="noreferrer">{COMMUNITY_GROUP.replace('@googlegroups.com', '')}</a></p>
 
         <nav className="nav-list primary" aria-label={t('nav_main_label')}>
           <NavLink to="/apps" end className="nav-item"><IconApps /><span className="label">{t('nav_apps')}</span></NavLink>
