@@ -54,6 +54,8 @@ export interface AppDoc {
   creatorFeedbackSentCount?: number
   creatorFeedbackVerifiedCount?: number
   creatorBadgeTier?: BadgeTier
+  /** Self-reported Play unavailable (open play_access_reports). */
+  playUnreachableCount: number
   createdAt: number
   updatedAt?: number
   deleted: boolean
@@ -125,4 +127,6 @@ export interface UserDoc {
   displayName: string
   photoURL?: string | null
   role: 'member' | 'admin'
+  /** Self-reported: joined the community Google Group (durable when signed in). */
+  joinedCommunityGroup: boolean
 }

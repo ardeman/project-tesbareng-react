@@ -1,7 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { hasOpenTodos } from './data'
+import { hasOpenTodos, setJoinedCommunityGroup as setJoinedCommunityGroupRpc } from './data'
 import { isLocalSupabase, supabase } from './supabase'
 import type { AppUser, UserDoc } from './types'
 
@@ -13,6 +13,8 @@ interface AuthState {
   /** Redirects to Google; the page reloads signed in at `returnTo` (default: the current URL). */
   signIn: (returnTo?: string) => Promise<never>
   signOut: () => Promise<void>
+  /** Persist self-reported community Google Group membership on the caller's profile. */
+  setJoinedCommunityGroup: (joined: boolean) => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -83,17 +85,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { alive = false; sub.subscription.unsubscribe() }
   }, [])
 
-  // Refresh the public profile from the Google identity, then read role + name.
+  // Refresh the public profile from the Google identity, then read role + name + group flag.
   useEffect(() => {
     if (!uid) { setProfile(null); return }
     let alive = true
     ;(async () => {
       await supabase.rpc('ensure_profile')
-      const { data } = await supabase.from('profiles').select('display_name, photo_url, role').eq('id', uid).maybeSingle()
-      if (alive) setProfile(data ? { email, displayName: data.display_name, photoURL: data.photo_url, role: data.role } : null)
+      const { data } = await supabase.from('profiles')
+        .select('display_name, photo_url, role, joined_community_group')
+        .eq('id', uid).maybeSingle()
+      if (alive) {
+        // Default false if the column is missing mid-deploy (migrate before shipping the web build).
+        setProfile(data ? {
+          email,
+          displayName: data.display_name,
+          photoURL: data.photo_url,
+          role: data.role,
+          joinedCommunityGroup: data.joined_community_group === true,
+        } : null)
+      }
     })().catch(() => { if (alive) setProfile(null) })
     return () => { alive = false }
   }, [uid, email])
+
+  const setJoinedCommunityGroup = useCallback(async (joined: boolean) => {
+    await setJoinedCommunityGroupRpc(joined)
+    setProfile((p) => (p ? { ...p, joinedCommunityGroup: joined } : p))
+  }, [])
 
   const signIn = useCallback(async (returnTo?: string): Promise<never> => {
     if (!returnTo && GENERIC_START.has(location.pathname)) {
@@ -115,8 +133,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const user = useMemo(() => toUser(session), [session])
   const value = useMemo(
-    () => ({ user, profile, isAdmin: profile?.role === 'admin', ready, signIn, signOut }),
-    [user, profile, ready, signIn, signOut],
+    () => ({
+      user, profile, isAdmin: profile?.role === 'admin', ready, signIn, signOut, setJoinedCommunityGroup,
+    }),
+    [user, profile, ready, signIn, signOut, setJoinedCommunityGroup],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
