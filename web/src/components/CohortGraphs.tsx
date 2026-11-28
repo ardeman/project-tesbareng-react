@@ -1,6 +1,6 @@
 // Live assignment ring + milestone overview for the cohort page (work surface).
 // Complements FR-38 matrix: ring answers “who tests whom”; bars answer “how far along”.
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Chip, ErrorBox, Skel } from './bits'
 import { useT } from '../lib/i18n'
@@ -11,6 +11,34 @@ import {
   type CohortMember,
 } from '../lib/cohorts'
 type Pt = { x: number; y: number }
+
+/** One-shot enter when the panel scrolls into view (ADR-001 §3 work-surface CSS only). */
+function useGraphEnter() {
+  const ref = useRef<HTMLElement | null>(null)
+  const [entered, setEntered] = useState(() =>
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+  useEffect(() => {
+    const el = ref.current
+    if (!el || entered) return
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setEntered(true)
+      return
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e?.isIntersecting) {
+          setEntered(true)
+          io.disconnect()
+        }
+      },
+      { threshold: 0.18, rootMargin: '0px 0px -8% 0px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [entered])
+  return [ref, entered] as const
+}
 
 const C = 300
 const OUTER_R = 250
@@ -80,6 +108,8 @@ export function CohortGraphs({
   myUid?: string
 }) {
   const t = useT()
+  const [panelRef, entered] = useGraphEnter()
+  const [focusUid, setFocusUid] = useState<string | null>(null)
   const creators = useMemo(
     () => [...c.members.filter((m) => m.appId != null)].sort((a, b) => {
       const ra = a.ringPosition ?? 9999
@@ -92,6 +122,15 @@ export function CohortGraphs({
   const pures = useMemo(
     () => c.members.filter((m) => m.appId == null),
     [c.members],
+  )
+  const focusMember = focusUid ? c.members.find((m) => m.userId === focusUid) : undefined
+  const progressStatus = useMemo(
+    () => (focusUid ? status.filter((s) => s.testerId === focusUid) : status),
+    [status, focusUid],
+  )
+  const openCount = useMemo(
+    () => progressStatus.filter((s) => s.cell !== 'reassigned').length,
+    [progressStatus],
   )
 
   if (creators.length === 0) return null
@@ -108,12 +147,20 @@ export function CohortGraphs({
   const started = c.status !== 'forming'
 
   return (
-    <section className="panel span-12 coh-graph-panel" aria-labelledby="coh-graph-h">
+    <section
+      ref={panelRef}
+      className={`panel span-12 coh-graph-panel${entered ? ' is-in' : ''}`}
+      aria-labelledby="coh-graph-h"
+    >
       <header>
         <h2 id="coh-graph-h">{t('coh_graph_h')}</h2>
         {loading && <span className="meta">{t('loading')}</span>}
         {!loading && started && (
-          <span className="meta num">{t('coh_graph_meta', { n: status.filter((s) => s.cell !== 'reassigned').length })}</span>
+          <span className="meta num">
+            {focusMember
+              ? t('coh_graph_meta_focus', { name: focusMember.displayName || t('coh_members'), n: openCount })
+              : t('coh_graph_meta', { n: openCount })}
+          </span>
         )}
       </header>
       <p className="small muted coh-graph-lede">
@@ -126,11 +173,19 @@ export function CohortGraphs({
           status={started ? status : []}
           myUid={myUid}
           forming={!started}
+          focusUid={focusUid}
+          onFocusChange={setFocusUid}
         />
         {started ? (
           loading && status.length === 0
             ? <div className="coh-progress-skel"><Skel w="100%" h={120} /><Skel w="80%" h={16} /></div>
-            : <ProgressOverview status={status} />
+            : (
+              <ProgressOverview
+                key={focusUid ?? 'cohort'}
+                status={progressStatus}
+                focusName={focusMember ? (focusMember.displayName || t('coh_members')) : null}
+              />
+            )
         ) : (
           <p className="small muted coh-progress-wait">{t('coh_graph_progress_wait')}</p>
         )}
@@ -145,17 +200,23 @@ function AssignmentRing({
   status,
   myUid,
   forming,
+  focusUid,
+  onFocusChange,
 }: {
   creators: CohortMember[]
   pures: CohortMember[]
   status: AssignmentStatus[]
   myUid?: string
   forming: boolean
+  focusUid: string | null
+  onFocusChange: (uid: string | null) => void
 }) {
   const t = useT()
   const titleId = useId()
   const descId = useId()
-  const [focusUid, setFocusUid] = useState<string | null>(myUid ?? null)
+  // Full network on load; click a tester → dim others + redraw their lines.
+  const [drawKey, setDrawKey] = useState(0)
+  const [drawn, setDrawn] = useState(false)
 
   const appOwner = useMemo(() => {
     const m = new Map<string, string>()
@@ -203,14 +264,57 @@ function AssignmentRing({
 
   const focus = focusUid && byUid.has(focusUid) ? focusUid : null
   const focusMember = focus ? byUid.get(focus)?.m : null
-  const focusTies = focus ? ties.filter((x) => x.from === focus) : ties
+  const focusTies = useMemo(
+    () => (focus ? ties.filter((x) => x.from === focus) : []),
+    [ties, focus],
+  )
   const focusDone = focusTies.filter((x) => x.kind === 'done').length
   const focusBehind = focusTies.filter((x) => x.kind === 'behind').length
 
-  const toggleFocus = (uid: string) => setFocusUid((cur) => (cur === uid ? null : uid))
+  /** Feedback sent or verified on every assigned app still in play (excludes Left). */
+  const jobDone = useMemo(() => {
+    const by = new Map<string, EdgeKind[]>()
+    for (const x of ties) {
+      const list = by.get(x.from) ?? []
+      list.push(x.kind)
+      by.set(x.from, list)
+    }
+    const done = new Set<string>()
+    for (const [uid, kinds] of by) {
+      const open = kinds.filter((k) => k !== 'left')
+      if (open.length > 0 && open.every((k) => k === 'done')) done.add(uid)
+    }
+    return done
+  }, [ties])
+
+  const selectTester = (uid: string | null) => {
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+    onFocusChange(uid)
+    if (uid == null) {
+      setDrawn(false)
+      return
+    }
+    setDrawn(reduce)
+    setDrawKey((k) => k + 1)
+  }
+
+  const toggleFocus = (uid: string) => selectTester(focus === uid ? null : uid)
+
+  // Draw animation finished → keep lit lines fully stroked (not a “job done” stamp).
+  useEffect(() => {
+    if (focus == null || drawn) return
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDrawn(true)
+      return
+    }
+    const n = Math.min(focusTies.length, 8)
+    const ms = 420 + Math.max(0, n - 1) * 45 + 80
+    const id = window.setTimeout(() => setDrawn(true), ms)
+    return () => window.clearTimeout(id)
+  }, [focus, drawKey, focusTies.length, drawn])
 
   return (
-    <figure className="coh-ring">
+    <figure className={`coh-ring${focus ? ' has-focus' : ''}${drawn ? ' is-drawn' : ''}`}>
       <svg
         viewBox="0 0 600 600"
         width="600"
@@ -230,43 +334,72 @@ function AssignmentRing({
               })}
         </desc>
         <g className="coh-ties" aria-hidden="true">
+          {/* Full network always present; focused ties remount (drawKey) to replay the draw. */}
           {ties.map((x) => {
+            const lit = focus != null && x.from === focus
             const dim = focus != null && x.from !== focus
+            if (lit) return null
             return (
               <path
                 key={x.key}
-                className={`coh-tie coh-tie--${x.kind}${dim ? ' is-dim' : ''}`}
+                className={`coh-tie coh-tie--${x.kind}${dim ? ' is-dim' : ' is-base'}`}
+                pathLength={1}
                 d={x.d}
               />
             )
           })}
+          {focusTies.map((x, j) => (
+            <path
+              key={`${drawKey}:${x.key}`}
+              className={`coh-tie coh-tie--${x.kind} is-lit`}
+              pathLength={1}
+              d={x.d}
+              style={{ ['--j' as string]: Math.min(j, 7) }}
+            />
+          ))}
         </g>
         <g className="coh-nodes">
-          {nodes.map(({ m, kind, pt }) => {
+          {nodes.map(({ m, kind, pt }, i) => {
             const name = m.displayName || t('coh_members')
             const mine = m.userId === myUid
             const selected = m.userId === focus
             const label = mine ? `${name} (${t('coh_you')})` : name
+            const stampI = Math.min(i, 7)
+            const complete = jobDone.has(m.userId)
+            const nodeState = [
+              selected ? ' is-act' : '',
+              complete ? ' is-complete' : '',
+            ].join('')
             return (
               <g
                 key={m.userId}
-                className={`coh-node coh-node--${kind}${mine ? ' is-me' : ''}${selected ? ' is-focus' : ''}`}
+                className={`coh-node coh-node--${kind}${mine ? ' is-me' : ''}${selected ? ' is-focus' : ''}${nodeState}`}
                 transform={`translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)})`}
               >
-                <title>{label}{m.appName ? ` · ${m.appName}` : ''}</title>
-                {kind === 'creator' ? (
-                  <>
-                    <rect className="coh-nshadow" x={-14} y={-14} width={34} height={34} aria-hidden="true" />
-                    <rect className="coh-nbody" x={-17} y={-17} width={34} height={34} />
-                  </>
-                ) : (
-                  <>
-                    <circle className="coh-nshadow" cx={3} cy={3} r={17} aria-hidden="true" />
-                    <circle className="coh-nbody" r={17} />
-                  </>
-                )}
-                <text y={5} aria-hidden="true">{initials(name)}</text>
-                {/* Transparent hit target; button semantics via surrounding HTML control below is hard in SVG — use focusable. */}
+                <title>
+                  {label}{m.appName ? ` · ${m.appName}` : ''}
+                  {complete ? ` · ${t('coh_ring_job_done')}` : ''}
+                </title>
+                <g className="coh-nstamp" style={{ ['--i' as string]: stampI }}>
+                  {kind === 'creator' ? (
+                    <>
+                      <rect className="coh-nshadow" x={-14} y={-14} width={34} height={34} aria-hidden="true" />
+                      <rect className="coh-nbody" x={-17} y={-17} width={34} height={34} />
+                    </>
+                  ) : (
+                    <>
+                      <circle className="coh-nshadow" cx={3} cy={3} r={17} aria-hidden="true" />
+                      <circle className="coh-nbody" r={17} />
+                    </>
+                  )}
+                  <text y={5} aria-hidden="true">{initials(name)}</text>
+                  {complete && (
+                    <g className="coh-ncheck" aria-hidden="true">
+                      <rect x={8} y={-27} width={18} height={18} />
+                      <path d="M12 -18.5l3.5 3.5 6.5-7" />
+                    </g>
+                  )}
+                </g>
                 <circle
                   className="coh-nhit"
                   r={22}
@@ -294,7 +427,11 @@ function AssignmentRing({
         <span><i className="coh-lg-line coh-lg-progress" aria-hidden="true" />{t('coh_ring_legend_progress')}</span>
         <span><i className="coh-lg-line coh-lg-done" aria-hidden="true" />{t('coh_ring_legend_done')}</span>
         <span><i className="coh-lg-line coh-lg-behind" aria-hidden="true" />{t('coh_ring_legend_behind')}</span>
+        <span><i className="coh-lg-ok" aria-hidden="true">✓</i>{t('coh_ring_legend_complete')}</span>
       </figcaption>
+      {!forming && (
+        <p className="small muted coh-ring-hint">{t('coh_ring_click_hint')}</p>
+      )}
       {focusMember && !forming && (
         <p className="coh-ring-focus small num" role="status">
           <Link className="link" to={`/u/${focusMember.userId}`}><b>{focusMember.displayName || t('coh_members')}</b></Link>
@@ -302,7 +439,7 @@ function AssignmentRing({
           {' · '}
           {t('coh_ring_focus_stats', { assigned: focusTies.length, done: focusDone, behind: focusBehind })}
           {' · '}
-          <button type="button" className="link" onClick={() => setFocusUid(null)}>{t('coh_ring_clear_focus')}</button>
+          <button type="button" className="link" onClick={() => selectTester(null)}>{t('coh_ring_clear_focus')}</button>
         </p>
       )}
       {forming && (
@@ -312,7 +449,7 @@ function AssignmentRing({
   )
 }
 
-function ProgressOverview({ status }: { status: AssignmentStatus[] }) {
+function ProgressOverview({ status, focusName }: { status: AssignmentStatus[]; focusName: string | null }) {
   const t = useT()
   const counts = useMemo(() => {
     const c: Record<ProgressBucket, number> = {
@@ -332,7 +469,14 @@ function ProgressOverview({ status }: { status: AssignmentStatus[] }) {
 
   const { c, behind, open } = counts
   if (open === 0) {
-    return <p className="small muted">{t('coh_graph_progress_empty')}</p>
+    return (
+      <div className="coh-progress">
+        <h3 className="coh-progress-h">
+          {focusName ? t('coh_progress_h_focus', { name: focusName }) : t('coh_progress_h')}
+        </h3>
+        <p className="small muted">{focusName ? t('coh_graph_progress_empty_focus') : t('coh_graph_progress_empty')}</p>
+      </div>
+    )
   }
 
   const labels: Record<ProgressBucket, string> = {
@@ -345,8 +489,10 @@ function ProgressOverview({ status }: { status: AssignmentStatus[] }) {
 
   return (
     <div className="coh-progress">
-      <h3 className="coh-progress-h">{t('coh_progress_h')}</h3>
-      <p className="small muted">{t('coh_progress_lede')}</p>
+      <h3 className="coh-progress-h">
+        {focusName ? t('coh_progress_h_focus', { name: focusName }) : t('coh_progress_h')}
+      </h3>
+      <p className="small muted">{focusName ? t('coh_progress_lede_focus') : t('coh_progress_lede')}</p>
       <div
         className="coh-stack"
         role="img"
@@ -376,17 +522,13 @@ function ProgressOverview({ status }: { status: AssignmentStatus[] }) {
         })}
       </div>
       <ul className="coh-progress-legend num">
-        {BUCKET_ORDER.map((key) => {
-          const n = c[key]
-          if (n === 0) return null
-          return (
-            <li key={key}>
-              <i className={`coh-swatch coh-stack--${key}`} aria-hidden="true" />
-              <span>{labels[key]}</span>
-              <b>{n}</b>
-            </li>
-          )
-        })}
+        {BUCKET_ORDER.filter((key) => c[key] > 0).map((key, i) => (
+          <li key={key} style={{ ['--i' as string]: i }}>
+            <i className={`coh-swatch coh-stack--${key}`} aria-hidden="true" />
+            <span>{labels[key]}</span>
+            <b>{c[key]}</b>
+          </li>
+        ))}
       </ul>
       {behind > 0 && (
         <p className="coh-progress-behind">
