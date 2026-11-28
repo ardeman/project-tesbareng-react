@@ -503,7 +503,6 @@ function ObligationMatrix({ c, status, focusUid }: {
 }) {
   const t = useT()
   const apps = c.members.filter((m) => m.appId != null)
-  const focusRowRef = useRef<HTMLTableRowElement>(null)
 
   const cells = useMemo<Map<string, Map<string, CellState>>>(() => {
     const m = new Map<string, Map<string, CellState>>()
@@ -516,11 +515,6 @@ function ObligationMatrix({ c, status, focusUid }: {
   }, [status.data])
 
   const behind = useMemo(() => new Set(status.data.filter((s) => s.isBehind).map((s) => s.testerId)), [status.data])
-
-  useEffect(() => {
-    if (!focusUid || !focusRowRef.current) return
-    focusRowRef.current.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  }, [focusUid])
 
   if (c.status === 'forming' || apps.length === 0) return null
   if (status.loading && status.data.length === 0) return null
@@ -555,7 +549,6 @@ function ObligationMatrix({ c, status, focusUid }: {
               return (
               <tr
                 key={m.userId}
-                ref={focused ? focusRowRef : undefined}
                 className={[
                   behind.has(m.userId) ? 'behind-row' : '',
                   focused ? 'matrix-focus-row' : '',
