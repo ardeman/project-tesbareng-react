@@ -266,6 +266,21 @@
 .matrix-cell.unassigned > [aria-hidden] { font-size: 1.33em; line-height: 1; }
 /* behind: cabai left edge on the name cell (ADR-001 §2.2; edge = inset shadow, not border, to preserve layout) */
 .behind-row .matrix-td-name { box-shadow: inset 4px 0 0 var(--cabai); }
+/* Ring click → matrix: highlight name (kunyit edge); dim status cells only — never fade the sticky names
+   (opacity on <tr> washes the whole sticky column grey). */
+.matrix-focus-row .matrix-td-name {
+  box-shadow: inset 6px 0 0 var(--kunyit);
+  background: var(--putih);
+  font-weight: 800;
+  z-index: 2;
+}
+.matrix-focus-row .matrix-td-name a { color: var(--ink); }
+.behind-row.matrix-focus-row .matrix-td-name {
+  box-shadow: inset 6px 0 0 var(--kunyit), inset 10px 0 0 var(--cabai);
+}
+.matrix-dim-row .matrix-cell { opacity: 0.4; }
+.matrix-dim-row:hover .matrix-cell { opacity: 1; }
+.matrix-dim-row .matrix-td-name a { color: var(--ink); }
 .matrix-legend { margin-top: var(--s-2); padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); }
 .matrix-legend li { white-space: nowrap; }
 

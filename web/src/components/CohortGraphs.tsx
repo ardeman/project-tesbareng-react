@@ -99,6 +99,8 @@ export function CohortGraphs({
   error,
   onRetry,
   myUid,
+  focusUid,
+  onFocusChange,
 }: {
   c: CohortDetail
   status: AssignmentStatus[]
@@ -106,10 +108,12 @@ export function CohortGraphs({
   error: string | null
   onRetry: () => void
   myUid?: string
+  /** Shared with the obligation matrix: click a ring node to highlight that tester. */
+  focusUid: string | null
+  onFocusChange: (uid: string | null) => void
 }) {
   const t = useT()
   const [panelRef, entered] = useGraphEnter()
-  const [focusUid, setFocusUid] = useState<string | null>(null)
   const creators = useMemo(
     () => [...c.members.filter((m) => m.appId != null)].sort((a, b) => {
       const ra = a.ringPosition ?? 9999
@@ -174,7 +178,7 @@ export function CohortGraphs({
           myUid={myUid}
           forming={!started}
           focusUid={focusUid}
-          onFocusChange={setFocusUid}
+          onFocusChange={onFocusChange}
         />
         {started ? (
           loading && status.length === 0

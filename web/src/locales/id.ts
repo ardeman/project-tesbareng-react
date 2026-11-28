@@ -1309,6 +1309,8 @@ export const id = {
   coh_matrix_sr: "Matriks penugasan",
   coh_matrix_load_error: "Matriks penugasan gagal dimuat.",
   coh_matrix_h: "Matriks penugasan",
+  coh_matrix_focus: "Menyorot {name}",
+  coh_matrix_focus_sr: " (disorot dari cincin)",
   coh_matrix_scroll: "Matriks penugasan, scroll horizontal",
   coh_col_tester: "Tester",
   coh_app_fallback: "Aplikasi",
