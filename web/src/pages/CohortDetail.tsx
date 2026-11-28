@@ -530,18 +530,11 @@ function ObligationMatrix({ c, status, focusUid }: {
     </section>
   )
 
-  const focusName = focusUid
-    ? (c.members.find((m) => m.userId === focusUid)?.displayName || t('coh_members'))
-    : null
-
   return (
     <section className={`panel span-12 matrix-panel${focusUid ? ' has-focus' : ''}`} aria-labelledby="matrix-h">
       <header>
         <h2 id="matrix-h">{t('coh_matrix_sr')}</h2>
         {status.loading && <span className="meta">{t('loading')}</span>}
-        {!status.loading && focusName && (
-          <span className="meta num">{t('coh_matrix_focus', { name: focusName })}</span>
-        )}
       </header>
       <div className="matrix-wrap" tabIndex={0} role="region" aria-label={t('coh_matrix_scroll')}>
         <table className="matrix-table num">

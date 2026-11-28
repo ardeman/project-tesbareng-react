@@ -1310,7 +1310,6 @@ export const en: Record<Keys, string> = {
   coh_matrix_sr: "Assignment matrix",
   coh_matrix_load_error: "Failed to load assignment matrix.",
   coh_matrix_h: "Assignment matrix",
-  coh_matrix_focus: "Highlighting {name}",
   coh_matrix_focus_sr: " (highlighted from ring)",
   coh_matrix_scroll: "Assignment matrix, horizontal scroll",
   coh_col_tester: "Tester",
